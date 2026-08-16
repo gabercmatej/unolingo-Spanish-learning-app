@@ -105,6 +105,17 @@ export interface StageAudit {
   thinLessons: string[];
   /** Concepts introduced here with too little material to practise them. */
   thinlyPractised: string[];
+  /**
+   * The concepts this stage practises least, always reported regardless of how
+   * healthy the stage is. An absolute threshold ("fewer than two sentences")
+   * answers a question that goes permanently quiet the moment it is satisfied —
+   * and a silent diagnostic reads as "finished" when it only means "no longer
+   * broken". This is relative, so it survives its own success: it names the
+   * next thing to deepen even in a stage with no warnings at all.
+   */
+  thinnest: { id: string; pool: number }[];
+  /** Median sentences per concept here — the yardstick `thinnest` is read against. */
+  medianPool: number;
   /** Concepts introduced here that no sentence exercises at all. */
   unpractised: string[];
   /** Drill-backed exercise kinds available at this stage's levels. */
@@ -204,13 +215,18 @@ export function auditCurriculum(): CurriculumAudit {
     );
     const unpractised: string[] = [];
     const thinlyPractised: string[] = [];
+    const pools: { id: string; pool: number }[] = [];
     let totalPools = 0;
     for (const concept of introducedHere) {
       const pool = getSentencesForConcept(concept.id).length;
       totalPools += pool;
+      pools.push({ id: concept.id, pool });
       if (pool === 0) unpractised.push(concept.id);
       else if (pool < THRESHOLDS.sentencesPerConcept) thinlyPractised.push(concept.id);
     }
+    const sortedPools = [...pools].sort((a, b) => a.pool - b.pool);
+    const medianPool =
+      sortedPools.length > 0 ? sortedPools[Math.floor(sortedPools.length / 2)].pool : 0;
 
     return {
       id: stage.id,
@@ -236,6 +252,8 @@ export function auditCurriculum(): CurriculumAudit {
       drawnBelowLevel,
       thinLessons,
       thinlyPractised,
+      thinnest: sortedPools.slice(0, 8),
+      medianPool,
       unpractised,
       errorDrills: errorDrills.filter((d) => owned.has(d.level)).length,
       naturalDrills: naturalDrills.filter((d) => owned.has(d.level)).length,
@@ -372,6 +390,20 @@ function findDepthGaps(stages: StageAudit[]): Gap[] {
           `${stage.thinlyPractised.slice(0, 5).join(', ')}` +
           `${stage.thinlyPractised.length > 5 ? ', …' : ''}`,
       );
+    }
+
+    /**
+     * The standing priority queue. Reported whether or not anything is wrong,
+     * because "which concepts does this stage practise least" is a question
+     * that stays useful forever, unlike "does anything fall under a threshold",
+     * which stops informing the moment it is answered.
+     */
+    if (stage.thinnest.length > 0) {
+      const worst = stage.thinnest
+        .slice(0, 6)
+        .map((entry) => `${entry.id}(${entry.pool})`)
+        .join(' ');
+      info(`least practised here — median ${stage.medianPool} sentences/concept: ${worst}`);
     }
 
     // An advanced stage living off easier material is the subtlest way for a

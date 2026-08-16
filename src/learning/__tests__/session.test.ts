@@ -16,7 +16,7 @@ import {
 import { skillBalance } from '@/learning/mastery';
 import { buildLessonSession, buildSmartReview, nextLesson } from '@/learning/session';
 import { createConceptState, review } from '@/learning/srs';
-import { PRESENTATION_KINDS } from '@/learning/types';
+import { KIND_SKILL, PRESENTATION_KINDS } from '@/learning/types';
 import { cumulativeXp, levelInfo, xpForAnswer } from '@/learning/xp';
 
 /** Every exercise the app can produce must be answerable and well-formed. */
@@ -503,6 +503,58 @@ describe('B2 raises the floor on production', () => {
     const fresh = candidateKinds(undefined, { ...base, level: 'B2' });
     expect(fresh.length).toBeGreaterThan(0);
     expect(fresh).toContain('translateToEn');
+  });
+});
+
+/**
+ * Modality is a property of the *generator*, not of the timetable.
+ *
+ * The course also ships dedicated listening, reading and conversation lessons,
+ * and it would be easy to read those as the only place those skills live — which
+ * would make an ordinary vocabulary lesson a silent, text-only affair. It is not:
+ * every sentence can become audio, so listening and production are generated
+ * inside ordinary lessons too. This locks that in, because a change to
+ * `candidateKinds` could remove it without any other test noticing.
+ */
+describe('modality inside ordinary lessons', () => {
+  const learnerWhoHasMetEverything = () => {
+    const concepts: Record<string, ReturnType<typeof createConceptState>> = {};
+    for (const lesson of allLessons) {
+      for (const id of [...lesson.teaches, ...(lesson.grammar ?? [])]) {
+        concepts[id] = {
+          ...createConceptState(id),
+          introduced: true,
+          timesSeen: 5,
+          strength: 0.6,
+          depth: 3,
+          lastReviewed: Date.now(),
+          stability: 10,
+        };
+      }
+    }
+    return makeLearner({ concepts });
+  };
+
+  it('puts listening and production inside core and grammar lessons, not only dedicated ones', () => {
+    const learner = learnerWhoHasMetEverything();
+    const ordinary = allLessons.filter((l) => l.kind === 'core' || l.kind === 'grammar');
+    expect(ordinary.length).toBeGreaterThan(20);
+
+    let withListening = 0;
+    let withProduction = 0;
+    for (const lesson of ordinary) {
+      const plan = buildLessonSession(lesson.id, { learner, seed: lesson.id.length * 13 });
+      const skills = new Set(
+        (plan?.exercises ?? []).map((e) => KIND_SKILL[e.kind]).filter(Boolean),
+      );
+      if (skills.has('listening')) withListening += 1;
+      if (skills.has('production')) withProduction += 1;
+    }
+
+    // Deliberately a floor, not the observed value: the generator is random, and
+    // the claim being protected is "most ordinary lessons", not an exact ratio.
+    expect(withListening / ordinary.length).toBeGreaterThan(0.8);
+    expect(withProduction / ordinary.length).toBeGreaterThan(0.8);
   });
 });
 
