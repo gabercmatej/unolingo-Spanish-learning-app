@@ -259,4 +259,40 @@ export const routineSentences: Sentence[] = [
     topics: ['social', 'daily-routine'],
     note: 'Irse = to leave. That que means "because" here — very colloquial and very common.',
   },
+
+  // --- The morning, in more than one order ---------------------------------
+  {
+    id: 's.r31',
+    es: 'Me despierto a las siete pero no me levanto hasta las siete y media.',
+    en: 'I wake up at seven but I don’t get up until half past.',
+    concepts: ['v.despertarse', 'v.levantarse', 'g.reflexive'],
+    level: 'A2',
+    topics: ['daily-routine'],
+    note: 'despertarse and levantarse are two different moments, and Spanish keeps them apart.',
+  },
+  {
+    id: 's.r32',
+    es: 'Me ducho por la noche, así por la mañana tengo más tiempo.',
+    en: 'I shower at night, that way I have more time in the morning.',
+    concepts: ['v.ducharse', 'g.reflexive', 'v.noche'],
+    level: 'A2',
+    topics: ['daily-routine'],
+  },
+  {
+    id: 's.r33',
+    es: 'Tengo prisa, me ducho en cinco minutos y salgo.',
+    en: 'I’m in a hurry, I’ll shower in five minutes and go.',
+    concepts: ['p.tengo-prisa', 'v.ducharse', 'v.salir'],
+    level: 'A2',
+    topics: ['daily-routine'],
+  },
+  {
+    id: 's.r34',
+    es: 'Entonces te despiertas, desayunas y ya está, ¿no?',
+    en: 'So you wake up, have breakfast and that’s it, right?',
+    concepts: ['v.entonces', 'v.despertarse', 'v.desayuno'],
+    level: 'A2',
+    topics: ['daily-routine'],
+    register: 'colloquial',
+  },
 ];
