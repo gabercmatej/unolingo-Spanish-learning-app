@@ -50,6 +50,13 @@ stage is quietly living off lower-level sentences. Output is split into **WARNIN
 (act on these) and **NOTES** (context for judgement — a stage with no warnings is not
 finished, it is merely no longer broken).
 
+The depth NOTE is deliberately **relative, not absolute**: it always names the eight
+least-practised concepts in each stage against that stage's median. An absolute threshold
+goes permanently quiet once it is met, which is how a diagnostic starts arguing that the
+work is done. This one survives its own success — but that also means it never reaches
+zero, and it is not supposed to. Read it as a queue and apply judgement about which
+concepts actually deserve more.
+
 For anything touching the module graph or routing, also run the web export — it statically
 renders every route and catches what a dev-server smoke test misses. There is no native
 project checked in (`/ios`, `/android` are gitignored); web is the fastest verification loop,
@@ -157,6 +164,15 @@ is exactly what these tests exist to catch.
   kinds already recorded in `ConceptState.kinds`, so it needs **no new persisted field and
   no `STATE_VERSION` bump**. It stays silent until a skill has ≥8 concepts behind it,
   because a skill looking weak after three items is a sample artefact.
+- **Modality is a property of the generator, not of the timetable.** The course ships
+  dedicated listening, reading and conversation lessons, but those are *additional* depth,
+  not the only place those skills live: every sentence can become audio, so a plain
+  vocabulary or grammar lesson still generates listening and production. Measured across
+  the 78 core/grammar lessons, 100% contain at least one listening exercise and one
+  production exercise, and the overall mix is roughly 34% grammar / 27% production /
+  25% listening / 14% vocabulary. A test in `session.test.ts` holds this at a floor of 80%,
+  because a change to `candidateKinds` could quietly turn ordinary lessons back into
+  reading-only sessions and nothing else would notice.
 - **`correctMistake` and `chooseNatural` are hand-authored only.** They come from
   `content/drills.ts` and cannot be generated. A level with no drill silently loses both
   from its mix — and they are the *top* tier from B2 up, so the loss is invisible and
@@ -248,15 +264,18 @@ those tests cross-check content against logic.
 
 ## Known open work
 
-- **Concepts introduced but barely practised.** `audit:content` reports these as NOTES,
-  not warnings: ~150 A1 concepts, and 20–35 at each level above, appear in exactly one
-  sentence. Every concept now has *a* sentence — the next pass is giving the important
-  ones several, so a concept can be met in more than one context. This is the main
-  remaining content gap, and the notes are deliberately not failures: the list is a
-  priority queue, not a defect report.
+- **Depth is now median 2–3 sentences per concept.** Every concept in the course has at
+  least two; no stage has a single-exposure item left. The audit's NOTE reports the eight
+  least-practised concepts per stage against that stage's median, and it says so *whether
+  or not anything is wrong* — it is a standing priority queue, not a defect report. The
+  next pass is lifting the high-frequency spine (ser, estar, tener, quedar, aunque,
+  darse cuenta) well past the median; those deserve dozens of exposures, while a narrow
+  item is finished at two or three. Do not read the queue as a quota.
 - **Modality reach is adequate, not generous.** Listening, conversation and reading now
   recur in 27–33% of each stage's units (the audit floor is 25%). Pushing toward ~50%
   would need more conversation scenes and reading pieces, which are the expensive objects.
+  Note this measures *dedicated* lessons only — see the modality invariant below before
+  concluding that ordinary lessons are text-only.
 - **Upper-stage unit counts are still lopsided** — B2, C1 and C2 have 6–7 units each
   against 14–15 at A1/A2. The sentence pools behind them are now comparable (80 each),
   so this is a structural question about how much B2+ material a single unit should hold,
