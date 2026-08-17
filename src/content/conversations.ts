@@ -1476,4 +1476,226 @@ export const conversations: ConversationScene[] = [
       { speaker: 'partner', es: 'Déjenos deliberar. Le diremos algo esta tarde.', en: 'Let us deliberate. We’ll get back to you this afternoon.' },
     ],
   },
+
+  {
+    id: 'conv.mesa-redonda',
+    title: 'Mesa redonda: el carril y la calle',
+    icon: 'people-outline',
+    setting:
+      'Una mesa redonda del barrio sobre el carril bici. Moderas tú, y te toca resumir a los demás antes de opinar.',
+    level: 'B2',
+    topics: ['city', 'opinions', 'transport'],
+    partner: { name: 'Vecinos' },
+    turns: [
+      {
+        speaker: 'partner',
+        es: 'FERRETERO: Nadie nos preguntó. Llevo veintidós años aquí y me enteré por el periódico.',
+        en: 'HARDWARE SHOP OWNER: Nobody asked us. I’ve been here twenty-two years and I found out from the paper.',
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'Antes de opinar, resume su posición en una frase para comprobar que le has entendido.',
+        accepted: [
+          'entonces lo que te molesta es que se decidiera sin consultaros',
+          'si te entiendo bien, tu objeción es el procedimiento, no el carril',
+          'o sea que el problema no es la bici, es cómo se decidió',
+          'lo que dices es que nadie os consultó antes de aprobarlo',
+        ],
+        hints: ['si te entiendo bien…', 'o sea que…', 'lo que dices es que…'],
+        concepts: ['p.o-sea-que', 'p.lo-que-quiero-decir', 'g.reformulation'],
+        note: 'Resumir a la otra parte antes de responderle es la técnica más eficaz de una mesa redonda: obliga a escuchar y desarma.',
+      },
+      {
+        speaker: 'partner',
+        es: 'MADRE: Con todo el respeto, yo cruzo ahí con dos niños. Antes no veíamos nada.',
+        en: 'MOTHER: With all due respect, I cross there with two children. Before, we couldn’t see a thing.',
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'Reconoce que las dos posiciones tienen base, sin dar la razón a ninguna todavía.',
+        accepted: [
+          'los dos tenéis razón en algo, y ahí está el problema',
+          'por un lado el procedimiento fue malo, por otro la calle era peligrosa',
+          'estoy de acuerdo en parte con los dos, no es una cosa o la otra',
+          'las dos cosas son ciertas a la vez, eso es lo complicado',
+        ],
+        hints: ['por un lado… por otro…', 'estoy de acuerdo en parte', 'los dos tenéis razón en algo'],
+        concepts: ['p.por-un-lado', 'p.estoy-de-acuerdo-en-parte', 'p.tener-razon'],
+      },
+      {
+        speaker: 'partner',
+        es: 'FERRETERO: Ya, pero mi facturación ha bajado un 4 %. Eso no es una opinión, es un dato.',
+        en: 'HARDWARE OWNER: Right, but my turnover is down 4%. That’s not an opinion, it’s a fact.',
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'Acepta el dato y añade el que falta: en el resto de la ciudad bajó un 5 %.',
+        accepted: [
+          'el dato es cierto, pero en el resto de la ciudad bajó un cinco por ciento',
+          'hay que tener en cuenta que la media de la ciudad cayó un cinco por ciento',
+          'es verdad, aunque comparado con el cinco por ciento de la ciudad salís mejor',
+          'no lo discuto, lo que pasa es que la ciudad entera bajó más',
+        ],
+        hints: ['hay que tener en cuenta que…', 'lo que pasa es que…', 'aunque'],
+        concepts: ['p.hay-que-tener-en-cuenta', 'v.dato', 'p.lo-que-pasa-es'],
+      },
+      {
+        speaker: 'partner',
+        es: 'FERRETERO: Entonces según usted no ha pasado nada. Muy bonito.',
+        en: 'HARDWARE OWNER: So according to you nothing has happened. Very nice.',
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'Te ha malinterpretado. Asume el malentendido y reformula lo que querías decir.',
+        accepted: [
+          'no me he explicado bien: no digo que no haya pasado nada, digo que la causa es otra',
+          'a lo que me refiero es a que la caída no la explica el carril',
+          'no es eso, ni mucho menos, lo que digo es que el motivo es otro',
+          'me explico: el problema existe, pero no viene del carril bici',
+        ],
+        hints: ['no me he explicado bien', 'a lo que me refiero es a que…', 'me explico:'],
+        concepts: ['p.no-me-he-explicado', 'p.a-lo-que-me-refiero', 'p.me-explico'],
+      },
+      {
+        speaker: 'partner',
+        es: 'MADRE: ¿Y entonces qué proponéis? Porque llevamos una hora y seguimos igual.',
+        en: 'MOTHER: So what are you proposing? Because we’ve been at this an hour and nothing’s changed.',
+      },
+      {
+        speaker: 'you',
+        instruction: 'Propón algo condicionado: una solución que dependa de que se cumpla algo.',
+        accepted: [
+          'si se hicieran dos zonas de carga y descarga, el problema se reduciría bastante',
+          'siempre y cuando pongan carga y descarga, yo lo veo viable',
+          'si el ayuntamiento aceptara dos plazas de carga, saldríamos todos ganando',
+          'yo propondría carga y descarga, siempre y cuando se respete',
+        ],
+        hints: ['si + imperfecto de subjuntivo… + condicional', 'siempre y cuando…'],
+        concepts: ['g.si-hypothetical', 'p.siempre-y-cuando', 'g.conditional'],
+      },
+      {
+        speaker: 'you',
+        instruction: 'Cierra la mesa resumiendo en una frase el acuerdo al que habéis llegado.',
+        accepted: [
+          'en resumen: el carril se queda y pedimos carga y descarga',
+          'resumiendo, nadie quiere quitar el carril pero hace falta carga y descarga',
+          'total, que el acuerdo es mantener el carril y añadir carga y descarga',
+          'en resumen, se mantiene el carril con dos plazas de carga y descarga',
+        ],
+        hints: ['en resumen…', 'resumiendo…', 'total, que…'],
+        concepts: ['p.en-resumen', 'p.resumiendo', 'p.en-plan-b2'],
+        note: 'Cerrar resumiendo convierte una discusión en un acuerdo. Sin el resumen, la mesa termina sin que nadie sepa qué se decidió.',
+      },
+      {
+        speaker: 'partner',
+        es: 'FERRETERO: Eso ya me parece otra cosa. Póngalo por escrito y lo firmo.',
+        en: 'HARDWARE OWNER: Now that sounds different. Put it in writing and I’ll sign it.',
+      },
+    ],
+  },
+  {
+    id: 'conv.acta-desacuerdo',
+    title: 'Dejar constancia',
+    icon: 'briefcase-outline',
+    setting:
+      'Se aprobó un proveedor que tú considerabas inviable. Tres semanas después ha fallado, y la reunión de hoy revisa qué ocurrió.',
+    level: 'C2',
+    topics: ['work', 'opinions'],
+    partner: { name: 'Dirección' },
+    turns: [
+      {
+        speaker: 'partner',
+        es: 'Según el acta de junio, no se formularon objeciones. ¿Alguien quiere matizar eso?',
+        en: 'According to the June minutes, no objections were raised. Does anyone want to qualify that?',
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'El acta es literalmente cierta. Discrepa de la lectura, no del hecho, y sin acusar a nadie.',
+        accepted: [
+          'el acta es exacta, pero no recoge que el área técnica habló cuarenta minutos',
+          'no es que el acta mienta, es que registra el silencio como acuerdo',
+          'permítame que matice: no hubo objeción formal, pero sí objeción',
+          'lo que el acta no dice es que nadie contestó al área técnica',
+        ],
+        hints: ['no es que…, es que…', 'permítame que matice', 'lo que el acta no dice es que…'],
+        concepts: ['p.no-es-que', 'v.matizar', 'g.lo-nominal', 'g.register'],
+      },
+      {
+        speaker: 'partner',
+        es: 'Si había una objeción de fondo, ¿por qué no consta en ninguna parte?',
+        en: 'If there was a substantive objection, why is it on no record anywhere?',
+      },
+      {
+        speaker: 'you',
+        instruction: 'Reconoce el fallo como propio: no lo dejaste por escrito. Sin excusas.',
+        accepted: [
+          'reconozco que no dejé constancia por escrito, y ahí me equivoqué',
+          'es culpa mía: lo dije en voz alta y no lo puse en el acta',
+          'lo asumo, debí pedir que se recogiera en el acta y no lo hice',
+          'reconozco el error: una objeción que no consta no existe',
+        ],
+        hints: ['reconozco que…', 'lo asumo', 'dejar constancia'],
+        concepts: ['v.reconocer', 'p.dejar-constancia', 'v.asumir'],
+        note: 'reconocer, no alegar: admitir algo que no te favorece es lo que da peso a lo que digas después.',
+      },
+      {
+        speaker: 'partner',
+        es: 'Bien. Pero hay quien dirá que ahora es muy fácil tener razón.',
+        en: 'Fine. But some will say it’s very easy to be right after the fact.',
+      },
+      {
+        speaker: 'you',
+        instruction: 'Corrige la caracterización: no reclamas tener razón, señalas un procedimiento.',
+        accepted: [
+          'no tanto tener razón como evitar que vuelva a pasar',
+          'no es una cuestión de razón, es de procedimiento',
+          'más bien diría que el problema es cómo se registran las objeciones',
+          'lejos de querer tener razón, lo que propongo es cambiar el procedimiento',
+        ],
+        hints: ['no tanto… como…', 'más bien diría que…', 'lejos de…'],
+        concepts: ['p.no-tanto-como', 'p.mas-bien', 'p.lejos-de'],
+      },
+      {
+        speaker: 'partner',
+        es: '¿Y qué cambiaría usted, concretamente?',
+        en: 'And what would you change, specifically?',
+      },
+      {
+        speaker: 'you',
+        instruction: 'Propón el cambio en registro formal, como iría en un acta.',
+        accepted: [
+          'propongo que las objeciones técnicas se recojan siempre por escrito en el acta',
+          'sugiero que quede constancia nominal de cada objeción de fondo',
+          'convendría que toda objeción técnica figurara en el acta con su autor',
+          'propondría que se deje constancia por escrito de cualquier objeción de fondo',
+        ],
+        hints: ['propongo que + subjuntivo', 'convendría que…', 'quede constancia'],
+        concepts: ['p.dejar-constancia', 'g.audience', 'g.subjunctive-intro'],
+      },
+      {
+        speaker: 'you',
+        instruction:
+          'Reformula esa misma propuesta para el equipo, en registro coloquial, como se lo dirías tomando un café.',
+        accepted: [
+          'o sea, que a partir de ahora lo que digamos en la reunión lo ponemos por escrito',
+          'total, que si alguien ve un problema, que lo escriba y no se quede en el aire',
+          'básicamente, lo decimos y lo apuntamos, que si no luego no consta',
+          'en plan: lo que se objete, se apunta. Así no pasa esto otra vez',
+        ],
+        hints: ['o sea, que…', 'total, que…', 'lo que se objete, se apunta'],
+        concepts: ['g.audience', 'p.o-sea-que', 'p.en-plan-b2'],
+        note: 'El mismo contenido en dos registros seguidos. Poder hacer eso a voluntad es exactamente lo que separa C2 de C1.',
+      },
+      {
+        speaker: 'partner',
+        es: 'Queda recogido. Y esta vez, con su nombre al lado.',
+        en: 'It’s on record. And this time, with your name next to it.',
+      },
+    ],
+  },
 ];

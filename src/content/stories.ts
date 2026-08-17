@@ -1297,4 +1297,255 @@ export const stories: Story[] = [
       },
     ],
   },
+
+  {
+    id: 'story.movilidad',
+    title: 'El carril y la calle',
+    blurb:
+      'Un carril bici, dos cartas al periódico y un informe municipal. Los tres dicen la verdad y ninguno dice lo mismo.',
+    icon: 'newspaper-outline',
+    level: 'B2',
+    topics: ['city', 'opinions', 'transport'],
+    concepts: ['p.por-un-lado', 'p.a-pesar-de', 'v.dato', 'v.medida', 'v.polemica'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'El Ayuntamiento quitó una fila de aparcamiento en la calle Mayor para poner un carril bici.',
+            en: 'The council removed a row of parking on Calle Mayor to put in a cycle lane.',
+          },
+          {
+            es: 'La medida se aprobó en junio, sin apenas debate, y entró en vigor en septiembre.',
+            en: 'The measure was approved in June with barely any debate, and came into force in September.',
+          },
+          {
+            es: 'Tres meses después, la polémica sigue viva en las páginas de cartas del periódico local.',
+            en: 'Three months on, the controversy is still alive in the local paper’s letters pages.',
+          },
+        ],
+        question: {
+          question: '¿Qué detalle sugiere que la protesta era previsible?',
+          questionEs: '¿Qué detalle sugiere que la protesta era previsible?',
+          options: [
+            'Que se aprobó «sin apenas debate», de modo que nadie afectado fue escuchado antes',
+            'Que el carril bici es demasiado estrecho',
+            'Que la medida entró en vigor en septiembre',
+            'Que el periódico es local',
+          ],
+          answer: 0,
+          explanation:
+            'La frase no dice que la medida fuese mala: dice que se decidió sin discusión. Es una crítica al procedimiento, colocada como si fuese un dato neutro.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'CARTA 1. «Llevo veintidós años con la ferretería en esta calle.',
+            en: 'LETTER 1. “I’ve had the hardware shop on this street for twenty-two years.',
+          },
+          {
+            es: 'Mis clientes venían en coche porque compran cosas que pesan. Ahora no pueden parar.',
+            en: 'My customers came by car because they buy heavy things. Now they can’t stop.',
+          },
+          {
+            es: 'No estoy en contra de la bici. Estoy en contra de que decidan por mí y me lo llamen progreso.»',
+            en: 'I’m not against bikes. I’m against them deciding for me and calling it progress.”',
+          },
+        ],
+        question: {
+          question: '¿Dónde sitúa el ferretero su objeción?',
+          questionEs: '¿Dónde sitúa el ferretero su objeción?',
+          options: [
+            'En quién decide, no en el carril bici en sí',
+            'En que las bicicletas son peligrosas',
+            'En que el alquiler de su local ha subido',
+            'En que la calle está más sucia',
+          ],
+          answer: 0,
+          explanation:
+            'La estructura «no estoy en contra de X, estoy en contra de que…» separa lo que le atribuirían de lo que de verdad le molesta. El objeto de la queja es el procedimiento.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'CARTA 2. «Cruzo esa calle todos los días con dos niños.',
+            en: 'LETTER 2. “I cross that street every day with two children.',
+          },
+          {
+            es: 'Antes había coches aparcados en doble fila y no veíamos nada al cruzar.',
+            en: 'Before, there were cars double-parked and we couldn’t see a thing when crossing.',
+          },
+          {
+            es: 'A los comerciantes les entiendo, de verdad. Pero mi hijo también tiene derecho a llegar al colegio.»',
+            en: 'I do understand the shopkeepers, honestly. But my son also has a right to get to school.”',
+          },
+        ],
+        question: {
+          question: '¿Qué hace la segunda carta antes de discrepar?',
+          questionEs: '¿Qué hace la segunda carta antes de discrepar?',
+          options: [
+            'Concede que la otra parte tiene motivos, y solo después pone su propio derecho enfrente',
+            'Acusa a los comerciantes de egoísmo',
+            'Niega que hubiera coches en doble fila',
+            'Pide que se retire el carril bici',
+          ],
+          answer: 0,
+          explanation:
+            '«A los comerciantes les entiendo, de verdad. Pero…» — conceder primero y objetar después es la forma estándar del desacuerdo en español, y aquí hace la carta mucho más difícil de rebatir.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'INFORME MUNICIPAL. Los atropellos en la calle Mayor han bajado un 60 % en un año.',
+            en: 'COUNCIL REPORT. Pedestrian collisions on Calle Mayor are down 60% in a year.',
+          },
+          {
+            es: 'La facturación media del comercio de la zona ha bajado un 4 %.',
+            en: 'Average retail turnover in the area is down 4%.',
+          },
+          {
+            es: 'El informe no compara con el resto de la ciudad, donde la facturación bajó un 5 %.',
+            en: 'The report does not compare with the rest of the city, where turnover fell 5%.',
+          },
+        ],
+        question: {
+          question: '¿Por qué importa el último dato?',
+          questionEs: '¿Por qué importa el último dato?',
+          options: [
+            'Porque el comercio de la zona cayó menos que la media: el carril no explica la caída',
+            'Porque demuestra que el carril bici arruinó a los comerciantes',
+            'Porque los atropellos no bajaron de verdad',
+            'Porque el informe está mal hecho',
+          ],
+          answer: 0,
+          explanation:
+            'Un 4 % frente a un 5 % de la ciudad significa que la zona aguantó mejor que la media. El dato que faltaba no refuta al ferretero por completo, pero desmonta la causa que él le atribuye.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'story.acta-larga',
+    title: 'Lo que consta y lo que ocurrió',
+    blurb:
+      'Un correo, un acta y una nota manuscrita sobre la misma reunión. Nadie falta a la verdad; la versión oficial es la menos exacta.',
+    icon: 'briefcase-outline',
+    level: 'C1',
+    topics: ['work', 'opinions'],
+    concepts: ['g.se-impersonal', 'g.lo-nominal', 'p.dejar-constancia', 'v.matiz', 'v.sesgo'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'CORREO, martes 9:14. «Os recuerdo que mañana hay que cerrar el proveedor.',
+            en: 'EMAIL, Tuesday 9:14. “A reminder that we have to settle the supplier tomorrow.',
+          },
+          {
+            es: 'Si alguien tiene una objeción de fondo, que la diga hoy, por favor.',
+            en: 'If anyone has a substantive objection, please say so today.',
+          },
+          { es: 'Mañana ya no hay margen.»', en: 'Tomorrow there’s no room left.”' },
+        ],
+        question: {
+          question: '¿Qué condición pone el correo sin decirlo abiertamente?',
+          questionEs: '¿Qué condición pone el correo sin decirlo abiertamente?',
+          options: [
+            'Que quien no objete hoy pierde el derecho a objetar después',
+            'Que la decisión ya está tomada y no admite cambios',
+            'Que el proveedor es el más barato',
+            'Que la reunión se aplaza',
+          ],
+          answer: 0,
+          explanation:
+            '«Mañana ya no hay margen» convierte el silencio de hoy en consentimiento. Es una cláusula, escrita como si fuese un aviso logístico.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'ACTA. «Se presentó la propuesta de adjudicación.',
+            en: 'MINUTES. “The award proposal was presented.',
+          },
+          {
+            es: 'Se recogieron las observaciones del área técnica y se acordó continuar.',
+            en: 'The technical department’s observations were noted and it was agreed to proceed.',
+          },
+          { es: 'No se formularon objeciones.»', en: 'No objections were raised.”' },
+        ],
+        question: {
+          question: '¿Qué consigue el acta con «no se formularon objeciones»?',
+          questionEs: '¿Qué consigue el acta con «no se formularon objeciones»?',
+          options: [
+            'Deja que el lector concluya que hubo consenso, sin afirmarlo en ningún momento',
+            'Afirma que todos votaron a favor',
+            'Reconoce que el área técnica se opuso',
+            'Indica que la reunión fue muy corta',
+          ],
+          answer: 0,
+          explanation:
+            'Es implicatura, no mentira. Registrar la ausencia de objeciones formales invita a leer «acuerdo» donde solo hubo silencio — y las tres pasivas reflejas se aseguran de que nadie firme esa lectura.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'NOTA MANUSCRITA, en el margen del acta.',
+            en: 'HANDWRITTEN NOTE, in the margin of the minutes.',
+          },
+          {
+            es: '«El área técnica habló 40 min. Dijo que el plazo era inviable con ese proveedor.',
+            en: '“Technical spoke for 40 min. Said the deadline was unworkable with that supplier.',
+          },
+          {
+            es: 'Nadie contestó. Eso es lo que aquí se llama "recoger observaciones".»',
+            en: 'Nobody replied. That is what gets called “noting observations” around here.”',
+          },
+        ],
+        question: {
+          question: '¿Qué añade la nota al acta?',
+          questionEs: '¿Qué añade la nota al acta?',
+          options: [
+            'No contradice ningún hecho del acta: aporta lo que el acta decidió no registrar',
+            'Demuestra que el acta contiene datos falsos',
+            'Prueba que el área técnica votó en contra',
+            'Indica que la reunión no se celebró',
+          ],
+          answer: 0,
+          explanation:
+            'Todo lo que dice el acta sigue siendo cierto. Lo que la nota expone es la distancia entre «se recogieron observaciones» y lo que ocurrió, que es exactamente donde vive el sesgo.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Tres semanas después, el proveedor comunicó que no llegaba a la fecha.',
+            en: 'Three weeks later, the supplier announced they would not make the date.',
+          },
+          {
+            es: 'En la reunión siguiente se pidió «reconstruir el proceso de decisión».',
+            en: 'At the next meeting there was a request to “reconstruct the decision process”.',
+          },
+          {
+            es: 'El acta de junio decía: «no se formularon objeciones». La nota del margen no constaba en ningún sitio.',
+            en: 'The June minutes said: “no objections were raised”. The margin note was on no record anywhere.',
+          },
+        ],
+        question: {
+          question: '¿Cuál es la lección práctica del último párrafo?',
+          questionEs: '¿Cuál es la lección práctica del último párrafo?',
+          options: [
+            'Una objeción que no se deja por escrito no existe cuando se revisa lo ocurrido',
+            'Que el proveedor era el culpable de todo',
+            'Que las actas no sirven para nada',
+            'Que el área técnica debería haber votado en contra',
+          ],
+          answer: 0,
+          explanation:
+            'De ahí la fórmula «quisiera dejar constancia de…». No es formalismo vacío: es lo único que sobrevive a la reconstrucción de los hechos.',
+        },
+      },
+    ],
+  },
 ];
