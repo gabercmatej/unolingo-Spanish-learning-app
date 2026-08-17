@@ -14,6 +14,11 @@ import {
 } from '@/content';
 import { errorDrills, naturalDrills } from '@/content/drills';
 import {
+  personBearingToken,
+  sentencesForForm,
+  supportedPersons,
+} from '@/content/verb-corpus';
+import {
   CEFR_LEVELS,
   PERSON_LABELS,
   PERSONS,
@@ -807,33 +812,51 @@ function buildVerbForm(
   const conjugation = verb?.tenses[tense as keyof typeof verb.tenses];
   if (!verb || !conjugation) return null;
 
-  const person = pick([...PERSONS], ctx.rng) ?? 'yo';
+  /**
+   * Prefer a person the corpus can actually illustrate, so conjugation is
+   * practised inside a sentence rather than as a bare table. `supportedPersons`
+   * comes from the derived corpus index, which is also what `audit:content`
+   * reports — the exercise the learner gets and the number the audit prints
+   * cannot drift apart.
+   *
+   * A quarter of the time we still take any person at random, so the explicit
+   * person → form drill keeps appearing and every person stays reachable even
+   * where the corpus is thin.
+   */
+  const supported = supportedPersons(conceptId);
+  const preferContext = supported.length > 0 && ctx.rng() > 0.25;
+  const person =
+    (preferContext ? pick(supported, ctx.rng) : pick([...PERSONS], ctx.rng)) ?? 'yo';
   const answer = conjugation.forms[person];
 
-  // Prefer a real sentence using this verb; fall back to a cued prompt.
-  const sentence = pick(
-    allSentences.filter((s) =>
-      tokenize(s.es).some((token) => bareWord(token) === bareWord(answer)),
-    ),
-    ctx.rng,
-  );
-
-  if (sentence) {
-    const blanked = blankOut(sentence.es, answer);
-    if (blanked) {
-      return {
-        ...base('fillBlank', [conceptId]),
-        form: 'typed',
-        instruction: `Fill the gap — ${verb.infinitive}`,
-        prompt: blanked.template,
-        promptSub: sentence.en,
-        promptIsSpanish: true,
-        template: blanked.template,
-        accepted: [blanked.answer],
-        language: 'es',
-        placeholder: 'Una palabra',
-        note: sentence.note,
-      };
+  if (preferContext) {
+    const sentence = pick(sentencesForForm(conceptId, person), ctx.rng);
+    if (sentence) {
+      /**
+       * Blank the token that carries the person, not the whole form. A compound
+       * or reflexive form spans several tokens, so blanking the lot matched no
+       * single token and silently produced nothing — which is why every present
+       * perfect and every reflexive was table-only before this.
+       */
+      const blanked = blankOut(sentence.es, personBearingToken(answer));
+      if (blanked) {
+        const compound = answer.split(/\s+/).length > 1;
+        return {
+          ...base('fillBlank', [conceptId]),
+          form: 'typed',
+          instruction: compound
+            ? `Fill the gap — ${verb.infinitive}, ${PERSON_LABELS[person].split(' /')[0]}`
+            : `Fill the gap — ${verb.infinitive}`,
+          prompt: blanked.template,
+          promptSub: sentence.en,
+          promptIsSpanish: true,
+          template: blanked.template,
+          accepted: [blanked.answer],
+          language: 'es',
+          placeholder: 'Una palabra',
+          note: sentence.note,
+        };
+      }
     }
   }
 

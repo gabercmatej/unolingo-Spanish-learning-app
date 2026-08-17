@@ -14,11 +14,13 @@ import {
   verbs,
 } from '@/content';
 import { errorDrills, naturalDrills } from '@/content/drills';
+import { reportVerbCorpus } from '@/content/verb-corpus';
 import {
   CEFR_LEVELS,
   type CefrLevel,
   type Lesson,
   type LessonKind,
+  type Person,
   type Stage,
 } from '@/content/types';
 
@@ -104,6 +106,11 @@ export interface StageAudit {
   drawnBelowLevel: number;
   /** Lessons whose own sentence list is too thin to vary a session. */
   thinLessons: string[];
+  /**
+   * Lessons declaring more concepts than one session can generate. The surplus
+   * is silently never introduced — see `findDepthGaps`.
+   */
+  overSubscribedLessons: string[];
   /** Concepts introduced here with too little material to practise them. */
   thinlyPractised: string[];
   /**
@@ -198,10 +205,17 @@ export function auditCurriculum(): CurriculumAudit {
     // What this stage's lessons actually reach for, and at what level.
     const drawn = new Set<string>();
     const thinLessons: string[] = [];
+    const overSubscribedLessons: string[] = [];
     for (const lesson of lessons) {
       for (const sentence of getLessonSentences(lesson)) drawn.add(sentence.id);
       if (drawsOnOwnSentences(lesson) && lesson.sentences.length < THRESHOLDS.sentencesPerLesson) {
         thinLessons.push(`${lesson.id} (${lesson.sentences.length})`);
+      }
+      // Mirrors `buildLessonSession`'s own target: clamp(estMinutes * 1.8, 10, 20).
+      const capacity = Math.max(10, Math.min(20, Math.round(lesson.estMinutes * 1.8)));
+      const declared = new Set([...lesson.teaches, ...(lesson.grammar ?? [])]).size;
+      if (declared > capacity) {
+        overSubscribedLessons.push(`${lesson.id} (${declared}>${capacity})`);
       }
     }
     const stageFloor = Math.min(...[...owned].map((level) => CEFR_LEVELS.indexOf(level)));
@@ -252,6 +266,7 @@ export function auditCurriculum(): CurriculumAudit {
       drawnSentences: drawn.size,
       drawnBelowLevel,
       thinLessons,
+      overSubscribedLessons,
       thinlyPractised,
       thinnest: sortedPools.slice(0, 8),
       medianPool,
@@ -387,6 +402,24 @@ function findDepthGaps(stages: StageAudit[]): Gap[] {
       }
     }
 
+    /**
+     * The mirror image of a thin lesson, and a worse failure. A session is
+     * capped at roughly `estMinutes × 1.8` exercises, so a lesson declaring
+     * more concepts than that cannot deliver them all — and a concept that is
+     * never generated never enters the learner's state, is never scheduled for
+     * review, and never appears in the Library. It is `teaches` making a promise
+     * the session cannot keep, which looks identical to a healthy lesson from
+     * every other angle.
+     */
+    if (stage.overSubscribedLessons.length > 0) {
+      warn(
+        `${stage.overSubscribedLessons.length} lesson(s) declare more concepts than a session ` +
+          `can deliver, so the surplus is never introduced: ` +
+          `${stage.overSubscribedLessons.slice(0, 5).join(', ')}` +
+          `${stage.overSubscribedLessons.length > 5 ? ', …' : ''}`,
+      );
+    }
+
     // Individual thin lessons, which a healthy stage mean hides completely.
     if (stage.thinLessons.length > 0) {
       warn(
@@ -463,50 +496,76 @@ function findDepthGaps(stages: StageAudit[]): Gap[] {
  * be missing is `vosotros`.
  */
 function findParadigmGaps(): Gap[] {
-  const corpus = new Set<string>();
-  for (const sentence of sentences) {
-    for (const token of sentence.es.split(/\s+/)) {
-      corpus.add(token.replace(/[¿?¡!.,;:«»"]/g, '').toLowerCase());
-    }
-  }
-
-  const missingByPerson = new Map<string, number>();
-  let tableOnly = 0;
-  for (const concept of verbFormConcepts) {
-    const verb = verbs.find((v) => v.id === concept.verbId);
-    const conjugation = verb?.tenses[concept.tense];
-    if (!conjugation) continue;
-
-    let present = 0;
-    for (const [person, form] of Object.entries(conjugation.forms)) {
-      // Compound and reflexive forms hang on their last token.
-      const head = form.split(/\s+/).slice(-1)[0].replace(/[¿?¡!.,;:«»"]/g, '').toLowerCase();
-      if (corpus.has(head)) present += 1;
-      else missingByPerson.set(person, (missingByPerson.get(person) ?? 0) + 1);
-    }
-    if (present === 0) tableOnly += 1;
-  }
-
+  const report = reportVerbCorpus((id) => !!getLessonThatIntroduces(id));
   const gaps: Gap[] = [];
-  if (tableOnly > 0) {
+
+  if (report.unsupported.length > 0) {
     gaps.push({
       severity: 'warn',
       where: 'verbs',
       message:
-        `${tableOnly} verb paradigm(s) have no conjugated form anywhere in the sentence ` +
-        `corpus, so they can only be drilled as a bare table`,
+        `${report.unsupported.length} taught paradigm(s) have no conjugated form anywhere in ` +
+        `the corpus, so they can only be drilled as a bare table: ` +
+        `${report.unsupported.slice(0, 5).join(', ')}` +
+        `${report.unsupported.length > 5 ? ', …' : ''}`,
     });
   }
-  const worst = [...missingByPerson.entries()].sort((a, b) => b[1] - a[1]);
-  if (worst.length > 0) {
+
+  // Reachable but resting on one sentence. Distinguishing this from "healthy"
+  // is the whole reason the corpus index exists.
+  if (report.barelyPractised.length > 0) {
     gaps.push({
-      severity: 'info',
+      severity: 'warn',
       where: 'verbs',
       message:
-        'conjugated forms absent from the corpus, by person: ' +
-        worst.map(([person, n]) => `${person}=${n}`).join(' '),
+        `${report.barelyPractised.length} taught paradigm(s) rest on a single sentence: ` +
+        `${report.barelyPractised.slice(0, 5).join(', ')}` +
+        `${report.barelyPractised.length > 5 ? ', …' : ''}`,
     });
   }
+
+  gaps.push({
+    severity: 'info',
+    where: 'verbs',
+    message:
+      `${report.taught} of ${report.paradigms} paradigms taught, ` +
+      `${report.withSentenceSupport} with sentence support ` +
+      `(${Math.round((report.withSentenceSupport / Math.max(report.taught, 1)) * 100)}%)`,
+  });
+
+  gaps.push({
+    severity: 'info',
+    where: 'verbs',
+    message:
+      'form exposures by person: ' +
+      (Object.entries(report.exposureByPerson) as [Person, number][])
+        .sort((a, b) => b[1] - a[1])
+        .map(([person, n]) => `${person}=${n}`)
+        .join(' '),
+  });
+
+  gaps.push({
+    severity: 'info',
+    where: 'verbs',
+    message:
+      'form exposures by tense: ' +
+      Object.entries(report.exposureByTense)
+        .sort((a, b) => b[1] - a[1])
+        .map(([tense, n]) => `${tense}=${n}`)
+        .join(' '),
+  });
+
+  gaps.push({
+    severity: 'info',
+    where: 'verbs',
+    message:
+      'taught paradigms by persons the corpus can illustrate (of 6): ' +
+      Object.entries(report.personsCoveredHistogram)
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map(([covered, n]) => `${covered}→${n}`)
+        .join(' '),
+  });
+
   return gaps;
 }
 

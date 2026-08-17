@@ -5,9 +5,11 @@ import {
   getConcept,
   getGrammar,
   getUnitConcepts,
+  getVerb,
   isGrammarConcept,
   isVocabConcept,
   levelIndex,
+  verbFormConceptId,
 } from '@/content';
 import {
   CEFR_LEVELS,
@@ -15,6 +17,7 @@ import {
   type CefrLevel,
   type Lesson,
   type Stage,
+  type TenseId,
   type TopicId,
   type Unit,
 } from '@/content/types';
@@ -211,6 +214,33 @@ export function weakAreas(learner: LearnerState, now = Date.now(), limit = 6): W
     .filter((area) => area.mastery < 0.82)
     .sort((a, b) => a.mastery - b.mastery)
     .slice(0, limit);
+}
+
+/**
+ * Verb tenses the learner has actually met, in the order `verbs.ts` lists them.
+ *
+ * The Library's verb page shows a tense only once its paradigm concept exists in
+ * the learner's state, and hides the rest behind "not met yet". That predicate
+ * used to live inline in the screen, which is part of why nobody noticed it was
+ * permanently false: no lesson taught any paradigm, so `metTenses` was always
+ * empty and every verb page showed the present tense and nothing else. Keeping
+ * it here means the integration test exercises the same predicate the screen
+ * does, rather than a copy of it that could stay green while the screen broke.
+ */
+export function metVerbTenses(verbId: string, learner: LearnerState): TenseId[] {
+  const verb = getVerb(verbId);
+  if (!verb) return [];
+  return (Object.keys(verb.tenses) as TenseId[]).filter(
+    (tense) => !!learner.concepts[verbFormConceptId(verbId, tense)],
+  );
+}
+
+export function hasMetVerbTense(
+  verbId: string,
+  tense: TenseId,
+  learner: LearnerState,
+): boolean {
+  return !!learner.concepts[verbFormConceptId(verbId, tense)];
 }
 
 /** Concepts due for review right now, most urgent first. */

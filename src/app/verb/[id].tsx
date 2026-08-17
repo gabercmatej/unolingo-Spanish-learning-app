@@ -17,6 +17,7 @@ import { getVerb, verbFormConceptId } from '@/content';
 import { PERSONS, PERSON_LABELS, TENSE_LABELS, type Conjugation, type TenseId } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { hasMetVerbTense } from '@/learning/mastery';
 import { mastery } from '@/learning/srs';
 import { goBack } from '@/lib/navigation';
 
@@ -46,8 +47,11 @@ export default function VerbScreen() {
   }
 
   const tenses = Object.entries(verb.tenses) as [TenseId, Conjugation][];
-  const metTenses = tenses.filter(([tense]) => learner.concepts[verbFormConceptId(verb.id, tense)]);
-  const unmetTenses = tenses.filter(([tense]) => !learner.concepts[verbFormConceptId(verb.id, tense)]);
+  // Shared with the learning layer, so the Library and the tests agree on what
+  // "met" means. This predicate was silently false for every verb for a long
+  // time, and an inline copy is why nothing noticed.
+  const metTenses = tenses.filter(([tense]) => hasMetVerbTense(verb.id, tense, learner));
+  const unmetTenses = tenses.filter(([tense]) => !hasMetVerbTense(verb.id, tense, learner));
 
   // Always show at least the present, even before it has been formally met.
   const visible = metTenses.length > 0 ? metTenses : tenses.slice(0, 1);
