@@ -131,7 +131,21 @@ is exactly what these tests exist to catch.
   easier on a first pass and harder on a later one.
 - **Concepts are the unit of memory.** Vocabulary, grammar rules and verb paradigms are all
   concepts with one `ConceptState`. Verb-form concepts (`f.<verb>.<tense>`) are *derived*
-  from `content/verbs.ts`, so adding a verb creates its practice targets automatically.
+  from `content/verbs.ts`, so adding a verb creates its practice targets automatically —
+  but **deriving them is not the same as reaching them**. A concept no lesson teaches and
+  no sentence tags never enters the learner's state, so it is never generated, never
+  reviewed and never appears in the Library. The course shipped for a long time with all
+  101 paradigms stranded exactly this way: the conjugation system existed and was dead,
+  and the Library's verb pages showed only the present tense forever because `metTenses`
+  could never populate. **Adding a verb therefore means also assigning its paradigms to a
+  lesson** — a test enforces this now, and the audit warns on any stranded paradigm.
+- **Verb paradigms are practised by text-matching the conjugated form**, not by concept
+  tags: `buildVerbForm` searches the sentence corpus for a sentence containing the exact
+  form. So a paradigm can be taught, reachable and healthy by every concept-pool measure
+  and still be drillable only as a bare conjugation table, because nothing tags paradigms
+  on sentences. `audit:content` measures this separately and reports absent forms per
+  person. The corpus skews to first and third singular, so the form to watch is
+  **`vosotros`** — the one a Peninsular course cannot afford to have only in a table.
 - **`stability` is days-until-review-threshold**, and `retrievability()` is a continuous
   decay curve. That curve — not a fixed interval ladder — ranks Smart Review.
 - **One grading path.** Everything answerable goes through `checkExercise()`. Do not grade
@@ -276,10 +290,16 @@ those tests cross-check content against logic.
   would need more conversation scenes and reading pieces, which are the expensive objects.
   Note this measures *dedicated* lessons only — see the modality invariant below before
   concluding that ordinary lessons are text-only.
-- **Upper-stage unit counts are still lopsided** — B2, C1 and C2 have 6–7 units each
-  against 14–15 at A1/A2. The sentence pools behind them are now comparable (80 each),
-  so this is a structural question about how much B2+ material a single unit should hold,
-  not a content shortage.
+- **Upper-stage unit counts are lopsided, and that is now a deliberate decision.** B2, C1
+  and C2 have 6–7 units against 14–15 at A1/A2. A breadth audit of every B2/C1/C2 unit
+  found them correctly scoped with two exceptions, which were lesson-level overload rather
+  than unit-level: `l.argument` carried 25 concepts and `l.c1-reformulation` 15, against a
+  teach-card cap of 8. Both split into two lessons *inside their existing unit*. Unit count
+  stayed at 63 on purpose — symmetry with A1/A2 is not a reason to add units, and the
+  remaining upper units each hold one coherent objective.
+- **`vosotros` and `tú` are the thinnest conjugated forms** (72 absent each, per the audit's
+  per-person note). Closing that gap means sentences that happen to use those forms
+  naturally, not conjugation drills.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
   pronunciation check. That is a deliberate limit, not an oversight — see `lib/speech.ts`
   for the seam where real audio would land.
