@@ -78,4 +78,39 @@ export const c2CoreVocab: VocabConcept[] = [
   { id: 'p.no-tanto-como', kind: 'phrase', level: 'C2', topics: ['opinions'], es: 'no tanto… como…', en: 'not so much… as…', pos: 'expression', note: 'El recurso más limpio para corregir una caracterización.' },
   { id: 'v.sintesis', kind: 'vocab', level: 'C2', topics: ['opinions'], es: 'la síntesis', en: 'the synthesis / summary', pos: 'noun', gender: 'f' },
   { id: 'v.salvedad', kind: 'vocab', level: 'C2', topics: ['opinions'], es: 'la salvedad', en: 'the caveat', pos: 'noun', gender: 'f', note: 'Con la salvedad de que… — el matiz que salva el argumento.' },
+  // --- Familias de casi sinónimos: la escala de registro --------------------
+  //
+  // A C2 no se aprende una palabra nueva por concepto, se aprende la escala.
+  // Cada grupo va de lo corriente a lo formal, y elegir mal el peldaño es el
+  // error que queda cuando ya no quedan errores de gramática.
+  { id: 'v.comenzar', kind: 'vocab', level: 'C2', topics: ['work'], es: 'comenzar', en: 'to begin', pos: 'verb', confusableWith: ['v.iniciar', 'v.emprender'], note: 'Neutro y algo más escrito que empezar; en habla corriente empezar gana siempre.' },
+  { id: 'v.iniciar', kind: 'vocab', level: 'C2', topics: ['work'], es: 'iniciar', en: 'to initiate / to open (a process)', pos: 'verb', register: 'formal', note: 'Pide un objeto abstracto: iniciar un expediente, un trámite, una investigación. No se inicia una cerveza.' },
+  { id: 'v.emprender', kind: 'vocab', level: 'C2', topics: ['work'], es: 'emprender', en: 'to embark on', pos: 'verb', note: 'Sugiere esfuerzo y recorrido: emprender un viaje, una reforma, una carrera.' },
+  { id: 'v.zanjar', kind: 'vocab', level: 'C2', topics: ['opinions', 'work'], es: 'zanjar', en: 'to settle (an argument) for good', pos: 'verb', confusableWith: ['v.concluir'], note: 'No es terminar: es cortar la discusión. Zanjar un debate implica autoridad.' },
+  { id: 'v.concluir', kind: 'vocab', level: 'C2', topics: ['work', 'opinions'], es: 'concluir', en: 'to conclude', pos: 'verb', register: 'formal', note: 'Terminar con una conclusión, no solo dejar de hacer algo.' },
+  { id: 'v.adquirir', kind: 'vocab', level: 'C2', topics: ['shopping', 'work'], es: 'adquirir', en: 'to acquire', pos: 'verb', register: 'formal', confusableWith: ['v.comprar'], note: 'Comprar con traje. En una tienda suena pretencioso; en un contrato es lo normal.' },
+  { id: 'v.solicitar', kind: 'vocab', level: 'C2', topics: ['work'], es: 'solicitar', en: 'to request / to apply for', pos: 'verb', register: 'formal', note: 'Pedir por escrito y por cauce oficial: solicitar una beca, una prórroga.' },
+  { id: 'v.manifestar', kind: 'vocab', level: 'C2', topics: ['opinions'], es: 'manifestar', en: 'to express / to state publicly', pos: 'verb', register: 'formal', confusableWith: ['v.afirmar', 'v.senalar'], note: 'Decir en público y para que conste. Muy de rueda de prensa.' },
+  { id: 'v.retocar', kind: 'vocab', level: 'C2', topics: ['work'], es: 'retocar', en: 'to tweak', pos: 'verb', confusableWith: ['v.modificar'], note: 'Cambio pequeño y superficial; admitir que has retocado algo suena a menos que modificarlo.' },
+  { id: 'v.modificar', kind: 'vocab', level: 'C2', topics: ['work'], es: 'modificar', en: 'to amend / to alter', pos: 'verb', register: 'formal' },
+  { id: 'p.hacerse-con', kind: 'phrase', level: 'C2', topics: ['work'], es: 'hacerse con', en: 'to get hold of / to secure', pos: 'expression', note: 'Conseguir algo disputado: hacerse con el contrato, con el puesto, con el mando.' },
+
+  // --- Connotación: la misma cualidad, elogio o reproche -------------------
+  { id: 'v.exigente', kind: 'vocab', level: 'C2', topics: ['describing', 'work'], es: 'exigente', en: 'demanding (in a good way)', pos: 'adjective', confusableWith: ['v.quisquilloso'], note: 'Elogio: pone el nivel alto. Su versión negativa es quisquilloso.' },
+  { id: 'v.quisquilloso', kind: 'vocab', level: 'C2', topics: ['describing'], es: 'quisquilloso / quisquillosa', en: 'nitpicking', pos: 'adjective', note: 'Exigente con lo que no importa. Nadie se describe así a sí mismo.' },
+  { id: 'v.firme', kind: 'vocab', level: 'C2', topics: ['describing', 'opinions'], es: 'firme', en: 'firm', pos: 'adjective', confusableWith: ['v.inflexible'], note: 'Mantenerse firme es virtud; ser inflexible es el mismo hecho contado en contra.' },
+  { id: 'v.inflexible', kind: 'vocab', level: 'C2', topics: ['describing'], es: 'inflexible', en: 'unbending', pos: 'adjective' },
+  { id: 'v.prudente', kind: 'vocab', level: 'C2', topics: ['describing', 'opinions'], es: 'prudente', en: 'prudent', pos: 'adjective', confusableWith: ['v.timorato'], note: 'Cautela bien vista. Si quieres criticarla, timorato o pusilánime.' },
+  { id: 'v.timorato', kind: 'vocab', level: 'C2', topics: ['describing'], es: 'timorato / timorata', en: 'timid to a fault', pos: 'adjective', register: 'formal' },
+  { id: 'v.ambicioso', kind: 'vocab', level: 'C2', topics: ['describing', 'work'], es: 'ambicioso / ambiciosa', en: 'ambitious', pos: 'adjective', note: 'De una persona puede sonar a reproche; de un proyecto es elogio sin más.' },
+
+  // --- Colocaciones con sustantivos abstractos -----------------------------
+  { id: 'p.tomar-medidas', kind: 'phrase', level: 'C2', topics: ['work', 'opinions'], es: 'tomar medidas', en: 'to take measures', pos: 'expression', note: 'Se toman medidas, se adoptan decisiones. Cruzarlos se nota.' },
+  { id: 'p.adoptar-una-postura', kind: 'phrase', level: 'C2', topics: ['opinions'], es: 'adoptar una postura', en: 'to adopt a position', pos: 'expression' },
+  { id: 'p.sentar-las-bases', kind: 'phrase', level: 'C2', topics: ['work'], es: 'sentar las bases', en: 'to lay the groundwork', pos: 'expression', confusableWith: ['p.sentar-precedente'] },
+  { id: 'p.marcar-la-pauta', kind: 'phrase', level: 'C2', topics: ['work', 'opinions'], es: 'marcar la pauta', en: 'to set the standard', pos: 'expression' },
+  { id: 'p.dejar-margen', kind: 'phrase', level: 'C2', topics: ['work'], es: 'dejar margen', en: 'to leave room / leeway', pos: 'expression' },
+  { id: 'p.cobrar-fuerza', kind: 'phrase', level: 'C2', topics: ['opinions'], es: 'cobrar fuerza', en: 'to gain momentum', pos: 'expression', confusableWith: ['p.ganar-terreno'] },
+  { id: 'p.plantear-una-hipotesis', kind: 'phrase', level: 'C2', topics: ['work', 'opinions'], es: 'plantear una hipótesis', en: 'to put forward a hypothesis', pos: 'expression' },
+  { id: 'p.dar-por-cerrado', kind: 'phrase', level: 'C2', topics: ['work'], es: 'dar por cerrado', en: 'to consider closed', pos: 'expression', confusableWith: ['v.zanjar'] },
 ];
