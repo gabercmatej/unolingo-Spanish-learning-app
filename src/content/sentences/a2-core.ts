@@ -476,4 +476,41 @@ export const a2CoreSentences: Sentence[] = [
     level: 'A2',
     topics: ['social'],
   },
+
+  // --- muy or mucho, the distinction that never stops mattering ------------
+  {
+    id: 's.m55',
+    es: 'Trabaja mucho y está muy cansado.',
+    en: 'He works a lot and he’s very tired.',
+    concepts: ['g.muy-mucho', 'v.trabajar', 'v.cansado'],
+    level: 'A2',
+    topics: ['work', 'feelings'],
+    blanks: ['mucho', 'muy'],
+    note: 'mucho modifies the verb, muy the adjective. One sentence, both jobs.',
+  },
+  {
+    id: 's.m56',
+    es: 'Hay mucha gente y hace muy buen tiempo.',
+    en: 'There are a lot of people and the weather is very good.',
+    concepts: ['g.muy-mucho', 'v.gente', 'p.que-tiempo-hace'],
+    level: 'A2',
+    topics: ['weather', 'city'],
+  },
+  {
+    id: 's.m57',
+    es: 'Me gusta mucho, pero es muy caro para mí.',
+    en: 'I like it a lot, but it’s too expensive for me.',
+    concepts: ['g.muy-mucho', 'g.gustar', 'v.caro'],
+    level: 'A2',
+    topics: ['shopping', 'opinions'],
+  },
+  {
+    id: 's.m58',
+    es: 'Tengo muchos amigos aquí, pero muy poco tiempo libre.',
+    en: 'I have a lot of friends here, but very little free time.',
+    concepts: ['g.muy-mucho', 'v.amigo', 'v.tiempo'],
+    level: 'A2',
+    topics: ['social'],
+    note: 'muchos agrees with amigos; muy never changes.',
+  },
 ];
