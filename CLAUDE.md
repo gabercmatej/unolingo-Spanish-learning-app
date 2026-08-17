@@ -140,12 +140,27 @@ is exactly what these tests exist to catch.
   could never populate. **Adding a verb therefore means also assigning its paradigms to a
   lesson** — a test enforces this now, and the audit warns on any stranded paradigm.
 - **Verb paradigms are practised by text-matching the conjugated form**, not by concept
-  tags: `buildVerbForm` searches the sentence corpus for a sentence containing the exact
-  form. So a paradigm can be taught, reachable and healthy by every concept-pool measure
-  and still be drillable only as a bare conjugation table, because nothing tags paradigms
-  on sentences. `audit:content` measures this separately and reports absent forms per
-  person. The corpus skews to first and third singular, so the form to watch is
-  **`vosotros`** — the one a Peninsular course cannot afford to have only in a table.
+  tags. `content/verb-corpus.ts` derives that association — which sentences contain which
+  form, per person — and both `buildVerbForm` and `audit:content` read the same index, so
+  the exercise a learner gets and the number the audit prints cannot drift apart. Authors
+  tag nothing: the information is already in the sentence text, so annotating sentences
+  with `f.comer.preterite` would be busywork that rots. Adding a sentence updates the
+  index automatically.
+  - Multi-word forms are matched as **token sequences**, and the blank falls on the token
+    that carries the person — the auxiliary for compounds (`he comido`), the verb for
+    reflexives (`me levanto`). Matching a single token is why every present perfect and
+    every reflexive was silently table-only for a long time.
+  - The audit reports taught paradigms, paradigms with sentence support, exposure by tense,
+    exposure by person, and paradigms resting on a single sentence. Person exposure is
+    *deliberately not equal* — `él` and `yo` dominate real Spanish — but **`vosotros`** is
+    the one to watch, because it is what makes this course Peninsular and it was the least
+    represented form in the corpus.
+- **A lesson cannot teach more concepts than its session can generate.** The session target
+  is `clamp(estMinutes × 1.8, 10, 20)`, and a concept that is never generated never enters
+  the learner's state, is never scheduled, and never reaches the Library — so `teaches`
+  declaring more than that is a promise the session silently breaks. `audit:content` warns
+  on it. Raising `estMinutes` is the honest fix when the lesson genuinely needs the time;
+  past 20 exercises the lesson has to split.
 - **`stability` is days-until-review-threshold**, and `retrievability()` is a continuous
   decay curve. That curve — not a fixed interval ladder — ranks Smart Review.
 - **One grading path.** Everything answerable goes through `checkExercise()`. Do not grade
@@ -297,9 +312,17 @@ those tests cross-check content against logic.
   teach-card cap of 8. Both split into two lessons *inside their existing unit*. Unit count
   stayed at 63 on purpose — symmetry with A1/A2 is not a reason to add units, and the
   remaining upper units each hold one coherent objective.
-- **`vosotros` and `tú` are the thinnest conjugated forms** (72 absent each, per the audit's
-  per-person note). Closing that gap means sentences that happen to use those forms
-  naturally, not conjugation drills.
+- **`vosotros` and `tú` are still the thinnest conjugated forms** — 67 exposures each against
+  `él`'s 501. That gap is partly legitimate (third-person narration dominates any corpus,
+  and `es` / `está` / `ha` are among the commonest tokens in Spanish), so the target is not
+  parity. What matters is that group dialogue keeps appearing, since that is where those
+  forms naturally live. `presentPerfect` (49), `future` (14) and `conditional` (13) are the
+  thinnest tenses.
+- **Composition is the untested surface.** The conjugation subsystem stayed dead through 119
+  passing tests because every link was tested individually and the chain was not.
+  `verb-flow.test.ts` walks the whole path — verb introduced → tense introduced → paradigm
+  reachable → exercise generated → graded → mastery updated → Library exposes the tense.
+  When adding a subsystem, prefer one test of the pathway over more tests of the parts.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
   pronunciation check. That is a deliberate limit, not an oversight — see `lib/speech.ts`
   for the seam where real audio would land.
