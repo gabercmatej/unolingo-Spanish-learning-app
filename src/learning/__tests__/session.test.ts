@@ -1,4 +1,4 @@
-import { allLessons, getConcept, levelIndex, vocabConcepts } from '@/content';
+import { allLessons, getConcept, levelIndex, verbFormConcepts, vocabConcepts } from '@/content';
 import { checkExercise } from '@/learning/check';
 import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from '@/learning/__tests__/helpers';
 import type { Exercise } from '@/learning/exercise';
@@ -87,6 +87,37 @@ describe('exercise generation', () => {
       expect(exercise).not.toBeNull();
       assertWellFormed(exercise!);
     }
+  });
+
+  /**
+   * Verb paradigms reach the learner through their own builder, not through the
+   * vocabulary path, so the loop above never touched them. They were also
+   * unreachable from the curriculum for a long time, which meant this builder
+   * ran only in theory — and it was quietly producing duplicate options.
+   *
+   * Spanish paradigms are syncretic: `yo` and `él` share a form in the
+   * imperfect, the conditional and the present subjunctive, and individual verbs
+   * collide elsewhere. That makes "pick the form for X" generate the same
+   * distractor twice unless the forms are deduped against each other as well as
+   * against the answer.
+   */
+  it('produces a well-formed exercise for every verb paradigm, syncretism included', () => {
+    let generated = 0;
+    for (const concept of verbFormConcepts) {
+      const state = { ...createConceptState(concept.id), introduced: true, timesSeen: 2 };
+      // Several seeds, because which person is asked about is random and only
+      // some persons collide.
+      for (const seed of [1, 7, 13, 29, 44]) {
+        const exercise = generateForConcept(concept.id, state, {
+          ...ctx,
+          rng: mulberry32(seed),
+        });
+        if (!exercise) continue;
+        generated += 1;
+        assertWellFormed(exercise);
+      }
+    }
+    expect(generated).toBeGreaterThan(100);
   });
 
   it('moves from recognition to production as a concept strengthens', () => {

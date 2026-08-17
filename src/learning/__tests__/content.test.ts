@@ -3,11 +3,14 @@ import {
   allLessons,
   curriculum,
   getLesson,
+  getLessonIndex,
+  getLessonThatIntroduces,
   getSentencesForConcept,
   playableUnits,
   sentences,
   validateContent,
   verbFormConceptId,
+  verbFormConcepts,
   verbs,
   vocabConcepts,
 } from '@/content';
@@ -90,6 +93,40 @@ describe('content integrity', () => {
     }
     // Vocabulary with no sentence can only ever be a multiple-choice item.
     expect(missing.length).toBeLessThan(vocabConcepts.length * 0.5);
+  });
+
+  /**
+   * `f.<verb>.<tense>` concepts are derived from `content/verbs.ts`, and the
+   * whole point of deriving them is that adding a verb creates its practice
+   * targets. That only holds if a lesson actually *introduces* them: a concept
+   * no lesson teaches and no sentence tags never enters the learner's state, so
+   * it is never generated, never reviewed, and never appears in the Library.
+   *
+   * The course shipped for a long time with all 101 of them stranded — the
+   * conjugation system existed and was unreachable — and nothing caught it,
+   * because the untaught-concept audit only looked at vocabulary and grammar.
+   */
+  it('introduces every verb paradigm through some lesson', () => {
+    const stranded = verbFormConcepts
+      .filter((concept) => !getLessonThatIntroduces(concept.id))
+      .map((concept) => concept.id);
+    expect(stranded).toEqual([]);
+  });
+
+  it('teaches a verb paradigm no earlier than the verb and the tense it needs', () => {
+    // A paradigm is only practisable once both halves are known.
+    const problems: string[] = [];
+    for (const concept of verbFormConcepts) {
+      const lesson = getLessonThatIntroduces(concept.id);
+      if (!lesson) continue;
+      const vocab = vocabConcepts.find((c) => c.verbId === concept.verbId);
+      const vocabLesson = vocab ? getLessonThatIntroduces(vocab.id) : undefined;
+      if (!vocabLesson) continue;
+      if (getLessonIndex(lesson) < getLessonIndex(vocabLesson)) {
+        problems.push(`${concept.id} taught at ${lesson}, before its verb at ${vocabLesson}`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it('exposes every unit through the curriculum tree', () => {

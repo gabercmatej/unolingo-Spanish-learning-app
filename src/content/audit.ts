@@ -8,6 +8,7 @@ import {
   getSentencesForConcept,
   grammarConcepts,
   sentences,
+  verbFormConcepts,
   stories,
   vocabConcepts,
   verbs,
@@ -275,7 +276,7 @@ export function auditCurriculum(): CurriculumAudit {
       errorDrills: errorDrills.length,
       naturalDrills: naturalDrills.length,
     },
-    gaps: [...findStructuralGaps(stages), ...findDepthGaps(stages), ...findUntaught(), ...findTemplates()],
+    gaps: [...findStructuralGaps(stages), ...findDepthGaps(stages), ...findUntaught(), ...findParadigmGaps(), ...findTemplates()],
   };
 }
 
@@ -289,7 +290,25 @@ export function auditCurriculum(): CurriculumAudit {
 function findUntaught(): Gap[] {
   const orphanGrammar = grammarConcepts.filter((c) => !getLessonThatIntroduces(c.id));
   const orphanVocab = vocabConcepts.filter((c) => !getLessonThatIntroduces(c.id));
+  /**
+   * Verb paradigms were omitted from this check for a long time, and all 101 of
+   * them were stranded: the conjugation system existed, generated nothing, and
+   * no diagnostic said so. A derived concept is exactly the kind that goes
+   * unnoticed, because nobody is looking at a file where it was written down.
+   */
+  const orphanParadigms = verbFormConcepts.filter((c) => !getLessonThatIntroduces(c.id));
   const gaps: Gap[] = [];
+
+  if (orphanParadigms.length > 0) {
+    const names = orphanParadigms.slice(0, 5).map((c) => c.id).join(', ');
+    gaps.push({
+      severity: 'warn',
+      where: 'course',
+      message:
+        `${orphanParadigms.length} verb paradigm(s) are never taught by a lesson, so they ` +
+        `can never be practised (${names}${orphanParadigms.length > 5 ? ', …' : ''})`,
+    });
+  }
 
   if (orphanGrammar.length > 0) {
     const names = orphanGrammar.slice(0, 4).map((c) => c.title).join(', ');
@@ -428,6 +447,66 @@ function findDepthGaps(stages: StageAudit[]): Gap[] {
     if (stage.optionalLessons === 0) info('no optional/enrichment lessons');
   }
 
+  return gaps;
+}
+
+/**
+ * Verb paradigms are practised by finding a sentence that contains the exact
+ * conjugated form. A paradigm whose forms appear nowhere in the corpus still
+ * generates an exercise — but only the bare "which form goes with yo?" table,
+ * which is the weakest thing the app can offer and teaches nothing about use.
+ *
+ * This is invisible to every other check: the paradigm is taught, reachable and
+ * not thin by any concept-pool measure, because paradigms are not tagged on
+ * sentences at all. Reported per person, because the corpus skews heavily to
+ * first and third singular — and in a Peninsular course the form that must not
+ * be missing is `vosotros`.
+ */
+function findParadigmGaps(): Gap[] {
+  const corpus = new Set<string>();
+  for (const sentence of sentences) {
+    for (const token of sentence.es.split(/\s+/)) {
+      corpus.add(token.replace(/[¿?¡!.,;:«»"]/g, '').toLowerCase());
+    }
+  }
+
+  const missingByPerson = new Map<string, number>();
+  let tableOnly = 0;
+  for (const concept of verbFormConcepts) {
+    const verb = verbs.find((v) => v.id === concept.verbId);
+    const conjugation = verb?.tenses[concept.tense];
+    if (!conjugation) continue;
+
+    let present = 0;
+    for (const [person, form] of Object.entries(conjugation.forms)) {
+      // Compound and reflexive forms hang on their last token.
+      const head = form.split(/\s+/).slice(-1)[0].replace(/[¿?¡!.,;:«»"]/g, '').toLowerCase();
+      if (corpus.has(head)) present += 1;
+      else missingByPerson.set(person, (missingByPerson.get(person) ?? 0) + 1);
+    }
+    if (present === 0) tableOnly += 1;
+  }
+
+  const gaps: Gap[] = [];
+  if (tableOnly > 0) {
+    gaps.push({
+      severity: 'warn',
+      where: 'verbs',
+      message:
+        `${tableOnly} verb paradigm(s) have no conjugated form anywhere in the sentence ` +
+        `corpus, so they can only be drilled as a bare table`,
+    });
+  }
+  const worst = [...missingByPerson.entries()].sort((a, b) => b[1] - a[1]);
+  if (worst.length > 0) {
+    gaps.push({
+      severity: 'info',
+      where: 'verbs',
+      message:
+        'conjugated forms absent from the corpus, by person: ' +
+        worst.map(([person, n]) => `${person}=${n}`).join(' '),
+    });
+  }
   return gaps;
 }
 

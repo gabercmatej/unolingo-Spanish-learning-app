@@ -837,9 +837,22 @@ function buildVerbForm(
     }
   }
 
-  const wrongForms = PERSONS.filter((p) => p !== person)
-    .map((p) => conjugation.forms[p])
-    .filter((form) => form !== answer);
+  /**
+   * Spanish paradigms are syncretic: in the imperfect, the conditional and the
+   * present subjunctive, `yo` and `él` share a form, and other persons collide
+   * in individual verbs. Filtering only forms equal to the answer therefore
+   * still leaves duplicate *distractors*, which would offer the same option
+   * twice — and if the collision is with the answer, two correct answers.
+   * Dedupe against the answer and against each other.
+   */
+  const wrongForms = [
+    ...new Set(PERSONS.filter((p) => p !== person).map((p) => conjugation.forms[p])),
+  ].filter((form) => form !== answer);
+
+  // A paradigm too syncretic to offer a real choice (haber, say) is not a
+  // multiple-choice question at all. Let the caller try another kind.
+  if (wrongForms.length < 2) return null;
+
   const options = shuffle(
     [{ text: answer }, ...sample(wrongForms, 3, ctx.rng).map((text) => ({ text }))],
     ctx.rng,

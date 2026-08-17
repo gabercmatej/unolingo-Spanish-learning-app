@@ -550,6 +550,124 @@ const SEEDS: VerbSeed[] = [
     tenses: ['present'],
     overrides: { present: { yo: 'acuesto', tu: 'acuestas', el: 'acuesta', ellos: 'acuestan' } },
   },
+  {
+    id: 'dar',
+    infinitive: 'dar',
+    en: 'to give',
+    level: 'A2',
+    irregular: true,
+    irregularityNote: 'Irregular yo form (doy) and an -er/-ir style preterite with no accents.',
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    overrides: {
+      present: { yo: 'doy', vosotros: 'dais' },
+      preterite: {
+        yo: 'di',
+        tu: 'diste',
+        el: 'dio',
+        nosotros: 'dimos',
+        vosotros: 'disteis',
+        ellos: 'dieron',
+      },
+    },
+    patterns: [
+      {
+        pattern: 'dar + sensación',
+        en: 'to make someone feel something',
+        example: { es: 'Me da pena que se vaya.', en: 'It makes me sad that he’s leaving.' },
+      },
+      {
+        pattern: 'dar igual',
+        en: 'not to matter',
+        example: { es: 'Me da igual, decide tú.', en: 'I don’t mind, you decide.' },
+      },
+    ],
+  },
+  {
+    id: 'poner',
+    infinitive: 'poner',
+    en: 'to put',
+    level: 'A2',
+    irregular: true,
+    irregularityNote: 'Irregular yo form (pongo), pus- preterite stem, participle puesto.',
+    participle: 'puesto',
+    tenses: ['present', 'preterite', 'presentPerfect', 'future'],
+    stems: { future: 'pondr' },
+    overrides: {
+      present: { yo: 'pongo' },
+      preterite: {
+        yo: 'puse',
+        tu: 'pusiste',
+        el: 'puso',
+        nosotros: 'pusimos',
+        vosotros: 'pusisteis',
+        ellos: 'pusieron',
+      },
+    },
+    patterns: [
+      {
+        pattern: '¿me pones…?',
+        en: 'can I get…? (ordering)',
+        example: { es: '¿Me pones una caña?', en: 'Can I get a small beer?' },
+      },
+      {
+        pattern: 'ponerse + adjetivo',
+        en: 'to become / to get (a state)',
+        example: { es: 'Se puso muy nervioso.', en: 'He got very nervous.' },
+      },
+    ],
+  },
+  {
+    id: 'llevar',
+    infinitive: 'llevar',
+    en: 'to carry / to wear / to have been',
+    level: 'A2',
+    irregular: false,
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    patterns: [
+      {
+        pattern: 'llevar + tiempo + gerundio',
+        en: 'to have been doing something for a while',
+        example: {
+          es: 'Llevo dos años estudiando español.',
+          en: 'I’ve been studying Spanish for two years.',
+        },
+      },
+      {
+        pattern: 'llevarse bien / mal con',
+        en: 'to get on well / badly with',
+        example: { es: 'Me llevo muy bien con mi jefa.', en: 'I get on really well with my boss.' },
+      },
+    ],
+  },
+  {
+    id: 'traer',
+    infinitive: 'traer',
+    en: 'to bring',
+    level: 'A2',
+    irregular: true,
+    irregularityNote: 'Irregular yo form (traigo), traj- preterite stem, participle traído.',
+    participle: 'traído',
+    gerund: 'trayendo',
+    tenses: ['present', 'preterite', 'presentPerfect'],
+    overrides: {
+      present: { yo: 'traigo' },
+      preterite: {
+        yo: 'traje',
+        tu: 'trajiste',
+        el: 'trajo',
+        nosotros: 'trajimos',
+        vosotros: 'trajisteis',
+        ellos: 'trajeron',
+      },
+    },
+    patterns: [
+      {
+        pattern: '¿nos trae…?',
+        en: 'could you bring us…? (in a restaurant)',
+        example: { es: '¿Nos trae la carta, por favor?', en: 'Could you bring us the menu, please?' },
+      },
+    ],
+  },
 ];
 
 export const verbs: Verb[] = SEEDS.map(buildVerb);
