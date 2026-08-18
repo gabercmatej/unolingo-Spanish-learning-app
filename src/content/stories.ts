@@ -1548,4 +1548,719 @@ export const stories: Story[] = [
       },
     ],
   },
+
+  // ===========================================================================
+  // Long-form readings
+  //
+  // The pieces above are 50–200 words: enough to sample a structure, not enough
+  // to *read*. From B1 up a learner needs texts that take several minutes, where
+  // an argument develops across paragraphs and where what is meant is not always
+  // what is written. These five are that: a saga, a memo and its replies, a
+  // report against its own annexes, and a column that means the opposite of what
+  // it says. The questions test inference at least as often as comprehension.
+  // ===========================================================================
+  {
+    id: 'story.mudanza',
+    title: 'La mudanza',
+    blurb: 'Cinco escenas, un piso, y una fianza que nadie quiere devolver.',
+    icon: 'home-outline',
+    level: 'B1',
+    topics: ['home', 'past', 'storytelling'],
+    concepts: ['g.preterite-imperfect', 'g.object-pronouns', 'v.quedar', 'v.llevar', 'p.hay-un-problema'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'Vimos el piso un martes por la tarde. Llovía, y por dentro estaba más oscuro de lo que parecía en las fotos.',
+            en: 'We saw the flat on a Tuesday afternoon. It was raining, and inside it was darker than it looked in the photos.',
+          },
+          {
+            es: 'La casera nos enseñó la cocina, el salón y una habitación que ella llamaba «despacho» y que era, en realidad, un armario con ventana.',
+            en: 'The landlady showed us the kitchen, the living room and a room she called “the study”, which was in fact a cupboard with a window.',
+          },
+          {
+            es: 'Nos gustó igual. Estaba cerca del metro, la calefacción funcionaba y llevábamos dos meses buscando.',
+            en: 'We liked it anyway. It was near the metro, the heating worked and we had been looking for two months.',
+          },
+          {
+            es: 'Firmamos el viernes. Le dimos dos meses de fianza en efectivo y ella nos dio un recibo escrito a mano.',
+            en: 'We signed on the Friday. We gave her two months’ deposit in cash and she gave us a handwritten receipt.',
+          },
+        ],
+        question: {
+          question: 'Why did they take the flat despite the drawbacks?',
+          questionEs: '¿Por qué se quedaron con el piso a pesar de los inconvenientes?',
+          options: [
+            'Llevaban dos meses buscando y estaban cansados de buscar',
+            'Porque era el piso más barato que habían visto',
+            'Porque la casera les cayó muy bien',
+            'Porque el despacho les pareció muy útil',
+          ],
+          answer: 0,
+          explanation:
+            '«Llevábamos dos meses buscando» es la razón real, y el texto la deja caer al final de la lista sin subrayarla. El «igual» de «nos gustó igual» hace el resto del trabajo.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'El día de la mudanza empezó mal. La furgoneta que habíamos alquilado no cabía por la calle, así que la dejamos a doscientos metros.',
+            en: 'Moving day started badly. The van we had hired didn’t fit down the street, so we left it two hundred metres away.',
+          },
+          {
+            es: 'Subimos veinte cajas a pulso por unas escaleras estrechas, con un vecino mirando desde el rellano y sin ofrecerse ni una vez.',
+            en: 'We carried twenty boxes up a narrow staircase by hand, with a neighbour watching from the landing and not offering once.',
+          },
+          {
+            es: 'A las siete apareció el de abajo. Dijo que llevaba toda la tarde oyendo golpes y que su hija estaba estudiando.',
+            en: 'At seven the man from downstairs appeared. He said he had been hearing banging all afternoon and that his daughter was studying.',
+          },
+          {
+            es: 'Le pedimos perdón, le explicamos que nos quedaban tres cajas y le dijimos que en media hora habríamos terminado. Se fue sin contestar.',
+            en: 'We apologised, explained that we had three boxes left and told him we would be finished in half an hour. He left without replying.',
+          },
+        ],
+        question: {
+          question: 'What does “se fue sin contestar” tell you about the neighbour?',
+          questionEs: '¿Qué indica «se fue sin contestar» sobre el vecino?',
+          options: [
+            'Que no aceptó la disculpa, aunque tampoco discutió',
+            'Que se quedó satisfecho con la explicación',
+            'Que no entendió lo que le decían',
+            'Que tenía prisa por volver con su hija',
+          ],
+          answer: 0,
+          explanation:
+            'Irse sin contestar no es aceptar: es retirarse sin conceder nada. El texto no lo dice, lo escenifica, y esa diferencia es la que se pide leer.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Vivimos allí dos años. El primer invierno descubrimos que la calefacción funcionaba, sí, pero que costaba casi tanto como el alquiler.',
+            en: 'We lived there for two years. The first winter we discovered that the heating did work, but that it cost almost as much as the rent.',
+          },
+          {
+            es: 'La casera pasaba cada seis meses, miraba las paredes, decía «esto está muy bien cuidado» y se marchaba.',
+            en: 'The landlady came by every six months, looked at the walls, said “this is very well looked after” and left.',
+          },
+          {
+            es: 'Nos llevábamos bien con casi todos: con la del cuarto, que nos guardaba los paquetes; con el del segundo, que no.',
+            en: 'We got on well with almost everyone: with the woman on the fourth floor, who took in our parcels; with the man on the second, not so much.',
+          },
+          {
+            es: 'Cuando decidimos irnos, avisamos con dos meses, como decía el contrato, y limpiamos el piso entero un domingo.',
+            en: 'When we decided to leave, we gave two months’ notice, as the contract said, and cleaned the whole flat one Sunday.',
+          },
+        ],
+        question: {
+          question: 'Why does the narrator mention the landlady’s six-monthly visits?',
+          questionEs: '¿Por qué menciona el narrador las visitas semestrales de la casera?',
+          options: [
+            'Para dejar constancia de que ella misma reconoció el buen estado del piso',
+            'Para explicar que la casera era una persona atenta',
+            'Para justificar por qué subió el alquiler',
+            'Para contar cómo se conocieron mejor con el tiempo',
+          ],
+          answer: 0,
+          explanation:
+            'El detalle parece decorativo hasta la escena siguiente. «Esto está muy bien cuidado», dicho por la casera cuatro veces, es la prueba que el narrador está guardando.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'La fianza no llegó. Al mes escribimos un correo educado preguntando por ella; no contestó.',
+            en: 'The deposit didn’t arrive. After a month we wrote a polite email asking about it; she didn’t reply.',
+          },
+          {
+            es: 'A las tres semanas la llamamos. Dijo que había un problema con unas humedades del baño y que el técnico aún no le había pasado el presupuesto.',
+            en: 'Three weeks later we phoned her. She said there was a problem with damp in the bathroom and that the technician hadn’t sent her the quote yet.',
+          },
+          {
+            es: 'Le recordamos que en la última visita nos había dicho que el piso estaba muy bien cuidado, y que lo había dicho delante de los dos.',
+            en: 'We reminded her that on her last visit she had told us the flat was very well looked after, and that she had said it in front of both of us.',
+          },
+          {
+            es: 'Hubo un silencio largo. Luego dijo que lo miraría y que ya nos diría algo.',
+            en: 'There was a long silence. Then she said she would look into it and would let us know.',
+          },
+        ],
+        question: {
+          question: 'What is the function of the “silencio largo”?',
+          questionEs: '¿Qué función tiene «hubo un silencio largo» en el relato?',
+          options: [
+            'Marca el momento en que la casera se queda sin argumento, sin que el texto lo diga',
+            'Indica que la llamada se cortó',
+            'Sugiere que la casera estaba consultando un documento',
+            'Muestra que los inquilinos habían sido groseros',
+          ],
+          answer: 0,
+          explanation:
+            'El relato nunca acusa a nadie de mentir. Coloca la frase de la casera en la escena tres, la repite en la cuatro, y deja que el silencio haga la acusación.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'La fianza llegó cuarenta días después, completa, sin una palabra sobre las humedades.',
+            en: 'The deposit arrived forty days later, in full, without a word about the damp.',
+          },
+          {
+            es: 'No hubo disculpa ni explicación. Llegó una transferencia con el concepto «devolución» y ya está.',
+            en: 'There was no apology and no explanation. A transfer arrived marked “refund” and that was that.',
+          },
+          {
+            es: 'Con el tiempo he pensado que ni siquiera intentaba estafarnos: probaba a ver si nos rendíamos, como se prueba una puerta para ver si está cerrada.',
+            en: 'Over time I’ve come to think she wasn’t even trying to cheat us: she was testing whether we’d give up, the way you try a door to see if it’s locked.',
+          },
+          {
+            es: 'Lo aprendimos tarde, pero lo aprendimos: en este país las cosas se piden por escrito y se recuerdan en voz alta.',
+            en: 'We learned it late, but we learned it: in this country you ask for things in writing and you remind people out loud.',
+          },
+        ],
+        question: {
+          question: 'What is the narrator’s final judgement of the landlady?',
+          questionEs: '¿Cuál es el juicio final del narrador sobre la casera?',
+          options: [
+            'Que no era deshonesta por sistema, sino que tanteaba hasta encontrar resistencia',
+            'Que era una estafadora profesional',
+            'Que había cometido un error administrativo sin mala fe',
+            'Que se comportó correctamente en todo momento',
+          ],
+          answer: 0,
+          explanation:
+            'La comparación con la puerta es el juicio: no un plan, sino una costumbre de probar. Es más duro que llamarla estafadora, y el narrador no usa la palabra ni una vez.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'story.teletrabajo',
+    title: 'Tres correos y lo que pasó de verdad',
+    blurb: 'Una circular, una respuesta y un acta. El mismo hecho, tres registros y tres versiones.',
+    icon: 'briefcase-outline',
+    level: 'B2',
+    topics: ['work', 'opinions'],
+    concepts: ['g.register', 'p.hay-que-tener-en-cuenta', 'p.al-parecer', 'p.llevar-a-cabo', 'v.medida'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'CIRCULAR INTERNA. Asunto: nuevo marco de presencialidad.',
+            en: 'INTERNAL MEMO. Subject: new attendance framework.',
+          },
+          {
+            es: 'Tras evaluar la experiencia de los últimos dos años, la dirección ha decidido implantar un modelo de tres días de presencia semanal a partir del 1 de octubre.',
+            en: 'Having evaluated the last two years, management has decided to introduce a three-day-a-week in-office model from 1 October.',
+          },
+          {
+            es: 'La medida responde a la necesidad de reforzar la cohesión de los equipos y facilitar la incorporación de los nuevos compañeros.',
+            en: 'The measure responds to the need to strengthen team cohesion and ease the integration of new colleagues.',
+          },
+          {
+            es: 'Se agradece de antemano la colaboración de toda la plantilla en la puesta en marcha de este nuevo marco.',
+            en: 'The cooperation of all staff in implementing this new framework is appreciated in advance.',
+          },
+        ],
+        question: {
+          question: 'What does “se agradece de antemano la colaboración” actually do here?',
+          questionEs: '¿Qué hace en realidad la fórmula «se agradece de antemano la colaboración»?',
+          options: [
+            'Presenta como colaboración voluntaria algo que ya está decidido',
+            'Pide sinceramente la opinión de la plantilla antes de decidir',
+            'Reconoce que la medida puede no llegar a aplicarse',
+            'Agradece un trabajo que la plantilla ya ha hecho',
+          ],
+          answer: 0,
+          explanation:
+            'Agradecer por adelantado convierte una orden en un favor concedido. El «se» impersonal remata la operación: nadie da la orden y nadie la recibe.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'RESPUESTA DEL EQUIPO DE PRODUCTO. Hola a todas: queremos hacer una observación antes de que esto se dé por cerrado.',
+            en: 'REPLY FROM THE PRODUCT TEAM. Hi everyone: we want to make an observation before this is treated as settled.',
+          },
+          {
+            es: 'Nadie discute lo de la cohesión. Ahora bien, hay que tener en cuenta que cuatro de las seis personas que se han incorporado este año viven fuera de Madrid.',
+            en: 'Nobody disputes the cohesion argument. That said, it must be borne in mind that four of the six people who joined this year live outside Madrid.',
+          },
+          {
+            es: 'Si el objetivo es integrarlas, obligarlas a tres días de tren no parece el camino más corto.',
+            en: 'If the aim is to integrate them, forcing them onto three days of trains doesn’t look like the shortest route.',
+          },
+          {
+            es: 'Proponemos dos días fijos de equipo y un tercero flexible por proyecto. Estamos a favor de vernos; lo que no vemos es el número.',
+            en: 'We propose two fixed team days and a flexible third by project. We’re in favour of seeing each other; what we don’t see is the number.',
+          },
+        ],
+        question: {
+          question: 'What rhetorical move does the product team make?',
+          questionEs: '¿Cuál es la maniobra retórica del equipo de producto?',
+          options: [
+            'Aceptan el objetivo de la dirección y atacan solo el medio elegido',
+            'Rechazan el objetivo y proponen otro completamente distinto',
+            'Se limitan a quejarse sin proponer alternativa',
+            'Piden que se retrase la decisión sin dar razones',
+          ],
+          answer: 0,
+          explanation:
+            'Conceden el fin («nadie discute lo de la cohesión») para poder discutir el medio. «Estamos a favor de vernos; lo que no vemos es el número» resume la estrategia en una línea.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'ACTA DE LA REUNIÓN DE SEGUIMIENTO, 12 DE SEPTIEMBRE.',
+            en: 'MINUTES OF THE FOLLOW-UP MEETING, 12 SEPTEMBER.',
+          },
+          {
+            es: 'Se expusieron las distintas sensibilidades existentes en torno al nuevo marco de presencialidad.',
+            en: 'The various sensitivities around the new attendance framework were set out.',
+          },
+          {
+            es: 'Se acordó mantener el calendario previsto, sin perjuicio de los ajustes que puedan valorarse más adelante.',
+            en: 'It was agreed to keep to the planned timetable, without prejudice to adjustments that may be considered later on.',
+          },
+          {
+            es: 'No se registraron objeciones formales a la propuesta de la dirección.',
+            en: 'No formal objections to management’s proposal were recorded.',
+          },
+        ],
+        question: {
+          question: 'Why is “no se registraron objeciones formales” technically true but misleading?',
+          questionEs: '¿Por qué «no se registraron objeciones formales» es cierto y engañoso a la vez?',
+          options: [
+            'La objeción existió por escrito, pero el acta la reclasifica como «sensibilidad»',
+            'Porque el equipo de producto no asistió a la reunión',
+            'Porque las objeciones se presentaron fuera de plazo',
+            'Porque la dirección retiró la propuesta antes de la votación',
+          ],
+          answer: 0,
+          explanation:
+            'La palabra que hace el trabajo es «formales». La respuesta del equipo existe, está escrita y es una objeción; el acta la degrada a «sensibilidad» y así puede decir la verdad literal.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'El 1 de octubre entró en vigor el modelo de tres días. En noviembre, la asistencia media real era de 2,1 días.',
+            en: 'On 1 October the three-day model came into force. In November, real average attendance was 2.1 days.',
+          },
+          {
+            es: 'No hubo sanciones, ni recordatorios, ni una segunda circular. Los responsables de equipo miraron para otro lado, cada uno por su cuenta.',
+            en: 'There were no sanctions, no reminders, and no second memo. Team leads looked the other way, each on their own.',
+          },
+          {
+            es: 'En enero se publicó un nuevo marco: dos días fijos y un tercero flexible por proyecto.',
+            en: 'In January a new framework was published: two fixed days and a flexible third by project.',
+          },
+          {
+            es: 'La circular decía que el modelo se había ajustado «a la vista de la experiencia acumulada». No mencionaba ningún correo.',
+            en: 'The memo said the model had been adjusted “in the light of accumulated experience”. It mentioned no emails.',
+          },
+        ],
+        question: {
+          question: 'What actually decided the outcome?',
+          questionEs: '¿Qué decidió realmente el resultado?',
+          options: [
+            'El incumplimiento silencioso y generalizado, no el debate escrito',
+            'La respuesta razonada del equipo de producto',
+            'Una votación formal de la plantilla',
+            'Una intervención del comité de empresa',
+          ],
+          answer: 0,
+          explanation:
+            'La propuesta que acaba aprobándose es exactamente la del equipo de producto, y aun así la circular final atribuye el cambio a «la experiencia acumulada». Ganó el argumento y perdió la autoría.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Merece la pena releer las tres piezas juntas. La circular no da razones: da un motivo y una fecha.',
+            en: 'It’s worth rereading the three pieces together. The memo gives no reasons: it gives a rationale and a date.',
+          },
+          {
+            es: 'La respuesta del equipo sí argumenta, y por eso es la única de las tres que se puede rebatir.',
+            en: 'The team’s reply does argue, and that is why it is the only one of the three that can be rebutted.',
+          },
+          {
+            es: 'El acta no argumenta ni informa: administra. Su función no es contar lo que pasó, sino fijar qué contará como que pasó.',
+            en: 'The minutes neither argue nor inform: they administer. Their function is not to record what happened but to fix what will count as having happened.',
+          },
+          {
+            es: 'De ahí que convenga leer las actas dos veces: una por lo que dicen y otra por lo que dejan de decir.',
+            en: 'Hence the wisdom of reading minutes twice: once for what they say and once for what they leave out.',
+          },
+        ],
+        question: {
+          question: 'What distinction does the final scene draw between the three texts?',
+          questionEs: '¿Qué distinción establece la última escena entre los tres textos?',
+          options: [
+            'Solo el segundo argumenta; el primero ordena y el tercero administra el relato',
+            'Los tres argumentan, pero con distinto nivel de formalidad',
+            'El primero informa, el segundo se queja y el tercero resume',
+            'Ninguno de los tres contiene opiniones',
+          ],
+          answer: 0,
+          explanation:
+            'Es el resumen del texto entero: dar un motivo no es dar una razón, y un acta no registra los hechos sino la versión de los hechos que quedará.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'story.informe',
+    title: 'El informe y sus anexos',
+    blurb: 'El resumen ejecutivo dice una cosa. El anexo IV, que nadie abre, dice otra.',
+    icon: 'newspaper-outline',
+    level: 'C1',
+    topics: ['work', 'opinions'],
+    concepts: ['g.lo-nominal', 'v.sesgo', 'v.constatar', 'p.si-bien', 'p.de-ahi-que', 'p.ahora-bien'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'RESUMEN EJECUTIVO. La satisfacción del usuario con el nuevo servicio alcanza el 82 %, lo que confirma el acierto del rediseño.',
+            en: 'EXECUTIVE SUMMARY. User satisfaction with the new service reaches 82%, confirming that the redesign was the right call.',
+          },
+          {
+            es: 'Se constata asimismo una reducción del 30 % en el tiempo medio de resolución de incidencias.',
+            en: 'A 30% reduction in average incident resolution time is likewise confirmed.',
+          },
+          {
+            es: 'Si bien persisten áreas de mejora, los indicadores respaldan la continuidad de la línea emprendida.',
+            en: 'While areas for improvement persist, the indicators support continuing along the line taken.',
+          },
+          {
+            es: 'Se recomienda extender el modelo al resto de la organización en el primer trimestre.',
+            en: 'It is recommended that the model be extended to the rest of the organisation in the first quarter.',
+          },
+        ],
+        question: {
+          question: 'What is “lo que confirma el acierto del rediseño” doing grammatically and rhetorically?',
+          questionEs: '¿Qué hace «lo que confirma el acierto del rediseño», gramatical y retóricamente?',
+          options: [
+            'Convierte un dato en una conclusión mediante un relativo, sin argumentar el paso',
+            'Introduce una hipótesis que el resto del informe pondrá a prueba',
+            'Cita textualmente la conclusión de un evaluador externo',
+            'Matiza el dato anterior reconociendo su margen de error',
+          ],
+          answer: 0,
+          explanation:
+            'El «lo que» encadena dato y juicio como si el segundo se siguiera del primero. Un 82 % es un dato; que confirme un acierto es una interpretación que aquí viaja de polizón.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'ANEXO IV. Metodología. La encuesta se remitió a 4.100 usuarios y obtuvo 611 respuestas válidas.',
+            en: 'ANNEX IV. Methodology. The survey was sent to 4,100 users and obtained 611 valid responses.',
+          },
+          {
+            es: 'El cuestionario se envió únicamente a quienes habían completado al menos tres operaciones en el nuevo entorno.',
+            en: 'The questionnaire was sent only to those who had completed at least three operations in the new environment.',
+          },
+          {
+            es: 'No se recabó información de los usuarios que abandonaron el proceso antes de finalizarlo.',
+            en: 'No information was gathered from users who abandoned the process before completing it.',
+          },
+          {
+            es: 'La tasa de abandono en el periodo analizado fue del 21 %.',
+            en: 'The abandonment rate in the period analysed was 21%.',
+          },
+        ],
+        question: {
+          question: 'What does Annex IV do to the 82% figure?',
+          questionEs: '¿Qué le hace el anexo IV a la cifra del 82 %?',
+          options: [
+            'La deja intacta y la vacía: mide solo a quienes el sistema no expulsó',
+            'La contradice directamente con otra medición',
+            'La corrige al alza por un error de cálculo',
+            'La confirma con una segunda fuente independiente',
+          ],
+          answer: 0,
+          explanation:
+            'El 82 % es cierto. Está calculado sobre una muestra de la que se ha excluido, por construcción, a todo el que tuvo problemas. Sesgo de supervivencia, redactado sin mentir una sola vez.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'ANEXO VII. Tiempos de resolución. La reducción del 30 % se calcula sobre las incidencias cerradas en el sistema.',
+            en: 'ANNEX VII. Resolution times. The 30% reduction is calculated on incidents closed in the system.',
+          },
+          {
+            es: 'A partir de marzo se modificó el criterio de cierre automático: las incidencias sin respuesta del usuario en 72 horas pasan a cerrarse de oficio.',
+            en: 'From March the automatic closure criterion was changed: incidents with no user response within 72 hours are now closed automatically.',
+          },
+          {
+            es: 'El número de incidencias cerradas de oficio pasó de 240 en febrero a 1.930 en abril.',
+            en: 'The number of incidents closed automatically went from 240 in February to 1,930 in April.',
+          },
+          {
+            es: 'No se dispone de datos sobre reapertura posterior por el mismo motivo.',
+            en: 'No data is available on subsequent reopening for the same reason.',
+          },
+        ],
+        question: {
+          question: 'Why did resolution time fall?',
+          questionEs: '¿Por qué bajó el tiempo de resolución?',
+          options: [
+            'Porque cambió la definición de «resuelto», no necesariamente el servicio',
+            'Porque se contrató a más personal de soporte',
+            'Porque los usuarios aprendieron a usar el sistema',
+            'Porque se redujo el número total de incidencias',
+          ],
+          answer: 0,
+          explanation:
+            'Un indicador que mejora justo después de que cambie su definición no ha mejorado: se ha redefinido. Y la ausencia de datos de reapertura impide comprobarlo, lo cual también es un dato.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'CORREO INTERNO, 14 DE MAYO. «Oye, ¿has visto que el anexo IV cuenta lo de la muestra?»',
+            en: 'INTERNAL EMAIL, 14 MAY. “Hey, have you seen that Annex IV explains the sampling?”',
+          },
+          {
+            es: '«Sí. Está todo dicho, no hemos ocultado nada. Ahora bien, el resumen es lo único que se lee.»',
+            en: '“Yes. It’s all stated, we haven’t hidden anything. That said, the summary is the only thing anyone reads.”',
+          },
+          {
+            es: '«Ya, pero si alguien lo mira en la comisión quedamos fatal.»',
+            en: '“Sure, but if someone looks at it in committee we come off terribly.”',
+          },
+          {
+            es: '«Nadie lo mira. Y si lo mira, le enseñamos el anexo y le decimos que está publicado desde el principio.»',
+            en: '“Nobody looks at it. And if they do, we show them the annex and tell them it’s been published from the start.”',
+          },
+        ],
+        question: {
+          question: 'What is the strategy revealed by the email exchange?',
+          questionEs: '¿Cuál es la estrategia que revela el intercambio de correos?',
+          options: [
+            'Publicar la información limitante donde nadie la lee, para poder alegar transparencia',
+            'Retirar el anexo IV antes de que llegue a la comisión',
+            'Corregir el resumen ejecutivo antes de la publicación',
+            'Encargar una segunda encuesta más representativa',
+          ],
+          answer: 0,
+          explanation:
+            'La defensa está preparada de antemano: «está publicado desde el principio». Transparencia como coartada, no como práctica — y todo ello sin una sola afirmación falsa.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'De ahí que leer un informe sea, en la práctica, leer la distancia entre su resumen y sus anexos.',
+            en: 'Hence reading a report is, in practice, reading the distance between its summary and its annexes.',
+          },
+          {
+            es: 'Lo llamativo no es que el resumen exagere: es que no necesita exagerar. Le basta con no repetir lo que el anexo ya ha dicho.',
+            en: 'What is striking is not that the summary exaggerates: it doesn’t need to. It is enough for it not to repeat what the annex has already said.',
+          },
+          {
+            es: 'Un texto puede ser íntegramente verdadero y aun así estar construido para producir una creencia falsa.',
+            en: 'A text can be wholly true and still be built to produce a false belief.',
+          },
+          {
+            es: 'Ahora bien, eso no lo constata ningún indicador. Lo constata quien se toma la molestia de abrir el anexo IV.',
+            en: 'That said, no indicator confirms that. It is confirmed by whoever takes the trouble to open Annex IV.',
+          },
+        ],
+        question: {
+          question: 'What is the text’s central claim about truthful documents?',
+          questionEs: '¿Cuál es la tesis central del texto sobre los documentos veraces?',
+          options: [
+            'Que la selección y el orden pueden producir una creencia falsa sin ninguna afirmación falsa',
+            'Que todos los informes corporativos contienen datos inventados',
+            'Que los anexos son siempre más fiables que los resúmenes',
+            'Que la culpa es de los lectores por no leer los anexos',
+          ],
+          answer: 0,
+          explanation:
+            '«Íntegramente verdadero y construido para producir una creencia falsa» es la tesis. No trata de mentiras sino de arquitectura: qué se pone delante, qué se pone en el anexo IV.',
+        },
+      },
+    ],
+  },
+  {
+    id: 'story.columna',
+    title: 'Columna: en defensa del ruido',
+    blurb: 'Una columna que defiende exactamente lo contrario de lo que dice defender.',
+    icon: 'newspaper-outline',
+    level: 'C2',
+    topics: ['city', 'opinions', 'social'],
+    concepts: ['g.emphasis', 'g.audience', 'p.a-todas-luces', 'p.no-cabe-duda', 'p.lejos-de', 'v.escepticismo'],
+    scenes: [
+      {
+        lines: [
+          {
+            es: 'Escribo en defensa del ruido, esa gran conquista social que algunos vecinos malintencionados pretenden ahora arrebatarnos.',
+            en: 'I write in defence of noise, that great social achievement which certain ill-intentioned neighbours now propose to snatch from us.',
+          },
+          {
+            es: 'No cabe duda de que dormir está sobrevalorado. Nuestros abuelos dormían ocho horas y mírenlos: pausados, longevos, insoportablemente serenos.',
+            en: 'There is no doubt that sleep is overrated. Our grandparents slept eight hours and look at them: unhurried, long-lived, unbearably serene.',
+          },
+          {
+            es: 'A todas luces, una ciudad que calla es una ciudad que ha renunciado a vivir.',
+            en: 'Plainly, a city that falls silent is a city that has given up on living.',
+          },
+          {
+            es: 'Que se lo pregunten al bar de abajo, cuya terraza cierra, escandalosamente, a las dos y media de la madrugada.',
+            en: 'Just ask the bar downstairs, whose terrace closes, scandalously, at half past two in the morning.',
+          },
+        ],
+        question: {
+          question: 'How do you know the column is ironic from the first scene alone?',
+          questionEs: '¿Cómo se sabe ya en la primera escena que la columna es irónica?',
+          options: [
+            'Los adjetivos elogiosos describen cosas indefendibles y el «escandalosamente» va al revés',
+            'Porque el autor dice explícitamente que está bromeando',
+            'Porque los datos que aporta son falsos',
+            'Porque el registro es coloquial y no periodístico',
+          ],
+          answer: 0,
+          explanation:
+            'La ironía se detecta en la incoherencia entre valoración y objeto: «insoportablemente serenos», «escandalosamente a las dos y media». El escándalo, en la lectura literal, sería que cierre; en la real, que cierre tan tarde.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Se dirá que hay quien madruga. Cierto, pero convendrán conmigo en que madrugar es, en el fondo, una elección estética.',
+            en: 'It will be said that some people get up early. True, but you will agree with me that getting up early is, at bottom, an aesthetic choice.',
+          },
+          {
+            es: 'Quien madruga es libre de mudarse a un pueblo, como lleva siglos haciendo la gente sensata.',
+            en: 'Whoever gets up early is free to move to a village, as sensible people have been doing for centuries.',
+          },
+          {
+            es: 'Lejos de mí sugerir que el problema sea del que no puede dormir. El problema es, sencillamente, que no ha sabido adaptarse.',
+            en: 'Far be it from me to suggest the problem lies with the person who cannot sleep. The problem is simply that they have failed to adapt.',
+          },
+          {
+            es: 'La ciudad no está para acomodarse a nadie. Para eso están las casas, que por algo tienen ventanas.',
+            en: 'The city is not there to accommodate anyone. That is what houses are for, and there is a reason they have windows.',
+          },
+        ],
+        question: {
+          question: 'What is the function of “lejos de mí sugerir que…”?',
+          questionEs: '¿Qué función cumple «lejos de mí sugerir que…»?',
+          options: [
+            'Niega formalmente lo que la frase siguiente afirma, exhibiendo la maniobra',
+            'Introduce una concesión sincera al punto de vista contrario',
+            'Marca el paso de la ironía a la argumentación seria',
+            'Cita una objeción que el autor va a refutar con datos',
+          ],
+          answer: 0,
+          explanation:
+            'Es una preterición: se niega estar diciendo justo lo que se dice a continuación. El autor la deja tan visible que la técnica misma pasa a formar parte de la sátira.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Los detractores del ruido esgrimen estudios. Siempre esgrimen estudios.',
+            en: 'The opponents of noise brandish studies. They always brandish studies.',
+          },
+          {
+            es: 'Dicen que la exposición sostenida a más de 55 decibelios nocturnos se asocia a hipertensión. Yo digo que también se asocia a haber vivido.',
+            en: 'They say sustained exposure to more than 55 night-time decibels is associated with hypertension. I say it is also associated with having lived.',
+          },
+          {
+            es: 'Nadie ha demostrado nunca que el silencio cure nada. Nadie, tampoco, ha demostrado lo contrario, y ahí está precisamente mi punto.',
+            en: 'Nobody has ever shown that silence cures anything. Nor has anybody shown the opposite, and that is precisely my point.',
+          },
+          {
+            es: 'En materia de convivencia, el escepticismo es la única postura elegante.',
+            en: 'In matters of coexistence, scepticism is the only elegant position.',
+          },
+        ],
+        question: {
+          question: 'What fallacy is being staged in this scene?',
+          questionEs: '¿Qué falacia se escenifica en esta escena?',
+          options: [
+            'La apelación a la ignorancia: si no está demostrado lo contrario, mi posición vale igual',
+            'La falsa analogía entre ruido y salud',
+            'El argumento de autoridad basado en los estudios citados',
+            'La generalización a partir de un caso particular',
+          ],
+          answer: 0,
+          explanation:
+            '«Nadie ha demostrado lo contrario, y ahí está mi punto» es exactamente la apelación a la ignorancia, y la columna la enuncia con orgullo para que el lector la reconozca.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Concluyo. No pido nada excesivo: solo que se deje de molestar a quienes molestan.',
+            en: 'I conclude. I ask for nothing excessive: only that people stop bothering those who bother others.',
+          },
+          {
+            es: 'Que las terrazas crezcan, que los altavoces canten, que la madrugada sea de todos y en especial de los que gritan.',
+            en: 'Let the terraces grow, let the speakers sing, let the small hours belong to everyone and especially to those who shout.',
+          },
+          {
+            es: 'Y si alguien no puede dormir, que se compre unos tapones. Cuestan tres euros. La convivencia, ya ven, es baratísima.',
+            en: 'And if anyone cannot sleep, let them buy earplugs. They cost three euros. Coexistence, you see, is dirt cheap.',
+          },
+          {
+            es: 'Firmado: un vecino del tercero, que lleva cuatro años sin dormir un martes entero.',
+            en: 'Signed: a neighbour on the third floor, who has not slept through a Tuesday in four years.',
+          },
+        ],
+        question: {
+          question: 'What does the signature do to the whole piece?',
+          questionEs: '¿Qué le hace la firma al texto completo?',
+          options: [
+            'Revela que el autor es la víctima, de modo que toda la defensa era una queja',
+            'Confirma que el autor defiende sinceramente el ruido',
+            'Introduce un segundo autor que contradice al primero',
+            'Sugiere que el texto es una carta y no una columna',
+          ],
+          answer: 0,
+          explanation:
+            'La firma es la clave que reorganiza todo lo leído: quien firma es el que no duerme. La columna nunca defendió el ruido; simuló defenderlo para que la defensa resultara insostenible.',
+        },
+      },
+      {
+        lines: [
+          {
+            es: 'Lo interesante de una ironía sostenida es que no se puede refutar sin repetirla.',
+            en: 'What is interesting about sustained irony is that it cannot be refuted without repeating it.',
+          },
+          {
+            es: 'Quien responda «pero el sueño no está sobrevalorado» habrá leído la letra y no el texto.',
+            en: 'Anyone who replies “but sleep isn’t overrated” will have read the letter and not the text.',
+          },
+          {
+            es: 'De ahí que este registro sea tan eficaz en prensa y tan peligroso en un correo de trabajo: exige un lector que colabore.',
+            en: 'Hence why this register works so well in the press and is so dangerous in a work email: it demands a reader who cooperates.',
+          },
+          {
+            es: 'Sin esa colaboración, la ironía no falla a medias: falla entera, y en la dirección contraria.',
+            en: 'Without that cooperation, irony does not half fail: it fails entirely, and in the opposite direction.',
+          },
+        ],
+        question: {
+          question: 'Why does the closing scene call irony “dangerous in a work email”?',
+          questionEs: '¿Por qué la escena final llama a la ironía «peligrosa en un correo de trabajo»?',
+          options: [
+            'Porque si el lector no coopera, el texto se entiende literalmente y significa lo contrario',
+            'Porque en el trabajo está prohibido el humor',
+            'Porque la ironía siempre resulta ofensiva para el destinatario',
+            'Porque los correos de trabajo se archivan y se pueden usar como prueba',
+          ],
+          answer: 0,
+          explanation:
+            'La ironía no lleva marca gramatical: depende por completo de que el lector reconstruya la intención. En prensa hay contexto que ayuda; en un correo suelto, no lo hay.',
+        },
+      },
+    ],
+  },
 ];
