@@ -34,7 +34,10 @@ npx jest --watch
 
 ### Three gates, two of which must be green
 
-`npm test` and `npm run typecheck` are **regression gates** and must always pass.
+`npm test`, `npm run typecheck` and `npm run lint` are **regression gates** and must always
+pass. Lint is not cosmetic here: the React Compiler rules in it have caught two real bugs
+(a `Date.now()` in four render bodies that silently defeated every memo depending on it, and
+a results screen assembled from refs during render).
 
 `npm run audit:content` is the **definition-of-done gate** for course content. It is
 deliberately excluded from `npm test` (see `testPathIgnorePatterns` in package.json) and is
@@ -146,6 +149,10 @@ is exactly what these tests exist to catch.
   tag nothing: the information is already in the sentence text, so annotating sentences
   with `f.comer.preterite` would be busywork that rots. Adding a sentence updates the
   index automatically.
+  - **An irregular future stem is always the conditional stem.** tendré/tendría, haré/haría,
+    saldré/saldría are the same word twice, and the seeds originally defined only one of each
+    pair, arbitrarily — so a learner who met `tendré` could never reach `tendría`. Adding a
+    `future` to a verb means adding its `conditional` too, and vice versa.
   - Multi-word forms are matched as **token sequences**, and the blank falls on the token
     that carries the person — the auxiliary for compounds (`he comido`), the verb for
     reflexives (`me levanto`). Matching a single token is why every present perfect and
@@ -179,12 +186,35 @@ is exactly what these tests exist to catch.
 - **Answer checking is asymmetric on purpose.** English answers are a *comprehension* check
   and accept any equivalent phrasing. Spanish answers stay strict — but an added subject
   pronoun is accepted only when it agrees with the verb, so "tú tengo" still fails.
+  - **Negation is never the word that slides.** `sameEnglishMeaning` tolerates one unmatched
+    content word, and negation is exactly one content word: "I don't like coffee" was accepted
+    as "I like coffee". Polarity counts must match before a paraphrase counts.
+  - **yo shares -a/-e endings with él only in the imperfect and conditional.** Treating every
+    -a ending as compatible with yo let "yo habla español" through as a near miss.
 - **No hearts, no energy, no daily limits.** A wrong answer shortens a review interval and
   writes a mistake record. It never blocks learning. Streaks are recomputed, never punished.
 - **Unolingo rank ≠ CEFR level.** `learning/ranks.ts` (Principiante → Leyenda) measures
   distance walked; `estimateLevel()` measures demonstrated ability. The Profile shows both
   side by side and they are allowed to disagree — never conflate them or derive one from the
   other. Rank names are invariable Spanish nouns so the app never guesses the user's gender.
+- **A CEFR level has to be demonstrated, not accumulated.** `estimateProficiency()` gates each
+  level on concept coverage *and* on enough of that level's strong concepts carrying listening
+  and production evidence, because `strength` records how well a concept is known and not how
+  it was learned. Without the gate a learner who only ever pressed multiple-choice buttons
+  reached B1 on the same evidence as one who could take dictation. When the concepts are there
+  and the evidence is not, the estimate reports `plus` and names the skill — "A2+, held back by
+  listening" — and `measured` distinguishes "nothing is holding you back" from "we have not
+  looked yet", which are opposite states that both produce an empty `heldBackBy`.
+- **`curriculumLevel()` and `estimateProficiency()` are allowed to disagree**, and the Profile
+  shows them side by side. Finishing the B1 stage and speaking B1 are different claims.
+- **A checkpoint carries a per-skill floor.** `skillBalance` steps demanding kinds back inside a
+  lagging skill, which is right in a lesson and inverts the purpose in a checkpoint: for a
+  learner experienced in every kind and weak at production, every checkpoint in the course
+  produced 0–2 production exercises out of 18, at every seed. Production collapses further than
+  listening because every production kind is difficulty 4–5, so demoting the demanding ones
+  demotes the whole skill, while listening keeps the gentle `listenSelect`. `cefr.test.ts` pins
+  it with the weak-but-experienced fixture — the obvious fixture (a recognition-only learner)
+  passes without the fix, because freshness alone already gives that learner breadth.
 - **The exercise mix shifts at B2+.** `candidateKinds()` takes the learner's *demonstrated*
   level. From B2, tiers move up one step and plain recognition (`multipleChoice`, `match`) is
   **demoted to the tail, not removed** — reached only when a concept has nothing else to
@@ -222,6 +252,23 @@ is exactly what these tests exist to catch.
   `byVerbTeachingOrder` from the registry. A concept no lesson teaches sorts to the very end,
   which `audit:content` flags.
 
+## Progress is not disposable
+
+`src/learning/backup.ts` is pure policy (what a backup is, what a restore must refuse, when a
+snapshot is due); `src/lib/snapshots.ts` and `src/lib/backup-file.ts` are the plumbing.
+
+- **Three rolling snapshots, twice a day**, under their own storage key so a learner record that
+  fails to parse cannot take its own backups with it, plus a forced snapshot before anything
+  destructive — including restore, which makes restoring the wrong file undoable.
+- **An empty state may never displace a full one.** Without that rule the snapshot taken in the
+  moments after a reset consumes a slot, and three cycles later there is nothing to go back to.
+- **File export/import needs no new dependency**: a Blob download and a file input on web,
+  `expo-file-system` on native, which ships with Expo and has carried its own system file picker
+  since SDK 57.
+- **Restore refuses by default.** The file must claim to be a Unolingo backup, from a format and
+  a `STATE_VERSION` this build understands, with its concepts, lesson history, mistakes and
+  sessions intact. Settings stay local — a phone backup must not redecorate a laptop.
+
 ## Platform traps
 
 These have each caused a real bug here; most are invisible on native and only bite on web.
@@ -247,7 +294,15 @@ These have each caused a real bug here; most are invisible on native and only bi
   `assets/*` (both resolved by Metro, so `require('@/assets/…')` works).
 - All colour, spacing, radius, type and motion tokens live in `src/constants/theme.ts` and
   are consumed via `useTheme()` / `useGradients()`. Never hardcode a colour — add a token.
-- Use `PressScale` rather than bare `Pressable`; the app's tactility depends on it.
+- Use `PressScale` rather than bare `Pressable`; the app's tactility depends on it. It drives
+  shared values through `.set()` from memoised handlers — assigning to `.value` inside a handler
+  created during render reads to the React Compiler as mutating a value it holds.
+- **Reduce Motion is already honoured**: every Reanimated animation defaults to
+  `ReduceMotion.System`. `components/ui/motion.tsx` is not an accessibility shim — `Reveal` exists
+  so entrance timings are one delay ladder instead of fifteen hand-tuned numbers. `useCountUp`
+  *is* the piece that needs an explicit check, being a plain rAF loop the library knows nothing about.
+- **Never call `Date.now()` in a render body.** Use `useNow()`. A fresh timestamp every render is a
+  fresh dependency every render, which silently turns every memo that depends on it into a no-op.
 - `<Text numeric>` for anything that counts or ticks — proportional digits make a changing
   XP total visibly jitter and stop columns of figures lining up.
 - **Emoji are not iconography.** Interface icons come from one Ionicons vocabulary
@@ -302,37 +357,29 @@ those tests cross-check content against logic.
 
 ## Known open work
 
-- **Depth is now median 3–4 sentences per concept**, and no stage draws more than 10% of its
-  material from below its own level. Every concept has at
-  least two sentences and most have three or more. The audit's NOTE reports the eight
-  least-practised concepts per stage against that stage's median, and it says so *whether
-  or not anything is wrong* — it is a standing priority queue, not a defect report. The
-  next pass is lifting the high-frequency spine (ser, estar, tener, quedar, aunque,
-  darse cuenta) well past the median; those deserve dozens of exposures, while a narrow
-  item is finished at two or three. Do not read the queue as a quota.
-- **Modality reach is adequate, not generous.** Listening, conversation and reading now
-  recur in 27–33% of each stage's units (the audit floor is 25%). Pushing toward ~50%
-  would need more conversation scenes and reading pieces, which are the expensive objects.
-  Note this measures *dedicated* lessons only — see the modality invariant below before
-  concluding that ordinary lessons are text-only.
-- **Upper-stage unit counts are lopsided, and that is now a deliberate decision.** B2, C1
-  and C2 have 6–7 units against 14–15 at A1/A2. A breadth audit of every B2/C1/C2 unit
-  found them correctly scoped with two exceptions, which were lesson-level overload rather
-  than unit-level: `l.argument` carried 25 concepts and `l.c1-reformulation` 15, against a
-  teach-card cap of 8. Both split into two lessons *inside their existing unit*. Unit count
-  stayed at 63 on purpose — symmetry with A1/A2 is not a reason to add units, and the
-  remaining upper units each hold one coherent objective.
-- **`vosotros` and `tú` are still the thinnest conjugated forms** — 67 and 69 exposures against
-  `él`'s 454. That gap is partly legitimate (third-person narration dominates any corpus,
-  and `es` / `está` / `ha` are among the commonest tokens in Spanish), so the target is not
-  parity. What matters is that group dialogue keeps appearing, since that is where those
-  forms naturally live. `presentPerfect` (49), `future` (14) and `conditional` (13) are the
-  thinnest tenses.
-- **Composition is the untested surface.** The conjugation subsystem stayed dead through 119
-  passing tests because every link was tested individually and the chain was not.
-  `verb-flow.test.ts` walks the whole path — verb introduced → tense introduced → paradigm
-  reachable → exercise generated → graded → mastery updated → Library exposes the tense.
-  When adding a subsystem, prefer one test of the pathway over more tests of the parts.
+- **Depth is median 4–8 sentences per concept and every stage draws ≤8% from below its level.**
+  The audit's NOTE reports the eight least-practised concepts per stage against that stage's
+  median, and it says so *whether or not anything is wrong* — a standing priority queue, not a
+  defect report. The queue is now mostly narrow items (clothes, months, individual idioms) that
+  are finished at two or three exposures; do not read it as a quota. The spine — ser (43),
+  estar (39), ir (32), tener (27), quedar, llevar, hacer, ya, todavía, aunque — is where density
+  was actually spent.
+- **`vosotros` (79) and `tú` (92) remain the thinnest persons against `él` (491).** Partly
+  legitimate: third-person narration dominates any corpus. The target is not parity — it is that
+  group dialogue keeps appearing, since that is where those forms live.
+- **`presentPerfect` (63) and `future` (46) are now the thinnest tenses**; `conditional` went from
+  16 to 104 when the future/conditional stems were paired.
+- **Four paradigms cover only one person each**, which the audit reports without warning on. That
+  is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
-  pronunciation check. That is a deliberate limit, not an oversight — see `lib/speech.ts`
-  for the seam where real audio would land.
+  pronunciation check. A deliberate limit — see `lib/speech.ts` for the seam where real audio and
+  recognition would land. This is the largest remaining gap in the course as a whole.
+- **Composition is the surface that breaks silently.** The conjugation subsystem stayed dead
+  through 119 passing tests because every link was tested individually and the chain was not.
+  `verb-flow.test.ts` walks verb → tense → paradigm → exercise → grade → mastery → Library, and
+  `journey.test.ts` walks placement → lesson → mistake → Smart Review → unit completion →
+  skipping the optional lessons → app restart → story → checkpoint. When adding a subsystem,
+  prefer one test of the pathway over more tests of the parts.
+- **A fixture that passes without the fix is not a test of the fix.** The first checkpoint-breadth
+  fixture passed before the floor existed; only the weak-but-experienced learner exposed the
+  defect. Check that a new regression test fails without its change.

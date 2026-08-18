@@ -60,7 +60,6 @@ interface Props {
 export function Standing({ rank, curriculum, proficiency }: Props) {
   const theme = useTheme();
   const rankTone = theme[rank.tone] as string;
-  const held = proficiency.heldBackBy;
 
   const rows: { icon: IconName; tone: string; label: string; value: string; caption: string }[] = [
     {
