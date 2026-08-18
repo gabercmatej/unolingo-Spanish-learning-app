@@ -1,5 +1,6 @@
 import { curriculum } from '@/content';
 import type { Lesson, Unit } from '@/content/types';
+import { newlyUnlocked } from '@/learning/achievements';
 import { checkExercise } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import { estimateProficiency, unitProgress } from '@/learning/mastery';
@@ -13,7 +14,7 @@ import {
 import { buildSession, isLessonUnlocked, type SessionPlan } from '@/learning/session';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
 import type { Grade, LearnerState, MistakeRecord } from '@/learning/types';
-import { xpForAnswer } from '@/learning/xp';
+import { cumulativeXp, levelInfo, xpForAnswer } from '@/learning/xp';
 import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from './helpers';
 
 /**
@@ -319,3 +320,33 @@ function findLesson(units: Unit[], predicate: (lesson: Lesson) => boolean): Less
   }
   return undefined;
 }
+
+describe('the session tells you what just happened', () => {
+  const now = Date.UTC(2026, 0, 12, 9, 0, 0);
+
+  it('reports an achievement the moment it is crossed, and only once', () => {
+    // Achievements are derived, so "new" is a diff — there is no stored flag to
+    // get out of sync, and equally nothing to stop a naive implementation from
+    // re-announcing the same trophy every session.
+    const before = makeLearner({ xp: 90 });
+    const after = makeLearner({ xp: 900 });
+
+    const first = newlyUnlocked(before, after, now);
+    expect(first.length).toBeGreaterThan(0);
+    expect(first.every((a) => a.unlocked)).toBe(true);
+
+    // The same state twice unlocks nothing.
+    expect(newlyUnlocked(after, after, now)).toEqual([]);
+    // And going further does not re-announce what was already announced.
+    const later = newlyUnlocked(after, makeLearner({ xp: 1200 }), now);
+    expect(later.map((a) => a.id)).not.toEqual(expect.arrayContaining(first.map((a) => a.id)));
+  });
+
+  it('crosses a level exactly when the XP curve says so', () => {
+    // The celebration is driven by levelBefore !== levelAfter, so an off-by-one
+    // here is a party that never happens or one that happens twice.
+    const boundary = cumulativeXp(2);
+    expect(levelInfo(boundary - 1).level).toBe(1);
+    expect(levelInfo(boundary).level).toBe(2);
+  });
+});

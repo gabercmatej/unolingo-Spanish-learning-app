@@ -385,3 +385,26 @@ export function achievementsByGroup(
     items: all.filter((item) => item.group === group),
   }));
 }
+
+/**
+ * Which achievements a session unlocked.
+ *
+ * Achievements are derived, so "new" cannot be a stored flag — it is a
+ * comparison between two states. Taking that diff at the moment a session ends
+ * is the only way to celebrate one at the moment it happens rather than leaving
+ * the learner to notice it on the profile page three days later.
+ */
+export function newlyUnlocked(
+  before: LearnerState,
+  after: LearnerState,
+  now = Date.now(),
+): Achievement[] {
+  const had = new Set(
+    achievements(before, now)
+      .filter((achievement) => achievement.unlocked)
+      .map((achievement) => achievement.id),
+  );
+  return achievements(after, now).filter(
+    (achievement) => achievement.unlocked && !had.has(achievement.id),
+  );
+}

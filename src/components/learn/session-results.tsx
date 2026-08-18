@@ -1,15 +1,18 @@
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Icon } from '@/components/ui/icon';
+import { LevelUp, MascotNote } from '@/components/learn/level-up';
+import { Reveal, useCountUp } from '@/components/ui/motion';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { RingProgress } from '@/components/ui/progress';
 import { Stat, StatGrid } from '@/components/ui/layout';
 import { Text } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { conceptLabel, getConcept } from '@/content';
 import { useTheme } from '@/hooks/use-theme';
+import type { Achievement } from '@/learning/achievements';
+import { rankForLevel } from '@/learning/ranks';
 import { formatDuration } from '@/lib/date';
 
 export interface ConceptDelta {
@@ -29,6 +32,17 @@ export interface SessionSummary {
   needsReview: string[];
   goalReached: boolean;
   streak: number;
+  /**
+   * Level before and after this session. Equal means nothing was crossed, which
+   * is the usual case and is why the celebration is conditional rather than a
+   * permanent block of the layout.
+   */
+  levelBefore: number;
+  levelAfter: number;
+  /** Progress into the new level, 0..1. */
+  levelProgress: number;
+  /** Achievements this session crossed, diffed at the moment it ended. */
+  unlocked: Achievement[];
 }
 
 interface SessionResultsProps {
@@ -49,6 +63,13 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
   const headline =
     accuracy >= 0.9 ? '¡Genial!' : accuracy >= 0.7 ? 'Good work' : 'That was a tough one';
 
+  const levelledUp = summary.levelAfter > summary.levelBefore;
+  const newRank = rankForLevel(summary.levelAfter);
+  // A rank only counts as new if the session actually crossed into it.
+  const rankChanged = levelledUp && rankForLevel(summary.levelBefore).id !== newRank.id;
+
+  const xp = useCountUp(summary.xp);
+
   const topImproved = [...summary.improved]
     .filter((delta) => delta.after > delta.before + 0.01)
     .sort((a, b) => b.after - b.before - (a.after - a.before))
@@ -56,7 +77,7 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
 
   return (
     <View style={styles.stack}>
-      <Animated.View entering={FadeInDown.duration(320)} style={styles.hero}>
+      <Reveal style={styles.hero}>
         <RingProgress
           value={accuracy}
           size={148}
@@ -71,10 +92,48 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
         <Text variant="small" color="textSecondary" center>
           {summary.title}
         </Text>
-      </Animated.View>
+      </Reveal>
+
+      {levelledUp ? (
+        <Reveal delay={80}>
+          <LevelUp
+            level={summary.levelAfter}
+            rank={rankChanged ? newRank : undefined}
+            progress={summary.levelProgress}
+          />
+        </Reveal>
+      ) : (
+        <Reveal delay={80}>
+          <MascotNote accuracy={accuracy} />
+        </Reveal>
+      )}
+
+      {summary.unlocked.length > 0 ? (
+        <Reveal delay={120}>
+          <Card variant="flat">
+            <View style={styles.cardHead}>
+              <Icon name="ribbon-outline" size={16} tone={theme.accent} />
+              <Text variant="overline" tone={theme.accent}>
+                {summary.unlocked.length === 1 ? 'ACHIEVEMENT UNLOCKED' : 'ACHIEVEMENTS UNLOCKED'}
+              </Text>
+            </View>
+            {summary.unlocked.map((achievement) => (
+              <View key={achievement.id} style={styles.row}>
+                <Icon name={achievement.icon as IconName} size={18} tone={theme.accent} />
+                <View style={styles.flex}>
+                  <Text variant="smallBold">{achievement.title}</Text>
+                  <Text variant="caption" color="textSecondary">
+                    {achievement.description}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </Card>
+        </Reveal>
+      ) : null}
 
       {summary.goalReached ? (
-        <Animated.View entering={FadeInDown.delay(120).duration(280)}>
+        <Reveal delay={160}>
           <View style={[styles.goal, { backgroundColor: theme.accentSoft }]}>
             <Icon name="checkmark-circle" size={22} tone={theme.accentText} />
             <View style={styles.flex}>
@@ -86,12 +145,12 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
               </Text>
             </View>
           </View>
-        </Animated.View>
+        </Reveal>
       ) : null}
 
-      <Animated.View entering={FadeInDown.delay(160).duration(280)}>
+      <Reveal delay={200}>
         <StatGrid>
-          <Stat value={`+${summary.xp}`} label="XP earned" icon="flash" tone={theme.accent} />
+          <Stat value={`+${xp}`} label="XP earned" icon="flash" tone={theme.accent} />
           <Stat value={`${summary.newConcepts}`} label="New" icon="sparkles" tone={theme.tint} />
           <Stat
             value={formatDuration(summary.seconds)}
@@ -100,10 +159,10 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
             tone={theme.listening}
           />
         </StatGrid>
-      </Animated.View>
+      </Reveal>
 
       {topImproved.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(220).duration(280)}>
+        <Reveal delay={260}>
           <Card variant="flat">
             <Text variant="overline" color="textTertiary">
               IMPROVED
@@ -123,11 +182,11 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
               );
             })}
           </Card>
-        </Animated.View>
+        </Reveal>
       ) : null}
 
       {summary.needsReview.length > 0 ? (
-        <Animated.View entering={FadeInDown.delay(260).duration(280)}>
+        <Reveal delay={300}>
           <Card variant="flat">
             <View style={styles.cardHead}>
               <Icon name="refresh-outline" size={16} tone={theme.danger} />
@@ -147,15 +206,15 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
               These will come back sooner in your next review.
             </Text>
           </Card>
-        </Animated.View>
+        </Reveal>
       ) : null}
 
-      <Animated.View entering={FadeInDown.delay(320).duration(280)} style={styles.actions}>
+      <Reveal delay={340} style={styles.actions}>
         <Button title="Continue" size="lg" onPress={onContinue} />
         {onReviewMistakes && summary.needsReview.length > 0 ? (
           <Button title="Review mistakes now" variant="secondary" onPress={onReviewMistakes} />
         ) : null}
-      </Animated.View>
+      </Reveal>
     </View>
   );
 }

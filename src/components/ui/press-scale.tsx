@@ -70,6 +70,21 @@ export function PressScale({
     opacity.set(withTiming(1, { duration: Motion.fast }));
   }, [opacity, scale]);
 
+  /**
+   * Hover exists only on web, where a pointer can rest on something without
+   * committing. React Native Web maps these onto mouseenter/mouseleave and
+   * native simply never fires them, so no platform check is needed — the lift is
+   * deliberately smaller than the press so the two read as different states
+   * rather than as the same one at two strengths.
+   */
+  const hoverIn = useCallback(() => {
+    scale.set(withSpring(1.02, Motion.spring));
+  }, [scale]);
+
+  const hoverOut = useCallback(() => {
+    scale.set(withSpring(1, Motion.spring));
+  }, [scale]);
+
   const press = useCallback(() => {
     if (haptic === 'tap') feedback.tap();
     else if (haptic === 'press') feedback.press();
@@ -85,6 +100,8 @@ export function PressScale({
       disabled={disabled}
       onPressIn={pressIn}
       onPressOut={pressOut}
+      onHoverIn={hoverIn}
+      onHoverOut={hoverOut}
       onPress={press}
       onLongPress={onLongPress}
       style={[animatedStyle, { opacity: disabled ? 0.45 : 1 }, style]}>

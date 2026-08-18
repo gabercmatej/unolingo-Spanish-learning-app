@@ -29,6 +29,9 @@ import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import { buildSession, type SessionKind } from '@/learning/session';
 import { mastery } from '@/learning/srs';
+import type { LearnerState } from '@/learning/types';
+import { levelInfo } from '@/learning/xp';
+import { newlyUnlocked } from '@/learning/achievements';
 import { toISODate } from '@/lib/date';
 import { feedback } from '@/lib/feedback';
 import { goBack } from '@/lib/navigation';
@@ -52,6 +55,10 @@ const LESSON_KINDS: SessionKind[] = ['lesson', 'conversation', 'story', 'checkpo
 /** The session as it stood when it ended — see `ending` below for why. */
 interface SessionEnding {
   seconds: number;
+  /** Level at the moment the session ended, before its XP was banked. */
+  levelBefore: number;
+  /** The learner as they were before this session's results were committed. */
+  learnerBefore: LearnerState;
   /** Mastery per concept before the session touched it. */
   before: [string, number][];
   needsReview: string[];
@@ -137,6 +144,11 @@ export default function SessionScreen() {
 
     setEnding({
       seconds,
+      // Captured before completeSession commits the XP, so the results screen
+      // can say "you crossed a level" rather than only "here is your level".
+      levelBefore: levelInfo(learner.xp).level,
+      // Achievements are derived, so "new" is a diff against this snapshot.
+      learnerBefore: learner,
       before: [...masteryBefore.current.entries()],
       needsReview: [...needsReview.current],
       newConcepts: newConcepts.current.size,
@@ -152,7 +164,7 @@ export default function SessionScreen() {
       newConcepts: newConcepts.current.size,
       lessonId: LESSON_KINDS.includes(kind) ? source : undefined,
     });
-  }, [answered, completeSession, correct, kind, plan?.title, source, startedAt, xpEarned]);
+  }, [answered, completeSession, correct, kind, learner, plan?.title, source, startedAt, xpEarned]);
 
   const advance = useCallback(() => {
     stopSpeaking();
@@ -258,8 +270,14 @@ export default function SessionScreen() {
       return { conceptId, before, after: state ? mastery(state) : before };
     });
 
+    const after = levelInfo(learner.xp);
+    const unlocked = newlyUnlocked(ending.learnerBefore, learner);
     const summary: SessionSummary = {
+      unlocked,
       title: plan.title,
+      levelBefore: ending.levelBefore,
+      levelAfter: after.level,
+      levelProgress: after.progress,
       xp: xpEarned,
       correct,
       total: answered,
