@@ -1283,7 +1283,8 @@ export const curriculum: Stage[] = [
               'p.solo-estoy-mirando',
               'f.probar.present',
             ],
-            sentences: ['s.m9', 's.m10', 's.m11', 's.m12', 's.m37', 's.m38', 's.m39', 's.m40', 's.m41', 's.k142'],
+            sentences: ['s.m9', 's.m10', 's.m11', 's.m12', 's.m37', 's.m38', 's.m39', 's.m40', 's.m41', 's.k142',
+              's.m111', 's.m112', 's.m113', 's.m114', 's.m115'],
           },
           {
             id: 'l.restaurant',
@@ -1301,7 +1302,8 @@ export const curriculum: Stage[] = [
               // Paradigms for the newly added core verbs.
               'f.traer.present',
             ],
-            sentences: ['s.a14', 's.a15', 's.a16', 's.a17', 's.e13', 's.e14'],
+            sentences: ['s.a14', 's.a15', 's.a16', 's.a17', 's.e13', 's.e14',
+              's.m106', 's.m107', 's.m108', 's.m109', 's.m110'],
           },
           {
             id: 'l.shopping-listening',
@@ -1509,7 +1511,8 @@ export const curriculum: Stage[] = [
               'f.traer.presentPerfect',
             ],
             grammar: ['g.present-perfect'],
-            sentences: ['s.e39', 's.e40', 's.s3', 's.a22', 's.a23'],
+            sentences: ['s.e39', 's.e40', 's.s3', 's.a22', 's.a23',
+              's.m101', 's.m102', 's.m103', 's.m104', 's.m105'],
           },
         ],
       },
@@ -1549,7 +1552,8 @@ export const curriculum: Stage[] = [
               'f.traer.preterite',
             ],
             grammar: ['g.preterite'],
-            sentences: ['s.s26', 's.s27', 's.s28', 's.s25', 's.a10', 's.a25'],
+            sentences: ['s.s26', 's.s27', 's.s28', 's.s25', 's.a10', 's.a25',
+              's.m94', 's.m95', 's.m96', 's.m97', 's.m98', 's.m99', 's.m100'],
           },
         ],
       },
@@ -1666,7 +1670,9 @@ export const curriculum: Stage[] = [
               'v.resfriado',
               'p.que-te-mejores',
             ],
-            sentences: ['s.m1', 's.m2', 's.m3', 's.m4', 's.m5', 's.m6', 's.m7', 's.m8'],
+            sentences: ['s.m1', 's.m2', 's.m3', 's.m4', 's.m5', 's.m6', 's.m7', 's.m8',
+              's.m80', 's.m81', 's.m82', 's.m83', 's.m84', 's.m85', 's.m86', 's.m87',
+              's.m88', 's.m89', 's.m90', 's.m91', 's.m92', 's.m93'],
           },
           {
             id: 'l.health-listening',
@@ -1678,7 +1684,7 @@ export const curriculum: Stage[] = [
             estMinutes: 8,
             requires: ['l.health'],
             teaches: [],
-            sentences: ['s.m1', 's.m2', 's.m3', 's.m6', 's.m7', 's.m8'],
+            sentences: ['s.m1', 's.m2', 's.m3', 's.m6', 's.m7', 's.m8', 's.m80', 's.m82', 's.m87', 's.m89', 's.m92'],
           },
           {
             id: 'l.farmacia-conversation',
@@ -1691,7 +1697,7 @@ export const curriculum: Stage[] = [
             requires: ['l.health'],
             teaches: [],
             conversation: 'conv.farmacia',
-            sentences: ['s.m1', 's.m3', 's.m6', 's.m7'],
+            sentences: ['s.m1', 's.m3', 's.m6', 's.m7', 's.m86', 's.m88', 's.m90', 's.m91'],
           },
           ],
       },
@@ -1765,12 +1771,17 @@ export const curriculum: Stage[] = [
         lessons: [
           {
             id: 'l.colloquial',
-            title: 'Everyday spoken Spanish',
-            goal: 'Recognise and use vale, venga, claro, en plan and qué guay',
+            title: 'Vale, venga, claro',
+            goal: 'Use the six words that hold a Spanish conversation together',
             kind: 'core',
             level: 'B1',
             estMinutes: 9,
             requires: ['l.checkpoint-a2'],
+            // Split from the old single "everyday spoken Spanish" lesson, which
+            // declared sixteen concepts against a sixteen-exercise session and so
+            // could never introduce them all. The discourse markers and the slang
+            // are different jobs anyway: these six are neutral and constant, the
+            // slang in the next lesson is generational and can be left alone.
             teaches: [
               'v.vale',
               'v.venga',
@@ -1779,6 +1790,25 @@ export const curriculum: Stage[] = [
               'v.bueno',
               'p.a-ver',
               'v.ya',
+              'v.todavia',
+              'v.tampoco',
+              // decir carries most of reported and colloquial speech.
+              'f.decir.present',
+            ],
+            sentences: ['s.s16', 's.s17', 's.s18', 's.s21', 's.s24', 's.b237', 's.b238', 's.b239',
+              's.s64', 's.s65', 's.s66', 's.s67', 's.s68', 's.s69', 's.s70', 's.s71', 's.s72',
+              's.s73', 's.s74', 's.s75', 's.s76', 's.s77', 's.s78', 's.s79', 's.s80', 's.s81',
+              's.s82', 's.s83', 's.s84', 's.s85'],
+          },
+          {
+            id: 'l.colloquial-slang',
+            title: 'Tío, qué fuerte',
+            goal: 'Follow friends talking to each other, not to you',
+            kind: 'core',
+            level: 'B1',
+            estMinutes: 9,
+            requires: ['l.colloquial'],
+            teaches: [
               'v.tio',
               'p.que-guay',
               'p.da-igual',
@@ -1787,10 +1817,8 @@ export const curriculum: Stage[] = [
               'v.molar',
               'p.que-rollo',
               'p.que-fuerte',
-              // decir carries most of reported and colloquial speech.
-              'f.decir.present',
             ],
-            sentences: ['s.s16', 's.s17', 's.s18', 's.s19', 's.s20', 's.s21', 's.s22', 's.s23', 's.s24', 's.b237', 's.b238', 's.b239', 's.b240', 's.b241', 's.b242', 's.b243', 's.b244'],
+            sentences: ['s.s19', 's.s20', 's.s22', 's.s23', 's.b240', 's.b241', 's.b242', 's.b243', 's.b244', 's.s63'],
           },
           {
             id: 'l.colloquial-listening',
@@ -1835,7 +1863,7 @@ export const curriculum: Stage[] = [
             kind: 'grammar',
             level: 'B1',
             estMinutes: 10,
-            requires: ['l.colloquial'],
+            requires: ['l.colloquial-slang'],
             teaches: [
               // Verb paradigms this lesson makes practisable.
               'f.comer.imperfect',
@@ -2037,9 +2065,22 @@ export const curriculum: Stage[] = [
               'f.venir.future',
               // Paradigms for the newly added core verbs.
               'f.poner.future',
+              // The rest of the future: the irregular stems that were previously
+              // defined only in the conditional, plus ser/estar/ir, whose futures
+              // are regular but far too common to leave unreachable.
+              'f.ser.future',
+              'f.estar.future',
+              'f.ir.future',
+              'f.decir.future',
+              'f.saber.future',
+              'f.poder.future',
+              'f.querer.future',
             ],
             grammar: ['g.future'],
-            sentences: ['s.b1', 's.b2', 's.b3', 's.b4', 's.b32', 's.b232', 's.b233', 's.b234', 's.b245'],
+            sentences: ['s.b1', 's.b2', 's.b3', 's.b4', 's.b32', 's.b232', 's.b233', 's.b234', 's.b245',
+              's.b248', 's.b249', 's.b250', 's.b251', 's.b252', 's.b253', 's.b254',
+              's.b255', 's.b256', 's.b257', 's.b258', 's.b259', 's.b260', 's.b261',
+              's.b262', 's.b263', 's.b264', 's.b265', 's.b266', 's.b267', 's.b268', 's.b269'],
           },
           {
             id: 'l.conditional',
@@ -2053,9 +2094,22 @@ export const curriculum: Stage[] = [
               // Verb paradigms this lesson makes practisable.
               'f.poder.conditional',
               'f.querer.conditional',
+              // Every irregular future stem is also the conditional stem — tendré
+              // and tendría are the same word twice. Meeting them together is the
+              // whole point, so the core set lands here and the rarer stems come
+              // back at B2 in l.hypothetical.
+              'f.ser.conditional',
+              'f.estar.conditional',
+              'f.ir.conditional',
+              'f.tener.conditional',
+              'f.hacer.conditional',
             ],
             grammar: ['g.conditional'],
-            sentences: ['s.b5', 's.b6', 's.b7', 's.b8', 's.b9', 's.b229', 's.b230', 's.b231', 's.b235', 's.b236'],
+            sentences: ['s.b5', 's.b6', 's.b7', 's.b8', 's.b9', 's.b229', 's.b230', 's.b231', 's.b235', 's.b236',
+              's.b270', 's.b271', 's.b272', 's.b273', 's.b274', 's.b275', 's.b276',
+              's.b277', 's.b278', 's.b279', 's.b280', 's.b281', 's.b282', 's.b283',
+              's.b284', 's.b285', 's.b286', 's.b287', 's.b288', 's.b289', 's.b290',
+              's.b291', 's.b292', 's.b293', 's.b294', 's.b295'],
           },
         ],
       },
@@ -2448,9 +2502,19 @@ export const curriculum: Stage[] = [
             level: 'B2',
             estMinutes: 12,
             requires: ['l.disagreeing'],
-            teaches: ['p.supongo-que', 'p.puede-que', 'p.a-lo-mejor', 'p.igual-viene', 'p.me-imagino-que', 'p.no-me-extrana', 'p.por-lo-que-parece'],
+            teaches: ['p.supongo-que', 'p.puede-que', 'p.a-lo-mejor', 'p.igual-viene', 'p.me-imagino-que', 'p.no-me-extrana', 'p.por-lo-que-parece',
+              // The conditional a second time, a level up, with the stems that
+              // only really earn their keep in a hypothetical.
+              'f.saber.conditional',
+              'f.salir.conditional',
+              'f.venir.conditional',
+              'f.poner.conditional',
+              'f.decir.conditional',
+            ],
             grammar: ['g.si-hypothetical'],
-            sentences: ['s.c7', 's.c8', 's.c9', 's.c10', 's.c11', 's.c12', 's.c116', 's.c117', 's.c118', 's.c119', 's.c120', 's.c121'],
+            sentences: ['s.c7', 's.c8', 's.c9', 's.c10', 's.c11', 's.c12', 's.c116', 's.c117', 's.c118', 's.c119', 's.c120', 's.c121',
+              's.c140', 's.c141', 's.c142', 's.c143', 's.c144', 's.c145', 's.c146',
+              's.c147', 's.c148', 's.c149', 's.c150', 's.c151', 's.c152'],
           },
           {
             id: 'l.turismo-reading',
