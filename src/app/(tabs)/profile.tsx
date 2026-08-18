@@ -29,7 +29,9 @@ import {
 import { curriculumLevel, estimateProficiency, wordsMastered } from '@/learning/mastery';
 import { rankProgress } from '@/learning/ranks';
 import type { Appearance, DailyGoal } from '@/learning/types';
+import { buildDiagnostics } from '@/learning/diagnostics';
 import { pickBackupFile, saveBackupFile } from '@/lib/backup-file';
+import { environment } from '@/lib/environment';
 import { currentStreak } from '@/lib/date';
 import { listSnapshots, type Snapshot } from '@/lib/snapshots';
 import {
@@ -89,12 +91,31 @@ export default function ProfileScreen() {
   }, [learner]);
 
   const exportBackup = async () => {
-    const payload = JSON.stringify(buildBackup(learner), null, 2);
-    const result = await saveBackupFile(payload, backupFilename());
+    const backup = buildBackup(learner);
+    const result = await saveBackupFile(JSON.stringify(backup, null, 2), backupFilename());
+    if (!result.ok) {
+      setBackupNote(`Could not save the backup: ${result.reason}`);
+      return;
+    }
+    /**
+     * The two outcomes are different promises and are worded as such. A file
+     * handed to the share sheet is off the device; a file written to the app's
+     * own folder is not, and survives an update but not an uninstall — which is
+     * the exact event a backup exists for.
+     */
     setBackupNote(
-      result.ok
-        ? `Saved ${describeSummary(buildBackup(learner).summary)}.`
-        : `Could not save the backup: ${result.reason}`,
+      result.shared
+        ? `Exported ${describeSummary(backup.summary)}. Keep it somewhere off this device.`
+        : `Saved ${describeSummary(backup.summary)} inside the app’s folder — this copy does not survive deleting Unolingo.`,
+    );
+  };
+
+  const exportDiagnostics = async () => {
+    const report = buildDiagnostics(learner, environment);
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    const result = await saveBackupFile(report, `unolingo-diagnostics-${stamp}.txt`);
+    setBackupNote(
+      result.ok ? 'Diagnostics report exported.' : `Could not export it: ${result.reason}`,
     );
   };
 
@@ -530,6 +551,42 @@ export default function ProfileScreen() {
             anything destructive.
           </Text>
         )}
+      </Section>
+
+      <Section
+        title="About"
+        caption="Version and a diagnostics report, for when something behaves oddly">
+        <Card variant="flat" padding="none">
+          <View style={styles.settingRow}>
+            <View style={styles.flex}>
+              <Text>Version</Text>
+              <Text variant="caption" color="textSecondary" numeric>
+                {environment.appVersion} ({environment.buildVersion}) · {environment.platform}{' '}
+                {environment.osVersion}
+              </Text>
+            </View>
+          </View>
+          <Divider />
+          <View style={styles.settingRow}>
+            <View style={styles.flex}>
+              <Text>Developer mode</Text>
+              <Text variant="caption" color="textSecondary">
+                Adds a “why am I seeing this?” panel under every exercise
+              </Text>
+            </View>
+            <Toggle
+              value={settings.developerMode ?? false}
+              onValueChange={(developerMode) => updateSettings({ developerMode })}
+            />
+          </View>
+          <Divider />
+          <ActionRow
+            icon="clipboard-outline"
+            label="Export a diagnostics report"
+            caption="Counts, versions and the state of the adaptive layer — no personal data"
+            onPress={exportDiagnostics}
+          />
+        </Card>
       </Section>
 
       <Section title="Course">

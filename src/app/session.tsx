@@ -25,6 +25,7 @@ import { Text } from '@/components/ui/text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { WhyPanel } from '@/components/session/why-panel';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import { buildSession, type SessionKind } from '@/learning/session';
@@ -351,6 +352,7 @@ export default function SessionScreen() {
               settings={settings}
               onSubmit={submit}
             />
+            <WhyPanel exercise={exercise} />
           </View>
         </ScrollView>
 

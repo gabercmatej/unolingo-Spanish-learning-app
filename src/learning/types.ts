@@ -211,6 +211,15 @@ export interface Settings {
    * guaranteed to survive, and the image is deliberately kept tiny.
    */
   avatarUri?: string;
+  /**
+   * Shows the "why am I seeing this?" panel inside a session.
+   *
+   * Optional, so adding it needs no `STATE_VERSION` bump — hydration merges
+   * defaults over a saved settings object, which is exactly what that rule is
+   * for. Off by default: this is a tool for diagnosing the adaptive layer
+   * during dogfooding, not a feature of the course.
+   */
+  developerMode?: boolean;
 }
 
 export interface PlacementResult {

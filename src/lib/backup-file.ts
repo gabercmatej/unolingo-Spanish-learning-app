@@ -6,15 +6,24 @@ import { Platform } from 'react-native';
  * Two platforms, two completely different mechanisms, one interface — because
  * the screen that offers "Export" should not have to know which one it is
  * talking to. On web this is a Blob download and a file input; on iOS and
- * Android it is `expo-file-system`, which ships with Expo and, since SDK 57,
- * carries its own system file picker, so this costs no new dependency.
+ * Android it is `expo-file-system`, which since SDK 57 carries its own system
+ * file picker, plus `expo-sharing` for the way out.
+ *
+ * The way out is the part that matters. Writing to the app's document directory
+ * is not a backup: that directory survives an app update and does not survive
+ * an uninstall, so the one event a backup exists for — losing or replacing the
+ * phone — is precisely the one it does not cover. Staging the file in the cache
+ * and handing it to the system share sheet puts it somewhere that outlives the
+ * app: Files, iCloud Drive, Drive, AirDrop, an email to yourself.
  *
  * Everything returns a result object rather than throwing. A failed export is a
  * sentence to show the learner, not a crash in the middle of the one screen
  * whose entire purpose is reassurance.
  */
 
-export type SaveResult = { ok: true; where: string } | { ok: false; reason: string };
+export type SaveResult =
+  | { ok: true; where: string; shared: boolean }
+  | { ok: false; reason: string; canceled?: boolean };
 
 export type LoadResult =
   | { ok: true; text: string; name: string }
@@ -27,10 +36,38 @@ export async function saveBackupFile(text: string, filename: string): Promise<Sa
 
   try {
     const { File, Paths } = await import('expo-file-system');
-    const file = new File(Paths.document, filename);
-    if (!file.exists) file.create();
+    const Sharing = await import('expo-sharing');
+
+    /**
+     * The cache, not the documents directory. This copy is a staging post on the
+     * way to the share sheet, not the backup itself — the backup is wherever the
+     * learner chooses to put it. Leaving it in documents would accumulate a
+     * folder of stale exports that look like safety and are not.
+     */
+    const file = new File(Paths.cache, filename);
+    if (file.exists) file.delete();
+    file.create();
     file.write(text);
-    return { ok: true, where: file.uri };
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'application/json',
+        UTI: 'public.json',
+        dialogTitle: 'Save your Unolingo backup',
+      });
+      return { ok: true, where: filename, shared: true };
+    }
+
+    /**
+     * No share sheet available. Fall back to the documents directory and say so
+     * plainly, because "saved" and "saved somewhere an uninstall will erase" are
+     * different promises and the learner is entitled to know which one they got.
+     */
+    const kept = new File(Paths.document, filename);
+    if (kept.exists) kept.delete();
+    kept.create();
+    kept.write(text);
+    return { ok: true, where: kept.uri, shared: false };
   } catch (err) {
     return { ok: false, reason: describe(err) };
   }
@@ -63,7 +100,7 @@ function saveOnWeb(text: string, filename: string): SaveResult {
     anchor.remove();
     // Revoking immediately can cancel the download in Safari; one tick is enough.
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return { ok: true, where: filename };
+    return { ok: true, where: filename, shared: true };
   } catch (err) {
     return { ok: false, reason: describe(err) };
   }
