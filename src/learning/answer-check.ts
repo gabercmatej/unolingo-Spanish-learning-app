@@ -218,11 +218,54 @@ export function buildCandidates(accepted: string[], language: 'es' | 'en'): Cand
   return out;
 }
 
-/** Edit distance tolerated before an answer stops counting as a typo. */
-function typoTolerance(length: number): number {
-  if (length <= 4) return 0;
-  if (length <= 10) return 1;
-  return 2;
+/** Characters two words still share at the end. */
+function sharedSuffix(a: string, b: string): number {
+  let n = 0;
+  while (n < a.length && n < b.length && a[a.length - 1 - n] === b[b.length - 1 - n]) n += 1;
+  return n;
+}
+
+/**
+ * Is this a slipped key, or a different word?
+ *
+ * The rule here used to be edit distance across the whole answer, with two
+ * characters of slack on anything long. But every grammatical error in Spanish
+ * is one or two characters — hablo/habla, un/una, rojo/rojos, lo/la, por/para —
+ * so a tolerance meant to forgive a typo was forgiving the entire morphology of
+ * the language. Measured against fifty adversarial answers, nineteen were
+ * accepted as "almost", among them "Soy cansado" for "Estoy cansado",
+ * "la problema" for "el problema" and "Quiero que hablas" for "hables".
+ * "Almost" is worth 0.75 and *lengthens* the review interval, so each of those
+ * taught the mistake and then hid it for longer.
+ *
+ * What separates the two cases is position, not size. A typo is a mis-keying
+ * *inside* a word; Spanish inflection lives at the *end* of one. So a near miss
+ * is: the same number of words, exactly one of them different, one edit apart,
+ * and the two words still sharing their last two characters. That final clause
+ * is the whole rule — it is what keeps "pero" for "perro" a typo while making
+ * "habla" for "hablo" an error.
+ */
+function isTypo(given: string, candidate: string): boolean {
+  const a = given.split(' ');
+  const b = candidate.split(' ');
+  if (a.length !== b.length) return false;
+
+  let differing = -1;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] === b[i]) continue;
+    // Two words wrong is not a slip of the finger.
+    if (differing >= 0) return false;
+    differing = i;
+  }
+  if (differing < 0) return false;
+
+  const left = a[differing];
+  const right = b[differing];
+  // Short words carry too much meaning per character to guess at: at four
+  // letters or fewer, one edit is usually a different word (casa/cosa, un/una).
+  if (Math.min(left.length, right.length) < 4) return false;
+  if (levenshtein(left, right) !== 1) return false;
+  return sharedSuffix(left, right) >= 2;
 }
 
 /**
@@ -351,6 +394,7 @@ export function checkAnswer(
   const bareForms = givenForms.map(deaccent);
 
   let accentOnlyMatch: string | null = null;
+  let typoMatch: string | null = null;
   let closest: { answer: string; distance: number } | null = null;
 
   for (const candidate of candidates) {
@@ -365,6 +409,9 @@ export function checkAnswer(
     }
 
     for (const bare of bareForms) {
+      if (typoMatch === null && isTypo(bare, candidateBare)) typoMatch = candidate.display;
+      // Tracked whatever the grade, so a wrong answer can still be shown the
+      // model answer it came closest to.
       const distance = levenshtein(bare, candidateBare);
       if (!closest || distance < closest.distance) {
         closest = { answer: candidate.display, distance };
@@ -379,11 +426,11 @@ export function checkAnswer(
       : { grade: 'correct', note, best: accentOnlyMatch };
   }
 
-  if (closest && closest.distance <= typoTolerance(bareForms[0].length)) {
+  if (typoMatch !== null) {
     return {
       grade: 'almost',
-      note: `Almost — check the spelling: ${closest.answer}`,
-      best: closest.answer,
+      note: `Almost — check the spelling: ${typoMatch}`,
+      best: typoMatch,
     };
   }
 

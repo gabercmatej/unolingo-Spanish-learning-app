@@ -150,3 +150,125 @@ describe('English comprehension leniency', () => {
     );
   });
 });
+
+/**
+ * The torture pass.
+ *
+ * These are the cases that were measured against the real checker before the
+ * word-alignment rule existed. Nineteen of fifty adversarial answers came back
+ * "almost" — which is worth 0.75 of a correct answer *and* lengthens the review
+ * interval, so every one of them taught the mistake and then hid it for longer.
+ * The cause was a typo tolerance that measured edit distance across the whole
+ * sentence: two characters of slack on anything long, when every grammatical
+ * error in Spanish is one or two characters.
+ *
+ * Each `it` below is one class of that failure. They are written as pairs —
+ * the error that must fail beside the slip that must still be forgiven —
+ * because a checker can be made to pass either half alone by simply moving the
+ * threshold, and only the pair pins the actual rule.
+ */
+describe('meaning errors are not typos', () => {
+  const wrong = (given: string, ...accepted: string[]) =>
+    expect(checkAnswer(given, accepted).grade).toBe('incorrect');
+
+  it('rejects the wrong person', () => {
+    wrong('yo habla español', 'yo hablo español');
+    wrong('Ella come pan', 'Ella comes pan');
+    wrong('Nosotros habla', 'Nosotros hablamos');
+  });
+
+  it('rejects the wrong tense', () => {
+    wrong('Nosotros hablamos', 'Nosotros hablaremos');
+    wrong('Yo he comido', 'Yo había comido');
+    wrong('comí la paella', 'comió la paella');
+  });
+
+  it('rejects the wrong auxiliary', () => {
+    wrong('hemos comido', 'han comido');
+    wrong('Han comido paella', 'Hemos comido paella');
+  });
+
+  it('rejects ser for estar', () => {
+    wrong('Soy cansado', 'Estoy cansado');
+    wrong('Es aburrido', 'Está aburrido');
+    wrong('El café es frío', 'El café está frío');
+  });
+
+  it('rejects por for para', () => {
+    wrong('Gracias para la comida', 'Gracias por la comida');
+    wrong('Salgo para Madrid', 'Salgo por Madrid');
+  });
+
+  it('rejects gender and number disagreement', () => {
+    wrong('la problema', 'el problema');
+    wrong('El casa es grande', 'La casa es grande');
+    wrong('Los libros rojo', 'Los libros rojos');
+    wrong('una coche rojo', 'un coche rojo');
+  });
+
+  it('rejects the wrong object or reflexive pronoun', () => {
+    wrong('Me levanto temprano', 'Se levanta temprano');
+    wrong('Lo veo', 'La veo');
+    wrong('Te quiero', 'Le quiero');
+  });
+
+  it('rejects the indicative where the subjunctive changes the meaning', () => {
+    wrong('Espero que viene', 'Espero que venga');
+    wrong('Quiero que hablas', 'Quiero que hables');
+  });
+
+  it('rejects grammatical Spanish that does not answer the prompt', () => {
+    wrong('Me llamo Matej', 'Tengo veinte años');
+    wrong('Hace mucho calor hoy', 'Vivo en Madrid');
+  });
+
+  it('rejects a missing or an added word', () => {
+    wrong('Tengo perro', 'Tengo un perro');
+    wrong('Tengo un perro grande', 'Tengo un perro');
+  });
+
+  it('rejects two slips in one answer — one is a typo, two is not knowing it', () => {
+    wrong('Tengo un pero negrp', 'Tengo un perro negro');
+  });
+});
+
+describe('slips of the finger are still forgiven', () => {
+  const almost = (given: string, accepted: string) =>
+    expect(checkAnswer(given, [accepted]).grade).toBe('almost');
+
+  it('accepts one mis-keyed letter inside a word', () => {
+    // Every one of these differs by a single character, exactly like the
+    // grammar errors above. What separates them is *where*: Spanish inflection
+    // lives on the last two letters, so an edit before them is a slip.
+    almost('Tengo un pero', 'Tengo un perro');
+    almost('Voy a la bibloteca', 'Voy a la biblioteca');
+    almost('Es un restaurente bueno', 'Es un restaurante bueno');
+    almost('Quiero un bocadilo', 'Quiero un bocadillo');
+    almost('Vivo en Barcelna', 'Vivo en Barcelona');
+    almost('El ordendor no funciona', 'El ordenador no funciona');
+  });
+
+  it('still waves a missing accent through, which is a keyboard, not an error', () => {
+    const correct = (given: string, accepted: string) =>
+      expect(checkAnswer(given, [accepted]).grade).toBe('correct');
+    correct('Quiero un cafe', 'Quiero un café');
+    correct('El nino esta en el jardin', 'El niño está en el jardín');
+    correct('Cuantos anos tienes', '¿Cuántos años tienes?');
+    correct('Vosotros comeis', 'Vosotros coméis');
+  });
+});
+
+describe('English meaning reversals', () => {
+  const wrong = (given: string, accepted: string) =>
+    expect(checkAnswer(given, [accepted], { language: 'en' }).grade).toBe('incorrect');
+
+  it('never lets negation slide', () => {
+    wrong("I don't like coffee", 'I like coffee');
+    wrong('He is not coming', 'He is coming');
+    wrong('I cannot go', 'I can go');
+    wrong('I never eat meat', 'I always eat meat');
+    wrong('Nobody came', 'Everybody came');
+    wrong('I have no money', 'I have money');
+    wrong('She does not work here', 'She works here');
+  });
+});
