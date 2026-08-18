@@ -451,19 +451,19 @@ subsystem stayed dead through 119 passing tests because every link was tested in
 
 ## Known open work
 
-- **Depth is median 4–8 sentences per concept and every stage draws ≤8% from below its level.**
+- **Depth is median 3–4 sentences per concept and every stage draws ≤8% from below its level.**
   The audit's NOTE reports the eight least-practised concepts per stage against that stage's
   median, and it says so *whether or not anything is wrong* — a standing priority queue, not a
   defect report. The queue is now mostly narrow items (clothes, months, individual idioms) that
   are finished at two or three exposures; do not read it as a quota. The spine — ser (43),
   estar (39), ir (32), tener (27), quedar, llevar, hacer, ya, todavía, aunque — is where density
   was actually spent.
-- **`vosotros` (79) and `tú` (92) remain the thinnest persons against `él` (491).** Partly
+- **`vosotros` (79) and `tú` (106) remain the thinnest persons against `él` (532).** Partly
   legitimate: third-person narration dominates any corpus. The target is not parity — it is that
   group dialogue keeps appearing, since that is where those forms live.
-- **`presentPerfect` (63) and `future` (46) are now the thinnest tenses**; `conditional` went from
+- **`presentPerfect` (66) and `future` (47) are now the thinnest tenses**; `conditional` went from
   16 to 104 when the future/conditional stems were paired.
-- **Four paradigms cover only one person each**, which the audit reports without warning on. That
+- **Nine paradigms cover only one person each**, which the audit reports without warning on. That
   is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
   pronunciation check. A deliberate limit — see `lib/speech.ts` for the seam where real audio and
@@ -489,3 +489,8 @@ subsystem stayed dead through 119 passing tests because every link was tested in
 - **A fixture that passes without the fix is not a test of the fix.** The first checkpoint-breadth
   fixture passed before the floor existed; only the weak-but-experienced learner exposed the
   defect. Check that a new regression test fails without its change.
+
+Every number in this section comes from `npm run audit:content`. **Re-read them there rather
+than trusting this file** — they drift with every content commit, and a stale number here is
+worse than none. They have already been wrong once: a restore from an older commit brought
+back the previous pass's figures, and they read as plausibly as the real ones.
