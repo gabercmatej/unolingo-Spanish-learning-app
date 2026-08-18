@@ -2862,7 +2862,7 @@ export const curriculum: Stage[] = [
               'p.todo-hay-que-decirlo',
               'p.por-lo-general',
             ],
-            sentences: ['s.d18', 's.d19', 's.d20', 's.d21'],
+            sentences: ['s.d18', 's.d19', 's.d20', 's.d21', 's.d135', 's.d136', 's.d137'],
           },
         ],
       },
@@ -2892,7 +2892,7 @@ export const curriculum: Stage[] = [
               'v.rotundo',
             ],
             grammar: ['g.reformulation'],
-            sentences: ['s.d22', 's.d23', 's.d24', 's.d26', 's.d62', 's.d63', 's.d95', 's.d103', 's.d104', 's.d105', 's.d106'],
+            sentences: ['s.d22', 's.d23', 's.d24', 's.d26', 's.d62', 's.d63', 's.d95', 's.d103', 's.d104', 's.d105', 's.d106', 's.d132', 's.d133', 's.d134', 's.d138'],
           },
           {
             id: 'l.c1-connectors',
@@ -2975,7 +2975,7 @@ export const curriculum: Stage[] = [
               'p.a-duras-penas',
               'p.por-si-fuera-poco',
             ],
-            sentences: ['s.d28', 's.d29', 's.d30', 's.d31', 's.d32'],
+            sentences: ['s.d28', 's.d29', 's.d30', 's.d31', 's.d32', 's.d126', 's.d127', 's.d128', 's.d129', 's.d130', 's.d131'],
           },
           {
             id: 'l.c1-reading',
@@ -3103,7 +3103,7 @@ export const curriculum: Stage[] = [
               'p.dejar-margen',
               'p.cobrar-fuerza',
             ],
-            sentences: ['s.e7c', 's.e8c', 's.e9c', 's.e10c', 's.e11c', 's.e12c'],
+            sentences: ['s.e7c', 's.e8c', 's.e9c', 's.e10c', 's.e11c', 's.e12c', 's.e176c', 's.e177c', 's.e178c'],
           },
           {
             id: 'l.c2-connotation',
@@ -3123,7 +3123,7 @@ export const curriculum: Stage[] = [
               'v.ambicioso',
             ],
             grammar: ['g.precision'],
-            sentences: ['s.e129c', 's.e130c', 's.e131c', 's.e132c', 's.e49c', 's.e50c', 's.e51c', 's.e89c'],
+            sentences: ['s.e129c', 's.e130c', 's.e131c', 's.e132c', 's.e49c', 's.e50c', 's.e51c', 's.e89c', 's.e170c', 's.e171c', 's.e172c', 's.e173c', 's.e174c', 's.e175c'],
           },
           {
             id: 'l.c2-precision-listening',
@@ -3290,7 +3290,7 @@ export const curriculum: Stage[] = [
               'p.no-cabe-duda',
               'p.lejos-de',
             ],
-            sentences: ['s.e23c', 's.e24c', 's.e25c', 's.e32c', 's.e33c'],
+            sentences: ['s.e23c', 's.e24c', 's.e25c', 's.e32c', 's.e33c', 's.e179c', 's.e180c', 's.e181c', 's.e182c', 's.e183c'],
           },
           {
             id: 'l.c2-conversation',
