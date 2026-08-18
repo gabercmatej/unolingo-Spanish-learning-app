@@ -12,6 +12,9 @@ import { useColorScheme as useSystemColorScheme } from 'react-native';
 
 import { getLesson, validateContent } from '@/content';
 import { ColorSchemeContext } from '@/hooks/use-theme';
+import { DEFAULT_SETTINGS, blankLearnerState } from '@/learning/defaults';
+import { migrateState } from '@/learning/migrate';
+import { STATE_VERSION } from '@/learning/schema';
 import type { Exercise } from '@/learning/exercise';
 import { applyPlacement, type PlacementAnswer, type PlacementScore } from '@/learning/placement';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
@@ -39,43 +42,30 @@ import { StorageKeys, storage } from '@/lib/storage';
  * directly — they call `useLearner()`.
  */
 
-export const STATE_VERSION = 1;
+export { STATE_VERSION };
 const MAX_MISTAKES = 200;
 const MAX_SESSIONS = 200;
 const MAX_DAILY = 400;
 
-export const DEFAULT_SETTINGS: Settings = {
-  name: '',
-  appearance: 'system',
-  haptics: true,
-  autoPlayAudio: true,
-  strictAccents: false,
-  hardMode: false,
-  speakingExercises: true,
-  slowAudioDefault: false,
-  showTranslations: true,
-  dailyGoal: 10,
-};
+export { DEFAULT_SETTINGS };
 
+/** A new learner, stamped with the schema this build writes. */
 function createLearnerState(now = Date.now()): LearnerState {
-  return {
-    version: STATE_VERSION,
-    settings: DEFAULT_SETTINGS,
-    concepts: {},
-    completedLessons: {},
-    mistakes: [],
-    sessions: [],
-    daily: [],
-    xp: 0,
-    streak: 0,
-    longestStreak: 0,
-    lastStudyDate: null,
-    placement: null,
-    onboarded: false,
-    favourites: [],
-    totalSeconds: 0,
-    createdAt: now,
-  };
+  return { ...blankLearnerState(now), version: STATE_VERSION };
+}
+
+/**
+ * What the app knows when it could not open the saved record.
+ *
+ * The presence of this object is what keeps the debounced save switched off, so
+ * the record on disk stays exactly as it was found. That is the entire safety
+ * property: the old hydration skipped a record it did not recognise and then
+ * let a blank learner overwrite it four hundred milliseconds later.
+ */
+export interface RecoveryState {
+  reason: string;
+  /** The bytes we declined to read, verbatim, so they can still be exported. */
+  raw: string;
 }
 
 export interface AnswerOutcome {
@@ -107,6 +97,10 @@ export interface CompleteSessionInput {
 
 interface LearnerContextValue {
   ready: boolean;
+  /** Set when a saved record exists but could not be opened. Saving stays off. */
+  recovery: RecoveryState | null;
+  /** Abandons an unreadable record and starts fresh — the only way past one. */
+  discardUnreadable: () => Promise<void>;
   learner: LearnerState;
   settings: Settings;
   recordAnswer: (input: RecordAnswerInput) => AnswerOutcome;
@@ -127,6 +121,7 @@ const LearnerContext = createContext<LearnerContextValue | null>(null);
 
 export function LearnerProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [recovery, setRecovery] = useState<RecoveryState | null>(null);
   const [learner, setLearner] = useState<LearnerState>(() => createLearnerState());
   /**
    * The newest state, for the two callbacks that need it without wanting to be
@@ -143,15 +138,48 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const saved = await storage.get<LearnerState>(StorageKeys.learner);
-      if (!cancelled && saved && saved.version === STATE_VERSION) {
-        setLearner({
-          ...createLearnerState(saved.createdAt),
-          ...saved,
-          settings: { ...DEFAULT_SETTINGS, ...saved.settings },
-        });
+      /**
+       * Read the bytes, not the object. `storage.get` swallows a parse failure
+       * and answers null, which is indistinguishable from a fresh install — and
+       * a fresh install is precisely the state that would then be saved over
+       * the record that failed to parse.
+       */
+      const raw = await storage.getRaw(StorageKeys.learner);
+
+      if (raw === null) {
+        // No record at all: a genuine first run. Saving may begin.
+        if (!cancelled) setReady(true);
+      } else {
+        let parsed: unknown;
+        let broken: string | null = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          broken = 'The saved progress could not be read — the file looks truncated.';
+        }
+
+        const result = broken
+          ? ({ ok: false, reason: broken, from: null } as const)
+          : migrateState(parsed, STATE_VERSION);
+
+        if (!cancelled) {
+          if (result.ok) {
+            setLearner(result.state);
+            if (result.migrated) {
+              console.log(
+                `[learner] upgraded saved progress from version ${result.from} to ${STATE_VERSION}`,
+              );
+            }
+            setReady(true);
+          } else {
+            // Never `setReady(true)` here: that is what switches the debounced
+            // save on, and the one thing that must not happen to a record we
+            // could not read is being written over.
+            await storage.set(StorageKeys.quarantine, { at: Date.now(), reason: result.reason, raw });
+            setRecovery({ reason: result.reason, raw });
+          }
+        }
       }
-      if (!cancelled) setReady(true);
       primeSpanishVoice();
 
       if (__DEV__) {
@@ -366,11 +394,31 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    */
   const restoreState = useCallback(async (incoming: LearnerState) => {
     await snapshotNow(latest.current);
+    /**
+     * Through the migrator, not around it. A backup written by an older build
+     * carries that build's `version`, and spreading it in verbatim stamped the
+     * live record with a version this build does not write — so the restore
+     * appeared to work and the *next* launch found a record it could not open.
+     */
+    const result = migrateState(incoming, STATE_VERSION);
+    const next = result.ok ? result.state : { ...incoming, version: STATE_VERSION };
     setLearner((prev) => ({
-      ...createLearnerState(incoming.createdAt),
-      ...incoming,
+      ...createLearnerState(next.createdAt),
+      ...next,
       settings: { ...DEFAULT_SETTINGS, ...prev.settings },
     }));
+  }, []);
+
+  /**
+   * The deliberate way out of a quarantined record: the learner says, in as many
+   * words, that they accept starting again. The bytes stay under the quarantine
+   * key regardless, so "start fresh" is still not the same as "delete".
+   */
+  const discardUnreadable = useCallback(async () => {
+    await storage.remove(StorageKeys.learner);
+    setLearner(createLearnerState());
+    setRecovery(null);
+    setReady(true);
   }, []);
 
   const resetProgress = useCallback(() => {
@@ -386,6 +434,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const value = useMemo<LearnerContextValue>(
     () => ({
       ready,
+      recovery,
+      discardUnreadable,
       learner,
       settings: learner.settings,
       recordAnswer,
@@ -402,6 +452,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }),
     [
       ready,
+      recovery,
+      discardUnreadable,
       learner,
       recordAnswer,
       markIntroduced,

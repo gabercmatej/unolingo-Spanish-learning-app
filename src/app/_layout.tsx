@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { RecoveryScreen } from '@/components/recovery-screen';
 import { ConfirmProvider } from '@/components/ui/confirm';
 import { Colors } from '@/constants/theme';
 import { LearnerProvider, ThemeSchemeProvider, useLearner } from '@/context/LearnerContext';
@@ -13,13 +14,16 @@ import { useColorScheme } from '@/hooks/use-theme';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { ready, learner } = useLearner();
+  const { ready, recovery, learner } = useLearner();
   const scheme = useColorScheme();
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
-  }, [ready]);
+    // Recovery counts as loaded: the splash must come down, or an unreadable
+    // record leaves the app on the splash screen forever.
+    if (ready || recovery) SplashScreen.hideAsync();
+  }, [ready, recovery]);
 
+  if (recovery) return <RecoveryScreen />;
   if (!ready) return null;
 
   const navigationTheme = scheme === 'dark' ? DarkTheme : DefaultTheme;

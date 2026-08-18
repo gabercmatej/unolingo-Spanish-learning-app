@@ -15,6 +15,22 @@ export const storage = {
     }
   },
 
+  /**
+   * The stored text, unparsed.
+   *
+   * Recovery needs the original bytes: once a record has failed to parse, the
+   * only honest thing to hand the learner is exactly what was on the device,
+   * not our best guess at what it meant.
+   */
+  async getRaw(key: string): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch (err) {
+      console.warn(`[storage] failed to read "${key}"`, err);
+      return null;
+    }
+  },
+
   async set<T>(key: string, value: T): Promise<void> {
     try {
       await AsyncStorage.setItem(key, JSON.stringify(value));
@@ -39,4 +55,10 @@ export const StorageKeys = {
    * that fails to parse must not be able to take its own backups with it.
    */
   snapshots: 'unolingo/snapshots/v1',
+  /**
+   * Where a record we could not read is set aside verbatim. It is never written
+   * over and never read back automatically — it exists so that "Unolingo could
+   * not open your progress" is a sentence with a file attached to it.
+   */
+  quarantine: 'unolingo/quarantine/v1',
 } as const;

@@ -9,6 +9,8 @@ import {
   shouldSnapshot,
   summarise,
 } from '@/learning/backup';
+import { migrateState } from '@/learning/migrate';
+import { STATE_VERSION } from '@/learning/schema';
 import type { LearnerState } from '@/learning/types';
 import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from './helpers';
 
@@ -153,5 +155,135 @@ describe('snapshots are taken on a cadence, and never eat themselves', () => {
     snapshots = pushSnapshot(snapshots, full, now + 3);
     expect(snapshots).toHaveLength(3);
     expect(snapshots.map((s) => s.at)).toEqual([now + 3, now + 2, now + 1]);
+  });
+});
+
+/**
+ * The whole journey, as a learner actually takes it: study for months, export,
+ * lose the phone, install on a new one, import.
+ *
+ * The existing round-trip above compares `summarise()`, which is six numbers —
+ * enough to prove the file parses, not enough to prove the *progress* survived.
+ * A backup that restored every count correctly while dropping every concept's
+ * stability would pass it and lose the spaced repetition entirely.
+ */
+describe('a backup survives a reinstall', () => {
+  const NOW = Date.UTC(2026, 4, 1, 9);
+
+  function monthsOfWork(): LearnerState {
+    return makeLearner({
+      xp: 41_250,
+      streak: 12,
+      longestStreak: 63,
+      lastStudyDate: '2026-04-30',
+      totalSeconds: 187_400,
+      onboarded: true,
+      createdAt: Date.UTC(2025, 8, 14),
+      placement: { level: 'A2', at: Date.UTC(2025, 8, 14) } as never,
+      favourites: ['v.quedar', 'g.subjunctive-present'],
+      concepts: {
+        'v.quedar': {
+          id: 'v.quedar', firstSeen: 1, lastReviewed: NOW - 86_400_000, timesSeen: 31,
+          correct: 26, incorrect: 5, lapses: 2, streak: 4, strength: 0.74,
+          stability: 18.5, ease: 2.31, dueAt: NOW + 86_400_000, depth: 3,
+          kinds: ['translateToEs', 'listenSelect', 'buildResponse'], introduced: true,
+        } as never,
+        'f.tener.conditional': {
+          id: 'f.tener.conditional', firstSeen: 2, lastReviewed: NOW, timesSeen: 7,
+          correct: 5, incorrect: 2, lapses: 1, streak: 1, strength: 0.42,
+          stability: 2.1, ease: 1.85, dueAt: NOW, depth: 2,
+          kinds: ['fillBlank'], introduced: true,
+        } as never,
+      },
+      completedLessons: {
+        'l.greetings': { at: 100, accuracy: 0.95, times: 3 },
+        'l.b1.opinions': { at: 200, accuracy: 0.81, times: 1 },
+      },
+      mistakes: [
+        { id: 'm1', at: 50, conceptIds: ['v.quedar'], kind: 'translateToEs',
+          prompt: 'p', given: 'g', expected: 'e' } as never,
+      ],
+      sessions: [
+        { id: 's1', at: 60, source: 'l.greetings', label: 'Greetings', xp: 40,
+          correct: 9, total: 10, duration: 300, newConcepts: 4 } as never,
+      ],
+      daily: [{ date: '2026-04-30', xp: 220, seconds: 900, exercises: 40 }],
+    });
+  }
+
+  /** Export, wipe the device, import — exactly the path the Profile screen runs. */
+  function reinstall(learner: LearnerState) {
+    const onDisk = JSON.stringify(buildBackup(learner), null, 2);
+    const parsed = parseBackup(onDisk, STATE_VERSION);
+    if (!parsed.ok) throw new Error(parsed.reason);
+    // A brand-new install: nothing but this device's own settings.
+    const fresh = makeLearner({ settings: { ...DEFAULT_SETTINGS_FOR_TEST, appearance: 'dark' } });
+    const restored = stateFromBackup(parsed.file, fresh.settings);
+    const migrated = migrateState(restored, STATE_VERSION);
+    if (!migrated.ok) throw new Error(migrated.reason);
+    return migrated.state;
+  }
+
+  it('brings back the spaced-repetition record, not just the totals', () => {
+    const after = reinstall(monthsOfWork());
+    const quedar = after.concepts['v.quedar'];
+
+    // These five fields *are* the memory model. Restoring the counts without
+    // them would put every concept back at day one while showing the same XP.
+    expect(quedar.stability).toBeCloseTo(18.5);
+    expect(quedar.ease).toBeCloseTo(2.31);
+    expect(quedar.strength).toBeCloseTo(0.74);
+    expect(quedar.dueAt).toBe(NOW + 86_400_000);
+    expect(quedar.lastReviewed).toBe(NOW - 86_400_000);
+    expect(quedar.kinds).toEqual(['translateToEs', 'listenSelect', 'buildResponse']);
+  });
+
+  it('brings back everything the profile and the path are built from', () => {
+    const before = monthsOfWork();
+    const after = reinstall(before);
+
+    expect(after.xp).toBe(41_250);
+    expect(after.streak).toBe(12);
+    expect(after.longestStreak).toBe(63);
+    expect(after.lastStudyDate).toBe('2026-04-30');
+    expect(after.totalSeconds).toBe(187_400);
+    expect(after.createdAt).toBe(Date.UTC(2025, 8, 14));
+    expect(after.onboarded).toBe(true);
+    expect(after.placement).toEqual(before.placement);
+    expect(after.favourites).toEqual(['v.quedar', 'g.subjunctive-present']);
+    expect(after.completedLessons).toEqual(before.completedLessons);
+    expect(after.mistakes).toEqual(before.mistakes);
+    expect(after.sessions).toEqual(before.sessions);
+    expect(after.daily).toEqual(before.daily);
+    expect(Object.keys(after.concepts)).toEqual(Object.keys(before.concepts));
+  });
+
+  it('keeps the new device’s settings rather than the old device’s', () => {
+    // Everything else moves; the appearance you chose on *this* screen stays.
+    expect(reinstall(monthsOfWork()).settings.appearance).toBe('dark');
+  });
+
+  it('leaves the restored record readable by the next launch', () => {
+    // The bug this pins: a restore used to write the *backup's* version into the
+    // live record. The restore looked fine, and the next launch found a version
+    // it did not recognise and discarded everything.
+    const after = reinstall(monthsOfWork());
+    expect(after.version).toBe(STATE_VERSION);
+    expect(migrateState(after, STATE_VERSION).ok).toBe(true);
+  });
+});
+
+describe('an empty backup is still a backup, and still has to be chosen', () => {
+  it('reports the full cost of restoring a blank file over real progress', () => {
+    const blank = makeLearner();
+    const real = makeLearner({ xp: 41_250, concepts: { 'v.a': {} as never }, completedLessons: { l: {} as never } });
+    const comparison = compareForRestore(blank, real);
+
+    // The restore is not blocked — it is the learner's file and their choice —
+    // but it can never happen without this number being shown first.
+    expect(comparison.losing).toBe(true);
+    expect(comparison.xpLost).toBe(41_250);
+    expect(comparison.incoming.concepts).toBe(0);
+    expect(comparison.current.concepts).toBe(1);
   });
 });
