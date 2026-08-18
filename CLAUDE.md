@@ -155,6 +155,15 @@ is exactly what these tests exist to catch.
     *deliberately not equal* — `él` and `yo` dominate real Spanish — but **`vosotros`** is
     the one to watch, because it is what makes this course Peninsular and it was the least
     represented form in the corpus.
+  - **Surface forms collide, and a naive match inflates exposure silently.** ser and ir
+    share their whole preterite; `trabajo`, `vino`, `paga` and `como` are also nouns or
+    conjunctions; `era` is both `yo` and `él`. The index guards all three — a preceding
+    determiner or preposition rejects the noun reading, an ambiguous form must be
+    corroborated by the sentence carrying the verb's own vocabulary concept, and a form
+    shared between persons is counted once rather than once per person. `verb-corpus.test.ts`
+    locks each case with the real example that exposed it. Extending the guards means adding
+    a case there first: the failure mode is a number quietly being too high, which nothing
+    else notices.
 - **A lesson cannot teach more concepts than its session can generate.** The session target
   is `clamp(estMinutes × 1.8, 10, 20)`, and a concept that is never generated never enters
   the learner's state, is never scheduled, and never reaches the Library — so `teaches`
@@ -293,8 +302,9 @@ those tests cross-check content against logic.
 
 ## Known open work
 
-- **Depth is now median 2–3 sentences per concept.** Every concept in the course has at
-  least two; no stage has a single-exposure item left. The audit's NOTE reports the eight
+- **Depth is now median 3–4 sentences per concept**, and no stage draws more than 10% of its
+  material from below its own level. Every concept has at
+  least two sentences and most have three or more. The audit's NOTE reports the eight
   least-practised concepts per stage against that stage's median, and it says so *whether
   or not anything is wrong* — it is a standing priority queue, not a defect report. The
   next pass is lifting the high-frequency spine (ser, estar, tener, quedar, aunque,
@@ -312,8 +322,8 @@ those tests cross-check content against logic.
   teach-card cap of 8. Both split into two lessons *inside their existing unit*. Unit count
   stayed at 63 on purpose — symmetry with A1/A2 is not a reason to add units, and the
   remaining upper units each hold one coherent objective.
-- **`vosotros` and `tú` are still the thinnest conjugated forms** — 67 exposures each against
-  `él`'s 501. That gap is partly legitimate (third-person narration dominates any corpus,
+- **`vosotros` and `tú` are still the thinnest conjugated forms** — 67 and 69 exposures against
+  `él`'s 454. That gap is partly legitimate (third-person narration dominates any corpus,
   and `es` / `está` / `ha` are among the commonest tokens in Spanish), so the target is not
   parity. What matters is that group dialogue keeps appearing, since that is where those
   forms naturally live. `presentPerfect` (49), `future` (14) and `conditional` (13) are the
