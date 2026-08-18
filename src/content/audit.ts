@@ -537,11 +537,12 @@ function findParadigmGaps(): Gap[] {
     severity: 'info',
     where: 'verbs',
     message:
-      'form exposures by person: ' +
+      'unambiguous form exposures by person: ' +
       (Object.entries(report.exposureByPerson) as [Person, number][])
         .sort((a, b) => b[1] - a[1])
         .map(([person, n]) => `${person}=${n}`)
-        .join(' '),
+        .join(' ') +
+      ` · shared between persons: ${report.sharedFormExposures}`,
   });
 
   gaps.push({
