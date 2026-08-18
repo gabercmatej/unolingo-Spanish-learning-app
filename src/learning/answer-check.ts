@@ -88,7 +88,8 @@ const ENGLISH_CONTRACTIONS: [RegExp, string][] = [
   [/\bdidn't\b/g, 'did not'],
   [/\bisn't\b/g, 'is not'],
   [/\baren't\b/g, 'are not'],
-  [/\bcan't\b/g, 'cannot'],
+  [/\bcan't\b/g, 'can not'],
+  [/\bcannot\b/g, 'can not'],
   [/\bwon't\b/g, 'will not'],
   [/\bit's\b/g, 'it is'],
   [/\bthat's\b/g, 'that is'],
@@ -168,7 +169,13 @@ export function pronounAgrees(pronoun: PronounKey, verb: string): boolean {
   if (bare.endsWith('n')) return pronoun === 'ellos';
   if (bare.endsWith('s')) return pronoun === 'tu';
   if (bare.endsWith('o')) return pronoun === 'yo';
-  if (bare.endsWith('a') || bare.endsWith('e')) return pronoun === 'el' || pronoun === 'yo';
+  if (bare.endsWith('a') || bare.endsWith('e')) {
+    if (pronoun === 'el') return true;
+    // yo and él genuinely share the imperfect (hablaba, comía) and the
+    // conditional (hablaría) — but not the present. Without this the checker
+    // stripped the pronoun from "yo habla" and marked it a near miss.
+    return pronoun === 'yo' && (bare.endsWith('aba') || bare.endsWith('ia'));
+  }
   return true;
 }
 
@@ -256,8 +263,6 @@ const EN_SYNONYMS: Record<string, string> = {
   wanna: 'want',
   gonna: 'going',
   shall: 'will',
-  cannot: 'can',
-  'can not': 'can',
   tired: 'tired',
   house: 'home',
   automobile: 'car',
@@ -271,6 +276,25 @@ const EN_SYNONYMS: Record<string, string> = {
   lift: 'elevator',
   queue: 'line',
 };
+
+/**
+ * Words that flip the meaning of a sentence rather than colouring it.
+ *
+ * These are the reason `sameEnglishMeaning` cannot simply allow one unmatched
+ * word: "I do not like coffee" and "I like coffee" differ by exactly one word,
+ * and it is the only word that matters. Measured on the real checker, all three
+ * of "I don't like coffee", "He is not coming" and "I cannot go" were accepted
+ * as their own opposites before this existed.
+ */
+const EN_POLARITY = new Set([
+  'not', 'no', 'never', 'none', 'nobody', 'nothing', 'neither', 'nor', 'without',
+  'nowhere', 'cannot', 'except', 'unless',
+]);
+
+/** How many polarity words a phrase carries — two of these cancel, one does not. */
+function polarity(words: string[]): number {
+  return words.filter((word) => EN_POLARITY.has(word)).length;
+}
 
 /** Content words of an English answer, normalised for comparison. */
 function contentWords(text: string): string[] {
@@ -293,6 +317,8 @@ function sameEnglishMeaning(a: string, b: string): boolean {
   const right = contentWords(b);
   if (left.length === 0 || right.length === 0) return false;
   if (Math.abs(left.length - right.length) > 1) return false;
+  // Negation is never the word we let slide.
+  if (polarity(left) !== polarity(right)) return false;
 
   // Every content word in the shorter list must appear in the longer one.
   const longer = left.length >= right.length ? [...left] : [...right];
