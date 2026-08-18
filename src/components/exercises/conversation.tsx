@@ -4,6 +4,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import { SpeakIcon } from '@/components/exercises/audio-button';
 import { Avatar } from '@/components/ui/avatar';
+import { AccentRow } from '@/components/exercises/accent-row';
 import type { ExerciseViewProps } from '@/components/exercises/shared';
 import { Icon } from '@/components/ui/icon';
 import { PressScale } from '@/components/ui/press-scale';
@@ -151,6 +152,10 @@ export function ConversationView({
             multiline
             autoCapitalize="none"
             autoCorrect={false}
+            spellCheck={false}
+            keyboardAppearance={theme.background === '#151215' ? 'dark' : 'light'}
+            returnKeyType="done"
+            blurOnSubmit
             onSubmitEditing={() => onSubmit?.()}
             style={[
               styles.input,
@@ -166,6 +171,9 @@ export function ConversationView({
               },
             ]}
           />
+          {!locked ? (
+            <AccentRow value={answer ?? ''} onChange={(next) => onAnswer(next.length > 0 ? next : null)} />
+          ) : null}
           {!locked && exercise.hints && exercise.hints.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always">
               <View style={styles.hintRow}>

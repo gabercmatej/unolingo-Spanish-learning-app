@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
+import { AccentRow } from '@/components/exercises/accent-row';
 import { AudioButton } from '@/components/exercises/audio-button';
 import type { ExerciseViewProps } from '@/components/exercises/shared';
 import { PressScale } from '@/components/ui/press-scale';
@@ -12,23 +13,7 @@ import type { TypedExercise } from '@/learning/exercise';
 /**
  * Free typing: translation both ways, dictation, fill-the-gap, correct the
  * mistake and open-ended responses.
- *
- * The accent row is the difference between this being usable on a phone and
- * being a chore. Tapping "á" upgrades a trailing "a" rather than appending, so
- * you type normally and fix the accent as you go.
  */
-const ACCENTS = ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü', '¿', '¡'];
-
-const BASE: Record<string, string> = {
-  á: 'a',
-  é: 'e',
-  í: 'i',
-  ó: 'o',
-  ú: 'u',
-  ñ: 'n',
-  ü: 'u',
-};
-
 export function TypedView({
   exercise,
   answer,
@@ -46,19 +31,6 @@ export function TypedView({
     const timer = setTimeout(() => inputRef.current?.focus(), 350);
     return () => clearTimeout(timer);
   }, [exercise.id]);
-
-  const insert = (character: string) => {
-    if (locked) return;
-    const base = BASE[character];
-    const last = value.slice(-1).toLowerCase();
-    // Upgrade the character just typed when it is the unaccented equivalent.
-    if (base && last === base) {
-      const preserveCase = value.slice(-1) !== last;
-      onAnswer(value.slice(0, -1) + (preserveCase ? character.toUpperCase() : character));
-    } else {
-      onAnswer(value + character);
-    }
-  };
 
   const borderColor = locked
     ? result.grade === 'incorrect'
@@ -121,25 +93,7 @@ export function TypedView({
       />
 
       {!locked && exercise.language === 'es' ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always">
-          <View style={styles.accentRow}>
-            {ACCENTS.map((character) => (
-              <PressScale
-                key={character}
-                onPress={() => insert(character)}
-                scaleTo={0.88}
-                accessibilityLabel={`Insert ${character}`}>
-                <View
-                  style={[
-                    styles.accent,
-                    { backgroundColor: theme.backgroundSunken, borderColor: theme.border },
-                  ]}>
-                  <Text variant="bodyBold">{character}</Text>
-                </View>
-              </PressScale>
-            ))}
-          </View>
-        </ScrollView>
+        <AccentRow value={value} onChange={(next) => onAnswer(next)} />
       ) : null}
 
       {!locked && exercise.hints && exercise.hints.length > 0 ? (
@@ -183,15 +137,6 @@ const styles = StyleSheet.create({
     fontSize: Type.body.fontSize,
     lineHeight: Type.body.lineHeight,
     textAlignVertical: 'top',
-  },
-  accentRow: { flexDirection: 'row', gap: Spacing.two, paddingVertical: Spacing.one },
-  accent: {
-    width: 44,
-    height: 40,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   hints: { gap: Spacing.two },
   hintRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useColorScheme as useSystemColorScheme } from 'react-native';
+import { AppState, useColorScheme as useSystemColorScheme } from 'react-native';
 
 import { getLesson, validateContent } from '@/content';
 import { ColorSchemeContext } from '@/hooks/use-theme';
@@ -208,6 +208,28 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }, 400);
     return () => clearTimeout(timer);
   }, [learner, ready]);
+
+  /**
+   * Write immediately when the app leaves the foreground.
+   *
+   * Four hundred milliseconds is nothing at a desk and is a real gap on a phone:
+   * answer the last question of a session, swipe up, and the pending write is
+   * still pending. Worse, a backgrounded app can have its JS thread suspended
+   * before the timer fires at all, so the write is not merely late — it never
+   * happens, and the next launch is a session behind.
+   *
+   * `latest` rather than `learner` so the listener is registered once instead of
+   * being torn down and rebuilt on every answer.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'background' || next === 'inactive') {
+        void storage.set(StorageKeys.learner, latest.current);
+      }
+    });
+    return () => subscription.remove();
+  }, [ready]);
 
   useEffect(() => {
     configureFeedback({ haptics: learner.settings.haptics });
