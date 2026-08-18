@@ -1,10 +1,11 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CrashScreen } from '@/components/crash-screen';
 import { RecoveryScreen } from '@/components/recovery-screen';
 import { ConfirmProvider } from '@/components/ui/confirm';
 import { Colors } from '@/constants/theme';
@@ -12,6 +13,18 @@ import { LearnerProvider, ThemeSchemeProvider, useLearner } from '@/context/Lear
 import { useColorScheme } from '@/hooks/use-theme';
 
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Expo Router renders this instead of the tree when a screen throws.
+ *
+ * Without it, an uncaught render error is a red box in development and a blank
+ * app in a release build — and a learner faced with a blank app reinstalls,
+ * which is the one action that takes their progress with it. Retrying costs
+ * nothing here because none of the state lives in the component tree.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <CrashScreen error={error} onRetry={retry} />;
+}
 
 function RootNavigator() {
   const { ready, recovery, learner } = useLearner();

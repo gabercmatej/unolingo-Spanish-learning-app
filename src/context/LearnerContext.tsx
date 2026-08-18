@@ -165,7 +165,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           if (result.ok) {
             setLearner(result.state);
-            if (result.migrated) {
+            if (result.migrated && __DEV__) {
               console.log(
                 `[learner] upgraded saved progress from version ${result.from} to ${STATE_VERSION}`,
               );
