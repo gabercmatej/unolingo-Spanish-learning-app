@@ -16,13 +16,22 @@ import { Segmented } from '@/components/ui/segmented';
 import { Text } from '@/components/ui/text';
 import { Toggle } from '@/components/ui/toggle';
 import { Fonts, Radius, Spacing, Type } from '@/constants/theme';
-import { useLearner } from '@/context/LearnerContext';
+import { STATE_VERSION, useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { achievements, achievementsByGroup, type AchievementTier } from '@/learning/achievements';
+import {
+  backupFilename,
+  buildBackup,
+  compareForRestore,
+  parseBackup,
+  stateFromBackup,
+} from '@/learning/backup';
 import { curriculumLevel, estimateProficiency, wordsMastered } from '@/learning/mastery';
 import { rankProgress } from '@/learning/ranks';
 import type { Appearance, DailyGoal } from '@/learning/types';
+import { pickBackupFile, saveBackupFile } from '@/lib/backup-file';
 import { currentStreak } from '@/lib/date';
+import { listSnapshots, type Snapshot } from '@/lib/snapshots';
 import {
   availableSpanishVoices,
   primeSpanishVoice,
@@ -40,7 +49,7 @@ const GOALS: { value: DailyGoal; label: string; caption: string }[] = [
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { learner, settings, updateSettings, resetProgress } = useLearner();
+  const { learner, settings, updateSettings, resetProgress, restoreState } = useLearner();
   const confirm = useConfirm();
   const [name, setName] = useState(settings.name);
 
@@ -65,6 +74,74 @@ export default function ProfileScreen() {
   const mastered = useMemo(() => wordsMastered(learner), [learner]);
   const proficiency = useMemo(() => estimateProficiency(learner), [learner]);
   const courseLevel = useMemo(() => curriculumLevel(learner), [learner]);
+
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [backupNote, setBackupNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSnapshots().then((found) => {
+      if (!cancelled) setSnapshots(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [learner]);
+
+  const exportBackup = async () => {
+    const payload = JSON.stringify(buildBackup(learner), null, 2);
+    const result = await saveBackupFile(payload, backupFilename());
+    setBackupNote(
+      result.ok
+        ? `Saved ${describeSummary(buildBackup(learner).summary)}.`
+        : `Could not save the backup: ${result.reason}`,
+    );
+  };
+
+  /**
+   * Restore is the one irreversible-feeling action in the app, so it says out
+   * loud what is being swapped for what — and refuses quietly to do nothing when
+   * the file turns out not to be a backup at all.
+   */
+  const importBackup = async () => {
+    const picked = await pickBackupFile();
+    if (!picked.ok) {
+      if (!picked.canceled) setBackupNote(picked.reason);
+      return;
+    }
+
+    const parsed = parseBackup(picked.text, STATE_VERSION);
+    if (!parsed.ok) {
+      setBackupNote(parsed.reason);
+      return;
+    }
+
+    const comparison = compareForRestore(parsed.file.state, learner);
+    const ok = await confirm({
+      title: 'Restore this backup?',
+      message: comparison.losing
+        ? `The backup has ${describeSummary(comparison.incoming)}. You currently have ${describeSummary(comparison.current)} — restoring gives up ${comparison.xpLost.toLocaleString('en-GB')} XP. A snapshot of what you have now is taken first.`
+        : `The backup has ${describeSummary(comparison.incoming)}. It replaces what is on this device. A snapshot of what you have now is taken first.`,
+      confirmLabel: 'Restore',
+      destructive: comparison.losing,
+    });
+    if (!ok) return;
+
+    await restoreState(stateFromBackup(parsed.file, settings));
+    setBackupNote(`Restored ${describeSummary(parsed.file.summary)}.`);
+  };
+
+  const restoreSnapshot = async (snapshot: Snapshot) => {
+    const ok = await confirm({
+      title: 'Go back to this snapshot?',
+      message: `It has ${describeSummary(snapshot.summary)}, from ${formatWhen(snapshot.at)}. What you have now is snapshotted first, so this is undoable.`,
+      confirmLabel: 'Go back',
+      destructive: true,
+    });
+    if (!ok) return;
+    await restoreState(snapshot.state);
+    setBackupNote(`Went back to the snapshot from ${formatWhen(snapshot.at)}.`);
+  };
 
   const confirmReset = async () => {
     const ok = await confirm({
@@ -414,6 +491,47 @@ export default function ProfileScreen() {
         </Card>
       </Section>
 
+      <Section
+        title="Your progress"
+        caption="Everything lives on this device. That is fine until the device is not around, so keep a copy somewhere else.">
+        <Card variant="flat" padding="none">
+          <ActionRow
+            icon="download-outline"
+            label="Export a backup"
+            caption={`${describeSummary(buildBackup(learner).summary)} as a file`}
+            onPress={exportBackup}
+          />
+          <Divider />
+          <ActionRow
+            icon="cloud-upload-outline"
+            label="Restore from a backup"
+            caption="Replaces what is on this device — you are shown both first"
+            onPress={importBackup}
+          />
+          {snapshots.map((snapshot) => (
+            <View key={snapshot.at}>
+              <Divider />
+              <ActionRow
+                icon="time-outline"
+                label={`Snapshot · ${formatWhen(snapshot.at)}`}
+                caption={describeSummary(snapshot.summary)}
+                onPress={() => restoreSnapshot(snapshot)}
+              />
+            </View>
+          ))}
+        </Card>
+        {backupNote ? (
+          <Text variant="caption" color="textSecondary">
+            {backupNote}
+          </Text>
+        ) : (
+          <Text variant="caption" color="textTertiary">
+            Unolingo keeps up to three automatic snapshots, taken twice a day and before
+            anything destructive.
+          </Text>
+        )}
+      </Section>
+
       <Section title="Course">
         <Card variant="flat" padding="none">
           <ActionRow
@@ -449,6 +567,20 @@ export default function ProfileScreen() {
       </Text>
     </Screen>
   );
+}
+
+/** "12,400 XP · 412 words · 38 lessons" — the same phrase everywhere it is needed. */
+function describeSummary(summary: { xp: number; concepts: number; lessons: number }): string {
+  return `${summary.xp.toLocaleString('en-GB')} XP · ${summary.concepts} words · ${summary.lessons} lessons`;
+}
+
+function formatWhen(at: number): string {
+  return new Date(at).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** Tier colours: bronze → platinum reads as increasing rarity, not decoration. */
@@ -509,7 +641,7 @@ function ActionRow({
   tone,
   onPress,
 }: {
-  icon: 'compass-outline' | 'reader-outline' | 'trash-outline';
+  icon: IconName;
   label: string;
   caption: string;
   tone?: string;

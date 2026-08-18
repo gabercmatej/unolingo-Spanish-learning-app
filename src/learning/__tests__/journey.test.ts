@@ -1,4 +1,4 @@
-import { curriculum, getLesson, getUnitForLesson } from '@/content';
+import { curriculum } from '@/content';
 import type { Lesson, Unit } from '@/content/types';
 import { checkExercise } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
@@ -12,7 +12,7 @@ import {
 } from '@/learning/placement';
 import { buildSession, isLessonUnlocked, type SessionPlan } from '@/learning/session';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
-import type { ConceptState, Grade, LearnerState, MistakeRecord } from '@/learning/types';
+import type { Grade, LearnerState, MistakeRecord } from '@/learning/types';
 import { xpForAnswer } from '@/learning/xp';
 import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from './helpers';
 

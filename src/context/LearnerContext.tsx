@@ -28,6 +28,7 @@ import { xpForAnswer } from '@/learning/xp';
 import { nextStreak, toISODate } from '@/lib/date';
 import { configureFeedback } from '@/lib/feedback';
 import { primeSpanishVoice, setPreferredVoice } from '@/lib/speech';
+import { maybeSnapshot, snapshotNow } from '@/lib/snapshots';
 import { StorageKeys, storage } from '@/lib/storage';
 
 /**
@@ -38,7 +39,7 @@ import { StorageKeys, storage } from '@/lib/storage';
  * directly — they call `useLearner()`.
  */
 
-const STATE_VERSION = 1;
+export const STATE_VERSION = 1;
 const MAX_MISTAKES = 200;
 const MAX_SESSIONS = 200;
 const MAX_DAILY = 400;
@@ -117,6 +118,8 @@ interface LearnerContextValue {
   clearResolvedMistakes: () => void;
   finishPlacement: (score: PlacementScore, answers: PlacementAnswer[]) => void;
   skipPlacement: () => void;
+  /** Replaces all progress with a backup or snapshot, keeping local settings. */
+  restoreState: (incoming: LearnerState) => Promise<void>;
   resetProgress: () => void;
 }
 
@@ -162,6 +165,10 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       storage.set(StorageKeys.learner, latest.current);
+      // A rolling copy under its own key, at most twice a day. It costs one
+      // extra write on the sessions that happen to cross the interval, and it
+      // is the only thing standing between a bad write and a year of progress.
+      void maybeSnapshot(latest.current);
     }, 400);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -344,7 +351,26 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setLearner((prev) => ({ ...prev, onboarded: true }));
   }, []);
 
+  /**
+   * Replaces everything with a backup or a snapshot.
+   *
+   * Settings stay local — see `stateFromBackup`. A snapshot is taken first, so
+   * restoring the wrong file is itself undoable, which is the difference between
+   * a restore button and a loaded gun.
+   */
+  const restoreState = useCallback(async (incoming: LearnerState) => {
+    await snapshotNow(latest.current);
+    setLearner((prev) => ({
+      ...createLearnerState(incoming.createdAt),
+      ...incoming,
+      settings: { ...DEFAULT_SETTINGS, ...prev.settings },
+    }));
+  }, []);
+
   const resetProgress = useCallback(() => {
+    // Same reasoning: the most destructive button in the app is the one that
+    // most needs a copy taken before it fires.
+    void snapshotNow(latest.current);
     setLearner((prev) => ({
       ...createLearnerState(),
       settings: prev.settings,
@@ -365,6 +391,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       clearResolvedMistakes,
       finishPlacement,
       skipPlacement,
+      restoreState,
       resetProgress,
     }),
     [
@@ -379,6 +406,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       clearResolvedMistakes,
       finishPlacement,
       skipPlacement,
+      restoreState,
       resetProgress,
     ],
   );

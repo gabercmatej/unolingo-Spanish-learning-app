@@ -34,4 +34,9 @@ export const storage = {
 
 export const StorageKeys = {
   learner: 'unolingo/learner/v1',
+  /**
+   * Rolling snapshots live under their own key on purpose: a learner record
+   * that fails to parse must not be able to take its own backups with it.
+   */
+  snapshots: 'unolingo/snapshots/v1',
 } as const;
