@@ -20,6 +20,7 @@ import {
   buildGrammarCard,
   buildReading,
   generateForConcept,
+  generateOfKind,
   mulberry32,
   shuffle,
   type GenContext,
@@ -253,6 +254,63 @@ export function buildLessonSession(lessonId: string, options: BuildOptions): Ses
  * deliberate spread across vocabulary, grammar, listening and production, and
  * the weakest concepts first so the result actually diagnoses something.
  */
+/**
+ * What a checkpoint has to test before it is allowed to certify anything.
+ *
+ * A checkpoint that samples the stage's weakest concepts will, left alone, pick
+ * whatever exercise kind the learner's own history makes freshest — and for a
+ * learner who has drilled vocabulary and skipped everything else, that is more
+ * vocabulary. Which is exactly how somebody reaches the B1 checkpoint, passes
+ * it, and cannot understand a spoken sentence.
+ *
+ * So the checkpoint carries a floor per skill. It is a floor, not a quota split:
+ * the rest of the session is still chosen adaptively.
+ */
+const CHECKPOINT_SKILL_FLOOR: { kinds: ExerciseKind[]; min: number }[] = [
+  { kinds: ['listenSelect', 'listenComprehend', 'dictation'], min: 3 },
+  { kinds: ['translateToEs', 'buildResponse', 'speak'], min: 3 },
+];
+
+/** Kinds cheap enough to give up a slot when a skill floor is unmet. */
+const SUBSTITUTABLE: ExerciseKind[] = ['multipleChoice', 'match', 'translateToEn'];
+
+/**
+ * Tops a session up until every skill floor is met, replacing the cheapest
+ * exercises rather than lengthening the session. Concepts already used are
+ * skipped so the substitution does not just re-ask the same word.
+ */
+function enforceSkillQuota(
+  exercises: Exercise[],
+  pool: string[],
+  learner: LearnerState,
+  ctx: GenContext,
+): Exercise[] {
+  const out = [...exercises];
+
+  for (const { kinds, min } of CHECKPOINT_SKILL_FLOOR) {
+    let have = out.filter((exercise) => kinds.includes(exercise.kind)).length;
+    if (have >= min) continue;
+
+    for (const conceptId of pool) {
+      if (have >= min) break;
+      if (out.some((exercise) => exercise.conceptIds.includes(conceptId))) continue;
+
+      const replacement = generateOfKind(conceptId, learner.concepts[conceptId], ctx, kinds);
+      if (!replacement) continue;
+
+      // Take a recognition slot if there is one; otherwise extend.
+      const victim = out.findIndex(
+        (exercise) => SUBSTITUTABLE.includes(exercise.kind) && exercise.form !== 'presentation',
+      );
+      if (victim === -1) out.push(replacement);
+      else out.splice(victim, 1, replacement);
+      have += 1;
+    }
+  }
+
+  return out;
+}
+
 function buildCheckpointSession(lesson: Lesson, options: BuildOptions): SessionPlan | null {
   const ctx = makeContext(options);
   const { learner } = options;
@@ -275,7 +333,8 @@ function buildCheckpointSession(lesson: Lesson, options: BuildOptions): SessionP
   ]);
 
   const target = options.targetLength ?? 18;
-  const exercises = interleave(generate(ordered, learner, ctx, target));
+  const generated = enforceSkillQuota(generate(ordered, learner, ctx, target), ordered, learner, ctx);
+  const exercises = interleave(generated);
 
   const reading = buildReading(ctx, levelIndex(estimateLevel(learner, now)));
   if (reading && exercises.length > 6) {

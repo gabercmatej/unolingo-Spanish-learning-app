@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { LevelHero, RankJourney } from '@/components/profile/level-card';
+import { Standing } from '@/components/profile/standing';
 import { AvatarButton } from '@/components/profile/learner-avatar';
 import { Card } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm';
@@ -18,7 +19,7 @@ import { Fonts, Radius, Spacing, Type } from '@/constants/theme';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { achievements, achievementsByGroup, type AchievementTier } from '@/learning/achievements';
-import { estimateLevel, wordsMastered } from '@/learning/mastery';
+import { curriculumLevel, estimateProficiency, wordsMastered } from '@/learning/mastery';
 import { rankProgress } from '@/learning/ranks';
 import type { Appearance, DailyGoal } from '@/learning/types';
 import { currentStreak } from '@/lib/date';
@@ -62,7 +63,8 @@ export default function ProfileScreen() {
   const streak = currentStreak(learner.lastStudyDate, learner.streak);
   const lessonsDone = Object.keys(learner.completedLessons).length;
   const mastered = useMemo(() => wordsMastered(learner), [learner]);
-  const cefr = useMemo(() => estimateLevel(learner), [learner]);
+  const proficiency = useMemo(() => estimateProficiency(learner), [learner]);
+  const courseLevel = useMemo(() => curriculumLevel(learner), [learner]);
 
   const confirmReset = async () => {
     const ok = await confirm({
@@ -100,15 +102,24 @@ export default function ProfileScreen() {
             <Text variant="heading" rounded numberOfLines={1}>
               {settings.name || 'Learner'}
             </Text>
-            {/* Two different measures, never conflated: the rank is how far you
-                have walked, the CEFR estimate is how good your Spanish is. */}
+            {/* Three different measures, never conflated — see the "Where you
+                stand" section below, which is where they get room to disagree. */}
             <Text variant="small" color="textSecondary">
-              {progress.rank.name} · Spanish around {cefr}
+              {progress.rank.name} · Spanish around {proficiency.level}
+              {proficiency.plus ? '+' : ''}
             </Text>
           </View>
         </View>
         <LevelHero progress={progress} />
       </Card>
+
+      <Section
+        title="Where you stand"
+        caption="Finishing a stage and speaking at that level are separate claims, and this is allowed to say so.">
+        <Card variant="flat">
+          <Standing rank={progress.rank} curriculum={courseLevel} proficiency={proficiency} />
+        </Card>
+      </Section>
 
       {/* Two rows of two rather than one wrapping grid: four tiles wrap to 3 + 1
           at phone widths, which reads as a layout accident. */}

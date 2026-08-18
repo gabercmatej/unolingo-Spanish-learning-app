@@ -1012,6 +1012,31 @@ export function generateForConcept(
   return buildMultipleChoice(concept, ctx, ctx.rng() < 0.5);
 }
 
+/**
+ * Generate for a concept restricted to particular exercise kinds.
+ *
+ * `generateForConcept` deliberately lets the learner's own history choose the
+ * mix, which is right for a lesson and wrong for a checkpoint: a checkpoint has
+ * to *test* listening and production whether or not the learner's history would
+ * have offered them. This is the escape hatch, and it is the only caller that
+ * gets to override the ranking.
+ */
+export function generateOfKind(
+  conceptId: string,
+  state: ConceptState | undefined,
+  ctx: GenContext,
+  kinds: ExerciseKind[],
+): Exercise | null {
+  const concept = getConcept(conceptId);
+  if (!concept || !isVocabConcept(concept) || !state?.introduced) return null;
+  const pool = getSentencesForConcept(concept.id);
+  for (const kind of kinds) {
+    const exercise = attemptKind(kind, concept, pool, state, ctx);
+    if (exercise) return exercise;
+  }
+  return null;
+}
+
 function attemptKind(
   kind: ExerciseKind,
   concept: VocabConcept,

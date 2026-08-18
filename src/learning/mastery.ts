@@ -23,7 +23,7 @@ import {
 } from '@/content/types';
 import { isLessonUnlocked } from '@/learning/session';
 import { mastery, masteryBand, retrievability, urgency } from '@/learning/srs';
-import type { ConceptState, LearnerState, Skill } from '@/learning/types';
+import type { ConceptState, ExerciseKind, LearnerState, Skill } from '@/learning/types';
 
 /**
  * Aggregates the per-concept memory records into the numbers the learner sees:
@@ -293,29 +293,155 @@ export function wordsMastered(learner: LearnerState, now = Date.now()): number {
 }
 
 /**
- * Running CEFR estimate. A level counts as reached once most of its concepts
- * are at least "strong" — a placement result sets the floor so the estimate
- * never reads lower than where the learner actually started.
+ * Which exercise kinds count as evidence for each skill. Vocabulary and grammar
+ * are properties of the *concept*; listening and production are properties of
+ * how it was answered, which is why they need this table and the other two do
+ * not.
  */
-export function estimateLevel(learner: LearnerState, now = Date.now()): CefrLevel {
-  const floor = learner.placement ? levelIndex(learner.placement.level) : 0;
-  let reached = 0;
+const SKILL_KINDS: Record<'listening' | 'production', readonly ExerciseKind[]> = {
+  listening: ['listenSelect', 'dictation', 'listenComprehend'],
+  production: ['translateToEs', 'conversation', 'buildResponse', 'speak'],
+};
 
-  for (let i = 0; i < CEFR_LEVELS.length; i += 1) {
-    const level = CEFR_LEVELS[i];
-    const levelConcepts = allConcepts.filter((c) => c.level === level);
-    if (levelConcepts.length === 0) continue;
+/**
+ * Concept coverage a level needs before it counts as reached at all.
+ */
+const LEVEL_COVERAGE = 0.6;
 
-    const strong = levelConcepts.filter((c) => {
-      const state = learner.concepts[c.id];
-      return state ? mastery(state, now) >= 0.7 : false;
-    }).length;
+/**
+ * And of the concepts that *are* strong at that level, the share that must
+ * carry evidence in each of listening and production.
+ *
+ * This is the gate that stops a level being bought with vocabulary. Without it
+ * `estimateLevel` counted concepts and nothing else, so a learner who never
+ * finished a dictation or produced a Spanish sentence could still be handed B1
+ * — the concepts were strong, and strength does not record *how* it was earned.
+ *
+ * A third rather than a half, deliberately. Not every concept can produce a
+ * listening item, and requiring parity would make the estimate impossible to
+ * reach rather than merely hard.
+ */
+const SKILL_EVIDENCE = 0.35;
 
-    if (strong / levelConcepts.length >= 0.6) reached = i;
-    else break;
+/**
+ * Below this many strong concepts at a level, the skill shares are noise and the
+ * gate is not applied. A learner three exercises into A0 has not failed a
+ * listening test; they have not taken one.
+ */
+const SKILL_GATE_MIN = 10;
+
+export interface ProficiencyEstimate {
+  /** The highest level demonstrated across concepts *and* both active skills. */
+  level: CefrLevel;
+  /**
+   * True when the next level's concept coverage is already there and only a
+   * skill gate is holding it back. This is the difference between "A2" and
+   * "A2+", and the reason the two are worth distinguishing at all.
+   */
+  plus: boolean;
+  /** The skills failing the gate on the level immediately above `level`. */
+  heldBackBy: Skill[];
+}
+
+interface LevelEvidence {
+  coverage: number;
+  strongCount: number;
+  /** Share of the level's strong concepts carrying evidence for each skill. */
+  listening: number;
+  production: number;
+}
+
+function levelEvidence(learner: LearnerState, level: CefrLevel, now: number): LevelEvidence {
+  const levelConcepts = allConcepts.filter((c) => c.level === level);
+  if (levelConcepts.length === 0) {
+    return { coverage: 1, strongCount: 0, listening: 1, production: 1 };
   }
 
-  return CEFR_LEVELS[Math.max(reached, floor)];
+  const strong = levelConcepts
+    .map((c) => learner.concepts[c.id])
+    .filter((state): state is ConceptState => !!state && mastery(state, now) >= 0.7);
+
+  const share = (kinds: readonly ExerciseKind[]) =>
+    strong.length === 0
+      ? 0
+      : strong.filter((state) => state.kinds.some((k) => kinds.includes(k))).length / strong.length;
+
+  return {
+    coverage: strong.length / levelConcepts.length,
+    strongCount: strong.length,
+    listening: share(SKILL_KINDS.listening),
+    production: share(SKILL_KINDS.production),
+  };
+}
+
+/** Which of the two evidence-based skills a level's record fails. */
+function gateFailures(evidence: LevelEvidence): Skill[] {
+  if (evidence.strongCount < SKILL_GATE_MIN) return [];
+  const failing: Skill[] = [];
+  if (evidence.listening < SKILL_EVIDENCE) failing.push('listening');
+  if (evidence.production < SKILL_EVIDENCE) failing.push('production');
+  return failing;
+}
+
+/**
+ * Running CEFR estimate, gated by demonstrated skill.
+ *
+ * A level counts as reached once most of its concepts are at least "strong"
+ * *and* enough of those strong concepts were answered in a listening and a
+ * production exercise. A placement result still sets the floor, so the estimate
+ * never reads lower than where the learner actually started — but the floor is
+ * a starting point, not a permanent grant.
+ */
+export function estimateProficiency(learner: LearnerState, now = Date.now()): ProficiencyEstimate {
+  const floor = learner.placement ? levelIndex(learner.placement.level) : 0;
+  let reached = 0;
+  let blockedAt: Skill[] = [];
+
+  for (let i = 0; i < CEFR_LEVELS.length; i += 1) {
+    const evidence = levelEvidence(learner, CEFR_LEVELS[i], now);
+    if (evidence.coverage < LEVEL_COVERAGE) break;
+
+    const failing = gateFailures(evidence);
+    if (failing.length > 0) {
+      // The concepts are there; the evidence of using them is not. Stop here and
+      // remember why, so the profile can say "A2+, held back by listening".
+      blockedAt = failing;
+      break;
+    }
+    reached = i;
+  }
+
+  const level = CEFR_LEVELS[Math.max(reached, floor)];
+  // The "+" only means something when the block is above where we landed.
+  const plus = blockedAt.length > 0 && levelIndex(level) === reached;
+
+  return { level, plus, heldBackBy: plus ? blockedAt : [] };
+}
+
+/**
+ * The single level, for callers that only need a label. Kept as the original
+ * name because the whole app reads it.
+ */
+export function estimateLevel(learner: LearnerState, now = Date.now()): CefrLevel {
+  return estimateProficiency(learner, now).level;
+}
+
+/**
+ * How far through the *course* the learner has walked, which is a different
+ * question from what they can do. A stage counts once every playable unit in it
+ * is complete; the label is that stage's upper level.
+ *
+ * Keeping this apart from `estimateProficiency` is the whole point: finishing
+ * the B1 stage and being a B1 speaker are separate claims, and the profile is
+ * allowed — expected — to show them disagreeing.
+ */
+export function curriculumLevel(learner: LearnerState, now = Date.now()): CefrLevel | null {
+  let highest: CefrLevel | null = null;
+  for (const stage of curriculum) {
+    if (stageProgress(stage, learner, now).state !== 'complete') break;
+    highest = stage.to;
+  }
+  return highest;
 }
 
 /** Progress through the current level, for the home-screen "A1 — 64%" line. */
