@@ -13,6 +13,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { conversations } from '@/content';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { useNow } from '@/hooks/use-now';
 import { dueConcepts, weakAreas } from '@/learning/mastery';
 import { unlockedStories } from '@/learning/session';
 
@@ -23,7 +24,7 @@ import { unlockedStories } from '@/learning/session';
 export default function PracticeScreen() {
   const theme = useTheme();
   const { learner } = useLearner();
-  const now = Date.now();
+  const now = useNow();
 
   const weak = useMemo(() => weakAreas(learner, now, 6), [learner, now]);
   const due = useMemo(() => dueConcepts(learner, now).length, [learner, now]);

@@ -11,6 +11,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { allLessons } from '@/content';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { useNow } from '@/hooks/use-now';
 import {
   courseProgress,
   levelProgress,
@@ -30,7 +31,7 @@ import { formatDuration } from '@/lib/date';
 export default function ProgressScreen() {
   const theme = useTheme();
   const { learner } = useLearner();
-  const now = Date.now();
+  const now = useNow();
 
   const skills = useMemo(() => skillSummaries(learner, now), [learner, now]);
   const { level, progress } = useMemo(() => levelProgress(learner, now), [learner, now]);

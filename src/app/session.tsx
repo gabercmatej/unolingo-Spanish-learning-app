@@ -49,6 +49,15 @@ import { speakSpanish, stopSpeaking } from '@/lib/speech';
 /** Session kinds that count as completing a lesson on the path. */
 const LESSON_KINDS: SessionKind[] = ['lesson', 'conversation', 'story', 'checkpoint'];
 
+/** The session as it stood when it ended — see `ending` below for why. */
+interface SessionEnding {
+  seconds: number;
+  /** Mastery per concept before the session touched it. */
+  before: [string, number][];
+  needsReview: string[];
+  newConcepts: number;
+}
+
 export default function SessionScreen() {
   const params = useLocalSearchParams<{
     kind?: string;
@@ -83,9 +92,21 @@ export default function SessionScreen() {
   const [lastXp, setLastXp] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [answered, setAnswered] = useState(0);
-  const [finished, setFinished] = useState(false);
+  /**
+   * What the session looked like at the moment it ended.
+   *
+   * These used to be read out of refs while rendering the results screen, which
+   * the React Compiler rightly rejects: a ref can change without a re-render, so
+   * a screen built from one is a screen that can silently disagree with itself.
+   * Snapshotting at `finish` is also the honest semantics — the summary is a
+   * record of a session that is over, not a live view.
+   */
+  const [ending, setEnding] = useState<SessionEnding | null>(null);
 
-  const startedAt = useRef(Date.now());
+  // Lazy initialiser: Date.now() in the argument position runs on every render
+  // and is an impure call in the render phase, even though only the first result
+  // is ever kept.
+  const [startedAt] = useState(() => Date.now());
   const retried = useRef(new Set<string>());
   /** Mastery at the moment a concept was first touched this session. */
   const masteryBefore = useRef(new Map<string, number>());
@@ -95,7 +116,6 @@ export default function SessionScreen() {
 
   const exercise = queue[index];
   const total = queue.length;
-  const isLast = index >= total - 1;
 
   useEffect(() => () => stopSpeaking(), []);
 
@@ -113,7 +133,14 @@ export default function SessionScreen() {
   const finish = useCallback(() => {
     if (committed.current) return;
     committed.current = true;
-    const seconds = Math.round((Date.now() - startedAt.current) / 1000);
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+
+    setEnding({
+      seconds,
+      before: [...masteryBefore.current.entries()],
+      needsReview: [...needsReview.current],
+      newConcepts: newConcepts.current.size,
+    });
 
     completeSession({
       source,
@@ -125,8 +152,7 @@ export default function SessionScreen() {
       newConcepts: newConcepts.current.size,
       lessonId: LESSON_KINDS.includes(kind) ? source : undefined,
     });
-    setFinished(true);
-  }, [answered, completeSession, correct, kind, plan?.title, source, xpEarned]);
+  }, [answered, completeSession, correct, kind, plan?.title, source, startedAt, xpEarned]);
 
   const advance = useCallback(() => {
     stopSpeaking();
@@ -184,7 +210,6 @@ export default function SessionScreen() {
         speakSpanish(outcome.expected);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advance, answer, exercise, learner.concepts, recordAnswer, result, settings]);
 
   const confirmExit = useCallback(async () => {
@@ -223,27 +248,25 @@ export default function SessionScreen() {
     );
   }
 
-  if (finished) {
+  if (ending) {
     const todayXp = learner.daily.find((entry) => entry.date === toISODate())?.xp ?? 0;
     const goalXp = settings.dailyGoal * 3;
 
     // "After" is read from the live learner state, which is now fully updated.
-    const improved: ConceptDelta[] = [...masteryBefore.current.entries()].map(
-      ([conceptId, before]) => {
-        const state = learner.concepts[conceptId];
-        return { conceptId, before, after: state ? mastery(state) : before };
-      },
-    );
+    const improved: ConceptDelta[] = ending.before.map(([conceptId, before]) => {
+      const state = learner.concepts[conceptId];
+      return { conceptId, before, after: state ? mastery(state) : before };
+    });
 
     const summary: SessionSummary = {
       title: plan.title,
       xp: xpEarned,
       correct,
       total: answered,
-      seconds: Math.round((Date.now() - startedAt.current) / 1000),
-      newConcepts: newConcepts.current.size,
+      seconds: ending.seconds,
+      newConcepts: ending.newConcepts,
       improved,
-      needsReview: [...needsReview.current],
+      needsReview: ending.needsReview,
       goalReached: todayXp >= goalXp,
       streak: learner.streak,
     };

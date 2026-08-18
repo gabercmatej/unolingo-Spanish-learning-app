@@ -12,7 +12,7 @@ import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { getConcept, getSentencesForConcept, isVocabConcept } from '@/content';
 import { TOPIC_LABELS } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';

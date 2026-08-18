@@ -18,6 +18,7 @@ import { getUnitForLesson } from '@/content';
 import { CEFR_LEVELS, type Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { useNow } from '@/hooks/use-now';
 import { courseProgress, dueConcepts, levelProgress, weakAreas } from '@/learning/mastery';
 import { nextLesson } from '@/learning/session';
 import { levelInfo } from '@/learning/xp';
@@ -33,7 +34,7 @@ import { currentStreak, toISODate } from '@/lib/date';
 export default function LearnScreen() {
   const theme = useTheme();
   const { learner, settings } = useLearner();
-  const now = Date.now();
+  const now = useNow();
 
   const upcoming = useMemo(() => nextLesson(learner), [learner]);
   const stages = useMemo(() => courseProgress(learner, now), [learner, now]);

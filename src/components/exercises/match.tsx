@@ -27,13 +27,6 @@ export function MatchView({ exercise, onAnswer, result }: ExerciseViewProps<Matc
   const english = [...exercise.pairs].sort((a, b) => a.en.localeCompare(b.en));
 
   useEffect(() => {
-    setSelectedEs(null);
-    setMatched([]);
-    setWrong(null);
-    setErrors(0);
-  }, [exercise.id]);
-
-  useEffect(() => {
     if (matched.length === exercise.pairs.length && exercise.pairs.length > 0) {
       onAnswer(errors === 0 ? 'perfect' : 'imperfect');
     } else {

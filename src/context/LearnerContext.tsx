@@ -128,9 +128,16 @@ const LearnerContext = createContext<LearnerContextValue | null>(null);
 export function LearnerProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [learner, setLearner] = useState<LearnerState>(() => createLearnerState());
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * The newest state, for the two callbacks that need it without wanting to be
+   * recreated whenever it changes. Assigned in an effect rather than during
+   * render: a ref written while rendering can be read by a render that never
+   * commits, and the React Compiler is right to refuse it.
+   */
   const latest = useRef(learner);
-  latest.current = learner;
+  useEffect(() => {
+    latest.current = learner;
+  }, [learner]);
 
   // --- Hydration ----------------------------------------------------------
   useEffect(() => {
@@ -160,19 +167,18 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --- Debounced persistence ----------------------------------------------
+  // The cleanup cancels the pending write on every change, which *is* the
+  // debounce — no ref needed, and the closure always has the state it is saving.
   useEffect(() => {
     if (!ready) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      storage.set(StorageKeys.learner, latest.current);
+    const timer = setTimeout(() => {
+      storage.set(StorageKeys.learner, learner);
       // A rolling copy under its own key, at most twice a day. It costs one
       // extra write on the sessions that happen to cross the interval, and it
       // is the only thing standing between a bad write and a year of progress.
-      void maybeSnapshot(latest.current);
+      void maybeSnapshot(learner);
     }, 400);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
+    return () => clearTimeout(timer);
   }, [learner, ready]);
 
   useEffect(() => {

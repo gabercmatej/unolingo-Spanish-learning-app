@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { Pressable, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -49,9 +49,32 @@ export function PressScale({
   const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+    transform: [{ scale: scale.get() }],
+    opacity: opacity.get(),
   }));
+
+  /**
+   * `.set()` rather than `.value =`. Reanimated has supported both since 3.6,
+   * but assigning to `.value` inside a handler created during render reads to the
+   * React Compiler as mutating a value it is holding — which it cannot know is a
+   * shared value living off the JS thread. The method form says the same thing
+   * and says it in a way that survives the lint.
+   */
+  const pressIn = useCallback(() => {
+    scale.set(withSpring(scaleTo, Motion.spring));
+    opacity.set(withTiming(0.92, { duration: Motion.fast }));
+  }, [opacity, scale, scaleTo]);
+
+  const pressOut = useCallback(() => {
+    scale.set(withSpring(1, Motion.springBouncy));
+    opacity.set(withTiming(1, { duration: Motion.fast }));
+  }, [opacity, scale]);
+
+  const press = useCallback(() => {
+    if (haptic === 'tap') feedback.tap();
+    else if (haptic === 'press') feedback.press();
+    onPress?.();
+  }, [haptic, onPress]);
 
   return (
     <AnimatedPressable
@@ -60,19 +83,9 @@ export function PressScale({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: !!disabled, ...accessibilityState }}
       disabled={disabled}
-      onPressIn={() => {
-        scale.value = withSpring(scaleTo, Motion.spring);
-        opacity.value = withTiming(0.92, { duration: Motion.fast });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, Motion.springBouncy);
-        opacity.value = withTiming(1, { duration: Motion.fast });
-      }}
-      onPress={() => {
-        if (haptic === 'tap') feedback.tap();
-        else if (haptic === 'press') feedback.press();
-        onPress?.();
-      }}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
+      onPress={press}
       onLongPress={onLongPress}
       style={[animatedStyle, { opacity: disabled ? 0.45 : 1 }, style]}>
       {children}

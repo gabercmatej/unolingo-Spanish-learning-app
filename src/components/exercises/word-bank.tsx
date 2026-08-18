@@ -31,11 +31,6 @@ export function WordBankView({
   const [line, setLine] = useState<Token[]>([]);
 
   useEffect(() => {
-    setBank(exercise.tokens.map((text, index) => ({ id: `${index}-${text}`, text })));
-    setLine([]);
-  }, [exercise.id, exercise.tokens]);
-
-  useEffect(() => {
     onAnswer(line.length > 0 ? line.map((token) => token.text).join(' ') : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [line]);

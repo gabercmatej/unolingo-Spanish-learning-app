@@ -15,6 +15,13 @@ import { WordBankView } from '@/components/exercises/word-bank';
 export function ExerciseView(props: ExerciseViewProps) {
   const { exercise } = props;
 
+  /**
+   * Keying the interactive views on the exercise id is what resets them between
+   * questions. They used to do it themselves, in an effect that called four
+   * setStates on every change of `exercise.id` — one render to show the previous
+   * question's tokens, then another to clear them. Letting React remount is both
+   * correct and a frame faster.
+   */
   switch (exercise.form) {
     case 'presentation':
       if (exercise.kind === 'teach') return <TeachCard exercise={exercise} />;
@@ -25,13 +32,13 @@ export function ExerciseView(props: ExerciseViewProps) {
       return <ChoiceView {...props} exercise={exercise} />;
 
     case 'wordBank':
-      return <WordBankView {...props} exercise={exercise} />;
+      return <WordBankView key={exercise.id} {...props} exercise={exercise} />;
 
     case 'typed':
       return <TypedView {...props} exercise={exercise} />;
 
     case 'match':
-      return <MatchView {...props} exercise={exercise} />;
+      return <MatchView key={exercise.id} {...props} exercise={exercise} />;
 
     case 'conversation':
       return <ConversationView {...props} exercise={exercise} />;

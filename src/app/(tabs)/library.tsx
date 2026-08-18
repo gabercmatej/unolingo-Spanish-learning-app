@@ -21,6 +21,7 @@ import {
 } from '@/content';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
+import { useNow } from '@/hooks/use-now';
 import { mastery, masteryBand, type MasteryBand } from '@/learning/srs';
 
 type Tab = 'words' | 'grammar' | 'verbs';
@@ -35,7 +36,7 @@ export default function LibraryScreen() {
   const { learner } = useLearner();
   const [tab, setTab] = useState<Tab>('words');
   const [filter, setFilter] = useState<Filter>('all');
-  const now = Date.now();
+  const now = useNow();
 
   const words = useMemo(() => {
     const list = vocabConcepts.filter((concept) => {

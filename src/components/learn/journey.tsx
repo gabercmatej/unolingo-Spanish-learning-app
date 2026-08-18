@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 
@@ -32,15 +32,21 @@ interface JourneyProps {
 }
 
 export function Journey({ stages, onOpenUnit, onStartLesson }: JourneyProps) {
-  const currentIndex = stages.findIndex((stage) => stage.state === 'current');
-  const openDefault = currentIndex === -1 ? 0 : currentIndex;
-  const [open, setOpen] = useState<string | null>(stages[openDefault]?.stage.id ?? null);
+  const currentStageId = stages.find((stage) => stage.state === 'current')?.stage.id ?? null;
+  const [open, setOpen] = useState<string | null>(currentStageId ?? stages[0]?.stage.id ?? null);
 
-  // If progress moves the learner into a new stage, follow them there.
-  useEffect(() => {
-    const current = stages.find((stage) => stage.state === 'current');
-    if (current) setOpen(current.stage.id);
-  }, [stages.find((stage) => stage.state === 'current')?.stage.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * If progress moves the learner into a new stage, follow them there — but only
+   * on the render where it actually changed, so a learner who collapses the
+   * accordion is not fought with on the next render. Adjusting state during
+   * render is the sanctioned pattern for this; the effect it replaces cost an
+   * extra render every time the Learn page recomputed.
+   */
+  const [followed, setFollowed] = useState(currentStageId);
+  if (currentStageId !== followed) {
+    setFollowed(currentStageId);
+    if (currentStageId) setOpen(currentStageId);
+  }
 
   return (
     <View style={styles.stages}>
