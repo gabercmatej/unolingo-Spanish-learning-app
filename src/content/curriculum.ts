@@ -2414,7 +2414,7 @@ export const curriculum: Stage[] = [
               'p.lo-que-pasa-es',
             ],
             grammar: ['g.subjunctive-opinion'],
-            sentences: ['s.c1', 's.c2', 's.c3', 's.c4', 's.c5', 's.c6'],
+            sentences: ['s.c1', 's.c2', 's.c3', 's.c4', 's.c5', 's.c6', 's.c105', 's.c106', 's.c107', 's.c108', 's.c109', 's.c110'],
           },
           {
             id: 'l.debate-conversation',
@@ -2450,7 +2450,7 @@ export const curriculum: Stage[] = [
             requires: ['l.disagreeing'],
             teaches: ['p.supongo-que', 'p.puede-que', 'p.a-lo-mejor', 'p.igual-viene', 'p.me-imagino-que', 'p.no-me-extrana', 'p.por-lo-que-parece'],
             grammar: ['g.si-hypothetical'],
-            sentences: ['s.c7', 's.c8', 's.c9', 's.c10', 's.c11', 's.c12'],
+            sentences: ['s.c7', 's.c8', 's.c9', 's.c10', 's.c11', 's.c12', 's.c116', 's.c117', 's.c118', 's.c119', 's.c120', 's.c121'],
           },
           {
             id: 'l.turismo-reading',
@@ -2486,7 +2486,7 @@ export const curriculum: Stage[] = [
             requires: ['l.hypothetical'],
             teaches: ['p.segun', 'p.me-comento-que', 'p.al-parecer', 'p.en-resumen', 'p.resumiendo', 'p.es-decir'],
             grammar: ['g.reported-speech'],
-            sentences: ['s.c13', 's.c14', 's.c15', 's.c16', 's.c17', 's.c23'],
+            sentences: ['s.c13', 's.c14', 's.c15', 's.c16', 's.c17', 's.c23', 's.c122', 's.c123', 's.c124', 's.c125'],
           },
           {
             id: 'l.b2-listening',
@@ -2531,7 +2531,7 @@ export const curriculum: Stage[] = [
               'p.de-hecho',
               'p.por-mucho-que',
             ],
-            sentences: ['s.c18', 's.c19', 's.c20', 's.c22', 's.c31', 's.c57', 's.c62', 's.c64', 's.c67', 's.c84'],
+            sentences: ['s.c18', 's.c19', 's.c20', 's.c22', 's.c31', 's.c57', 's.c62', 's.c64', 's.c67', 's.c84', 's.c111', 's.c112', 's.c113', 's.c114', 's.c115', 's.c126', 's.c127', 's.c128', 's.c129'],
           },
           {
             id: 'l.debate-topics',
@@ -2558,7 +2558,7 @@ export const curriculum: Stage[] = [
               'v.lograr',
               'p.llevar-a-cabo',
             ],
-            sentences: ['s.c21', 's.c23', 's.c29', 's.c30', 's.c58', 's.c59', 's.c60', 's.c63', 's.c65', 's.c66', 's.c69', 's.c70'],
+            sentences: ['s.c21', 's.c23', 's.c29', 's.c30', 's.c58', 's.c59', 's.c60', 's.c63', 's.c65', 's.c66', 's.c69', 's.c70', 's.c130', 's.c131', 's.c132', 's.c133', 's.c134'],
           },
           {
             id: 'l.b2-reading',
@@ -2640,7 +2640,7 @@ export const curriculum: Stage[] = [
               'p.ni-de-broma',
             ],
             grammar: ['g.register'],
-            sentences: ['s.c24', 's.c25', 's.c26', 's.c27', 's.c28'],
+            sentences: ['s.c24', 's.c25', 's.c26', 's.c27', 's.c28', 's.c135', 's.c136', 's.c137', 's.c138', 's.c139'],
             culture: ['c.tuteo'],
           },
           {
