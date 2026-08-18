@@ -91,7 +91,16 @@ describe('proficiency is gated by demonstrated skill', () => {
         allConcepts.slice(0, 3).map((c) => [c.id, strongState(c.id, RECOGNITION, now)]),
       ),
     });
-    expect(estimateProficiency(beginner, now).heldBackBy).toEqual([]);
+    const estimate = estimateProficiency(beginner, now);
+    expect(estimate.heldBackBy).toEqual([]);
+    // …and says so, rather than reading as a clean bill of health. These two
+    // states produce the same empty heldBackBy and mean opposite things.
+    expect(estimate.measured).toBe(false);
+  });
+
+  it('marks a well-evidenced learner as measured', () => {
+    const rounded = learnerThrough('B1', [...RECOGNITION, ...LISTENING, ...PRODUCTION], now);
+    expect(estimateProficiency(rounded, now).measured).toBe(true);
   });
 
   it('separates how far you have walked from what you can do', () => {

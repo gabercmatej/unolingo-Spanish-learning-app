@@ -16,6 +16,20 @@ const SKILL_LABEL: Record<Skill, string> = {
   production: 'production',
 };
 
+/**
+ * Three different things, and only one of them is praise. "Nothing is holding
+ * you back" and "we have not measured you yet" produce the same empty
+ * `heldBackBy`, so a new learner was being told their A0 was demonstrated across
+ * every skill on the evidence of four exercises.
+ */
+function proficiencyCaption(estimate: ProficiencyEstimate): string {
+  if (estimate.heldBackBy.length > 0) {
+    return `Held back by ${joinSkills(estimate.heldBackBy)} — the words are there, the evidence is not`;
+  }
+  if (!estimate.measured) return 'Not measured yet — a few more sessions will settle it';
+  return 'Demonstrated across every skill';
+}
+
 /** Reads "listening", "listening and production" — never "listening, production". */
 function joinSkills(skills: Skill[]): string {
   const names = skills.map((skill) => SKILL_LABEL[skill]);
@@ -68,10 +82,7 @@ export function Standing({ rank, curriculum, proficiency }: Props) {
       tone: theme.listening as string,
       label: 'Proficiency',
       value: `${proficiency.level}${proficiency.plus ? '+' : ''}`,
-      caption:
-        held.length > 0
-          ? `Held back by ${joinSkills(held)} — the words are there, the evidence is not`
-          : 'Demonstrated across every skill',
+      caption: proficiencyCaption(proficiency),
     },
   ];
 

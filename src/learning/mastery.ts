@@ -341,6 +341,15 @@ export interface ProficiencyEstimate {
   plus: boolean;
   /** The skills failing the gate on the level immediately above `level`. */
   heldBackBy: Skill[];
+  /**
+   * Whether there is enough evidence for the gate to have run at all.
+   *
+   * False and `heldBackBy` empty look identical from the outside and mean
+   * opposite things — "nothing is holding you back" versus "we have not looked
+   * yet". A brand-new learner told their A0 is "demonstrated across every skill"
+   * is being flattered by a rounding error.
+   */
+  measured: boolean;
 }
 
 interface LevelEvidence {
@@ -414,8 +423,9 @@ export function estimateProficiency(learner: LearnerState, now = Date.now()): Pr
   const level = CEFR_LEVELS[Math.max(reached, floor)];
   // The "+" only means something when the block is above where we landed.
   const plus = blockedAt.length > 0 && levelIndex(level) === reached;
+  const measured = levelEvidence(learner, level, now).strongCount >= SKILL_GATE_MIN;
 
-  return { level, plus, heldBackBy: plus ? blockedAt : [] };
+  return { level, plus, heldBackBy: plus ? blockedAt : [], measured };
 }
 
 /**
