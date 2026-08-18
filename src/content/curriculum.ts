@@ -1790,7 +1790,7 @@ export const curriculum: Stage[] = [
               // decir carries most of reported and colloquial speech.
               'f.decir.present',
             ],
-            sentences: ['s.s16', 's.s17', 's.s18', 's.s19', 's.s20', 's.s21', 's.s22', 's.s23', 's.s24'],
+            sentences: ['s.s16', 's.s17', 's.s18', 's.s19', 's.s20', 's.s21', 's.s22', 's.s23', 's.s24', 's.b237', 's.b238', 's.b239', 's.b240', 's.b241', 's.b242', 's.b243', 's.b244'],
           },
           {
             id: 'l.colloquial-listening',
@@ -1972,7 +1972,7 @@ export const curriculum: Stage[] = [
               'f.saber.present',
               'f.saber.preterite',
             ],
-            sentences: ['s.s15', 's.s16', 's.s14', 's.r21', 's.r22', 's.r23', 's.a27'],
+            sentences: ['s.s15', 's.s16', 's.s14', 's.r21', 's.r22', 's.r23', 's.a27', 's.b209', 's.b210', 's.b211', 's.b212', 's.b213', 's.b214', 's.b215', 's.b216'],
           },
         ],
       },
@@ -2039,7 +2039,7 @@ export const curriculum: Stage[] = [
               'f.poner.future',
             ],
             grammar: ['g.future'],
-            sentences: ['s.b1', 's.b2', 's.b3', 's.b4', 's.b32'],
+            sentences: ['s.b1', 's.b2', 's.b3', 's.b4', 's.b32', 's.b232', 's.b233', 's.b234', 's.b245'],
           },
           {
             id: 'l.conditional',
@@ -2055,7 +2055,7 @@ export const curriculum: Stage[] = [
               'f.querer.conditional',
             ],
             grammar: ['g.conditional'],
-            sentences: ['s.b5', 's.b6', 's.b7', 's.b8', 's.b9'],
+            sentences: ['s.b5', 's.b6', 's.b7', 's.b8', 's.b9', 's.b229', 's.b230', 's.b231', 's.b235', 's.b236'],
           },
         ],
       },
@@ -2162,7 +2162,7 @@ export const curriculum: Stage[] = [
               'p.buscar-trabajo',
               'p.echar-un-curriculum',
             ],
-            sentences: ['s.b23', 's.b34', 's.b39', 's.b40', 's.b8'],
+            sentences: ['s.b23', 's.b34', 's.b39', 's.b40', 's.b8', 's.b202', 's.b203', 's.b204', 's.b205', 's.b206', 's.b207', 's.b208'],
           },
           {
             id: 'l.work-listening',
@@ -2223,7 +2223,7 @@ export const curriculum: Stage[] = [
               'p.llevarse-bien',
               'p.tener-ganas',
             ],
-            sentences: ['s.b22', 's.b23', 's.b24', 's.b25', 's.b26', 's.b27'],
+            sentences: ['s.b22', 's.b23', 's.b24', 's.b25', 's.b26', 's.b27', 's.b191', 's.b192', 's.b193', 's.b194', 's.b195', 's.b196', 's.b197', 's.b198', 's.b199', 's.b200', 's.b201'],
           },
           {
             id: 'l.carta-reading',
@@ -2268,7 +2268,7 @@ export const curriculum: Stage[] = [
               'p.lo-siento-mucho',
               'p.no-pasa-nada',
             ],
-            sentences: ['s.b28', 's.b29', 's.b30', 's.b31', 's.b32', 's.b33'],
+            sentences: ['s.b28', 's.b29', 's.b30', 's.b31', 's.b32', 's.b33', 's.b222', 's.b223', 's.b224', 's.b225', 's.b226', 's.b227', 's.b228'],
           },
           {
             id: 'l.b1-listening',
@@ -2324,7 +2324,7 @@ export const curriculum: Stage[] = [
               'p.prestar-atencion',
               'p.valer-la-pena',
             ],
-            sentences: ['s.b14', 's.b37', 's.b38', 's.b39'],
+            sentences: ['s.b14', 's.b37', 's.b38', 's.b39', 's.b246', 's.b247', 's.b204', 's.b208'],
           },
           {
             id: 'l.connectors-b1',
@@ -2335,7 +2335,7 @@ export const curriculum: Stage[] = [
             estMinutes: 9,
             requires: ['l.chunks-b1'],
             teaches: ['v.sin-embargo', 'v.ademas', 'v.por-eso', 'v.en-cambio', 'v.o-sea'],
-            sentences: ['s.b34', 's.b35', 's.b36', 's.b38'],
+            sentences: ['s.b34', 's.b35', 's.b36', 's.b38', 's.b217', 's.b218', 's.b219', 's.b220', 's.b221'],
           },
           {
             id: 'l.articulo-reading',
