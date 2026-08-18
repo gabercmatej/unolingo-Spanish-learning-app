@@ -1,6 +1,7 @@
+import { buildBackup, parseBackup, stateFromBackup } from '@/learning/backup';
 import { blankLearnerState } from '@/learning/defaults';
 import { MIGRATIONS, migrateState } from '@/learning/migrate';
-import { makeLearner } from './helpers';
+import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from './helpers';
 
 /**
  * These are tests about not losing anything.
@@ -151,5 +152,78 @@ describe('a brand-new learner', () => {
     expect(blank.version).toBe(0);
     expect(blank.xp).toBe(0);
     expect(blank.onboarded).toBe(false);
+  });
+});
+
+/**
+ * Restoring an old backup into a newer build.
+ *
+ * This is the case the whole migration seam exists for, and it cannot be tested
+ * at the current schema — with one version in existence, "stamp the record with
+ * the backup's version" and "stamp it with this build's version" produce the
+ * same bytes, so the bug is invisible. Standing up a second version is what
+ * makes it visible: restore a v1 file into a v2 build, then try to open what the
+ * restore wrote. That second step is the one that used to fail, silently, a day
+ * later, with everything gone.
+ */
+describe('a backup from an older build, restored into a newer one', () => {
+  afterEach(() => {
+    for (const key of Object.keys(MIGRATIONS)) delete MIGRATIONS[Number(key)];
+  });
+
+  const V2 = 2;
+
+  function v1Backup() {
+    return JSON.stringify(
+      buildBackup(makeLearner({ version: 1, xp: 7700, longestStreak: 19 })),
+    );
+  }
+
+  it('restores, and the record it writes can be opened by the next launch', () => {
+    MIGRATIONS[1] = (state) => ({ ...state, version: 2 });
+
+    const parsed = parseBackup(v1Backup(), V2);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    // What the app writes on restore.
+    const written = migrateState(
+      stateFromBackup(parsed.file, DEFAULT_SETTINGS_FOR_TEST),
+      V2,
+    );
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+    expect(written.migrated).toBe(true);
+    expect(written.state.version).toBe(V2);
+    expect(written.state.xp).toBe(7700);
+
+    // The next cold start. Spreading the backup in verbatim left `version: 1`
+    // here, which the old hydration did not recognise — and then overwrote.
+    const nextLaunch = migrateState(JSON.parse(JSON.stringify(written.state)), V2);
+    expect(nextLaunch.ok).toBe(true);
+    if (!nextLaunch.ok) return;
+    expect(nextLaunch.state.xp).toBe(7700);
+    expect(nextLaunch.migrated).toBe(false);
+  });
+
+  it('shows what going around the migrator would have written', () => {
+    MIGRATIONS[1] = (state) => ({ ...state, version: 2 });
+
+    const parsed = parseBackup(v1Backup(), V2);
+    if (!parsed.ok) throw new Error(parsed.reason);
+
+    // The old restore: spread the backup's state straight in, version and all.
+    const naive = { ...parsed.file.state, settings: DEFAULT_SETTINGS_FOR_TEST };
+    expect(naive.version).toBe(1);
+
+    // Which is readable only because a migration happens to exist. Remove it —
+    // the realistic case, since a schema change without a written step is
+    // exactly the mistake — and the next launch cannot open it at all.
+    delete MIGRATIONS[1];
+    const nextLaunch = migrateState(naive, V2);
+    expect(nextLaunch.ok).toBe(false);
+    // The point being that it *refuses* rather than returning a blank learner
+    // for the debounced save to write over the top of.
+    expect(nextLaunch).not.toHaveProperty('state');
   });
 });

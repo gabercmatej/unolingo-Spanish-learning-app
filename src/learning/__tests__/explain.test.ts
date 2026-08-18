@@ -1,8 +1,7 @@
 import { buildDiagnostics } from '@/learning/diagnostics';
 import { explainConcept, explainExercise, formatExplanation } from '@/learning/explain';
 import type { Exercise } from '@/learning/exercise';
-import { createConceptState } from '@/learning/srs';
-import { DAY_MS } from '@/learning/srs';
+import { DAY_MS, createConceptState } from '@/learning/srs';
 import type { ConceptState } from '@/learning/types';
 import { makeLearner } from './helpers';
 

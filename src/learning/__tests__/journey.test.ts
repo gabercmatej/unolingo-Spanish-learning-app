@@ -11,9 +11,12 @@ import {
   scorePlacement,
   type PlacementAnswer,
 } from '@/learning/placement';
+import { buildBackup, parseBackup, stateFromBackup } from '@/learning/backup';
+import { migrateState } from '@/learning/migrate';
+import { STATE_VERSION } from '@/learning/schema';
 import { buildSession, isLessonUnlocked, type SessionPlan } from '@/learning/session';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
-import type { Grade, LearnerState, MistakeRecord } from '@/learning/types';
+import { KIND_SKILL, type Grade, type LearnerState, type MistakeRecord } from '@/learning/types';
 import { cumulativeXp, levelInfo, xpForAnswer } from '@/learning/xp';
 import { DEFAULT_SETTINGS_FOR_TEST, makeLearner } from './helpers';
 
@@ -160,13 +163,31 @@ function completeLesson(store: Store, lesson: Lesson, now: number, seed = 3): Se
 }
 
 /** What AsyncStorage does to the state, and what hydration does on the way back. */
+/**
+ * A force-quit and a cold start, through the path the app actually takes.
+ *
+ * It goes via `migrateState` rather than a bare JSON round-trip because that is
+ * the code hydration runs, and the point of an end-to-end test is to walk the
+ * real chain. A round-trip that skipped the migrator would have stayed green
+ * through the whole class of bug where a record is readable but the app declines
+ * to read it.
+ */
 function closeAndReopen(learner: LearnerState): LearnerState {
-  const persisted = JSON.parse(JSON.stringify(learner)) as LearnerState;
-  return {
-    ...learner,
-    ...persisted,
-    settings: { ...DEFAULT_SETTINGS_FOR_TEST, ...persisted.settings },
-  };
+  const onDisk = JSON.stringify(learner);
+  const result = migrateState(JSON.parse(onDisk), STATE_VERSION);
+  if (!result.ok) throw new Error(`the app could not reopen its own save: ${result.reason}`);
+  return { ...result.state, settings: { ...DEFAULT_SETTINGS_FOR_TEST, ...result.state.settings } };
+}
+
+/** Export to a file, wipe the device, install again, import. */
+function exportAndReinstall(learner: LearnerState): LearnerState {
+  const file = JSON.stringify(buildBackup(learner), null, 2);
+  const parsed = parseBackup(file, STATE_VERSION);
+  if (!parsed.ok) throw new Error(`the app could not read its own backup: ${parsed.reason}`);
+  const restored = stateFromBackup(parsed.file, DEFAULT_SETTINGS_FOR_TEST);
+  const migrated = migrateState(restored, STATE_VERSION);
+  if (!migrated.ok) throw new Error(`the restore produced an unreadable record: ${migrated.reason}`);
+  return migrated.state;
 }
 
 // ---------------------------------------------------------------------------
@@ -306,10 +327,64 @@ describe('a learner walks the whole app', () => {
     // Answering a checkpoint correctly must not report failures.
     expect(played.graded.filter((g) => g === 'incorrect')).toHaveLength(0);
 
-    // --- 8. And the estimate is a number, not a crash ----------------------
+    // --- 8. The checkpoint has to have asked across more than one skill ----
+    // A certification that only ever tested recognition is not a certification.
+    // This is the end-to-end half of the per-skill floor in cefr.test.ts.
+    const skillsTested = new Set(
+      checkpointPlan.exercises
+        .map((exercise) => KIND_SKILL[exercise.kind])
+        .filter((skill): skill is NonNullable<typeof skill> => skill !== null),
+    );
+    expect(skillsTested.size).toBeGreaterThanOrEqual(3);
+
+    // --- 9. And the estimate is a number, not a crash ----------------------
     const estimate = estimateProficiency(store.learner, clock);
     expect(estimate.level).toBeDefined();
     expect(store.learner.xp).toBeGreaterThan(50);
+
+    // --- 10. Lose the phone. Restore onto a new one. Carry on. -------------
+    // The last link in the chain, and the one the whole release turns on: not
+    // "does the file parse" but "is the learner in the same place afterwards".
+    const walked = store.learner;
+    const restored = exportAndReinstall(walked);
+
+    expect(restored.xp).toBe(walked.xp);
+    expect(restored.streak).toBe(walked.streak);
+    expect(restored.longestStreak).toBe(walked.longestStreak);
+    expect(Object.keys(restored.concepts).sort()).toEqual(Object.keys(walked.concepts).sort());
+    expect(Object.keys(restored.completedLessons).sort()).toEqual(
+      Object.keys(walked.completedLessons).sort(),
+    );
+    expect(restored.mistakes).toHaveLength(walked.mistakes.length);
+
+    // The memory model, not just the totals: every concept has to come back
+    // scheduled exactly where it was, or the restore silently resets the SRS.
+    for (const [id, state] of Object.entries(walked.concepts)) {
+      const back = restored.concepts[id];
+      expect(back.stability).toBeCloseTo(state.stability);
+      expect(back.ease).toBeCloseTo(state.ease);
+      expect(back.dueAt).toBe(state.dueAt);
+      expect(back.lastReviewed).toBe(state.lastReviewed);
+      expect(back.kinds).toEqual(state.kinds);
+    }
+
+    // And the course still knows where the learner is.
+    expect(unitProgress(firstUnit, restored, clock).state).toBe('complete');
+    expect(isLessonUnlocked(firstStage.units[1].lessons[0], restored)).toBe(true);
+    expect(estimateProficiency(restored, clock)).toEqual(estimate);
+
+    // Smart Review still has something to say on the restored device.
+    const afterRestore = buildSession('smartReview', 'smartReview', {
+      learner: restored,
+      now: clock + 86400_000,
+      seed: 11,
+    });
+    expect(afterRestore).not.toBeNull();
+    expect(afterRestore!.exercises.length).toBeGreaterThan(0);
+
+    // A restored record must also survive the next cold start, which is the
+    // bug that made the restore feel fine and lose everything the day after.
+    expect(closeAndReopen(restored).xp).toBe(walked.xp);
   });
 });
 
