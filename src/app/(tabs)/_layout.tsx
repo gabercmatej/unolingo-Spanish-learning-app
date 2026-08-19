@@ -1,10 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { Platform, StyleSheet, type ColorValue } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
+import { Motion, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { feedback } from '@/lib/feedback';
 
 /**
  * JS-based tabs (not NativeTabs) so the bar renders identically on iOS,
@@ -23,6 +31,62 @@ import { useTheme } from '@/hooks/use-theme';
  */
 const BAR_CONTENT_HEIGHT = 64;
 const LABEL_LINE_HEIGHT = 14;
+
+/**
+ * A tab icon that acknowledges being selected.
+ *
+ * The colour swap alone is a state change with no event attached to it — you
+ * can see which tab is active but not that you just moved. A short rise and
+ * settle supplies the event, and it is deliberately tiny: this fires on every
+ * navigation in the app, so anything larger would be the most-repeated and
+ * therefore fastest-tiring animation in the product.
+ *
+ * `withSpring` and `withTiming` both default to `ReduceMotion.System`, so the
+ * icon simply snaps for anyone who has asked for that.
+ */
+function TabIcon({
+  name,
+  color,
+  size,
+  focused,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  // React Navigation hands the tab tint through as a `ColorValue`, which is
+  // wider than a hex string — it can be a platform-opaque handle.
+  color: ColorValue;
+  size: number;
+  focused: boolean;
+}) {
+  const active = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    active.set(
+      focused ? withSpring(1, Motion.springPop) : withTiming(0, { duration: Motion.fast }),
+    );
+  }, [active, focused]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + active.get() * 0.12 }, { translateY: active.get() * -2 }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <Ionicons name={name} size={size} color={color} />
+    </Animated.View>
+  );
+}
+
+const TABS: {
+  name: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { name: 'index', title: 'Learn', icon: 'school' },
+  { name: 'practice', title: 'Practice', icon: 'barbell' },
+  { name: 'library', title: 'Library', icon: 'library' },
+  { name: 'progress', title: 'Progress', icon: 'stats-chart' },
+  { name: 'profile', title: 'Profile', icon: 'person-circle' },
+];
 
 export default function TabsLayout() {
   const theme = useTheme();
@@ -54,41 +118,23 @@ export default function TabsLayout() {
         },
         sceneStyle: { backgroundColor: theme.background },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Learn',
-          tabBarIcon: ({ color, size }) => <Ionicons name="school" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="practice"
-        options={{
-          title: 'Practice',
-          tabBarIcon: ({ color, size }) => <Ionicons name="barbell" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Library',
-          tabBarIcon: ({ color, size }) => <Ionicons name="library" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="progress"
-        options={{
-          title: 'Progress',
-          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
-        }}
-      />
+      {TABS.map((tab) => (
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{
+            title: tab.title,
+            tabBarIcon: ({ color, size, focused }) => (
+              <TabIcon name={tab.icon} color={color} size={size} focused={focused} />
+            ),
+          }}
+          // The tab bar is the one control in the app that was silent. Every
+          // other press in Unolingo goes through `PressScale` and reports
+          // itself; this one is drawn by React Navigation, so it has to say so
+          // explicitly or the bottom edge of the app feels dead by comparison.
+          listeners={{ tabPress: () => feedback.tap() }}
+        />
+      ))}
     </Tabs>
   );
 }

@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
 
+import { stagger } from '@/components/ui/motion';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { DailyRecord } from '@/learning/types';
 import { addDays, toISODate } from '@/lib/date';
@@ -183,34 +185,22 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
         ) : null}
 
         <View style={styles.bars}>
-          {data.map((bar, index) => {
-            const isNow = index === data.length - 1;
-            const height = Math.max(3, (bar.xp / max) * CHART_HEIGHT);
-            return (
-              <View key={bar.label} style={styles.barColumn}>
-                {bar.xp > 0 ? (
-                  <Text variant="caption" color="textTertiary" style={styles.barValue}>
-                    {bar.xp}
-                  </Text>
-                ) : null}
-                <View
-                  accessibilityLabel={`${bar.label}: ${bar.xp} XP`}
-                  style={[
-                    styles.bar,
-                    {
-                      height,
-                      backgroundColor:
-                        bar.xp === 0
-                          ? theme.backgroundSunken
-                          : isNow
-                            ? theme.tint
-                            : mix(theme.tint, theme.backgroundSunken, 0.55),
-                    },
-                  ]}
-                />
-              </View>
-            );
-          })}
+          {data.map((bar, index) => (
+            <Bar
+              key={bar.label}
+              label={bar.label}
+              xp={bar.xp}
+              height={Math.max(3, (bar.xp / max) * CHART_HEIGHT)}
+              index={index}
+              tone={
+                bar.xp === 0
+                  ? theme.backgroundSunken
+                  : index === data.length - 1
+                    ? theme.tint
+                    : mix(theme.tint, theme.backgroundSunken, 0.55)
+              }
+            />
+          ))}
         </View>
       </View>
 
@@ -225,6 +215,54 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
           </View>
         ))}
       </View>
+    </View>
+  );
+}
+
+/**
+ * One weekly column.
+ *
+ * Bars grow from the baseline, left to right. That is not decoration on a chart
+ * of XP over time: the axis *is* time, so drawing it in the direction time runs
+ * makes the shape of the last two months legible in a way a chart that simply
+ * exists does not. Eight bars at one stagger step is over in under half a
+ * second, which is short enough that it never delays reading the number.
+ *
+ * The calendar above it is deliberately left static — 119 cells is where a
+ * per-element animation stops being a flourish and starts being a frame budget.
+ */
+function Bar({
+  label,
+  xp,
+  height,
+  index,
+  tone,
+}: {
+  label: string;
+  xp: number;
+  height: number;
+  index: number;
+  tone: string;
+}) {
+  const grown = useSharedValue(0);
+
+  useEffect(() => {
+    grown.set(withDelay(stagger(index), withSpring(height, Motion.springSoft)));
+  }, [grown, height, index]);
+
+  const style = useAnimatedStyle(() => ({ height: grown.get() }));
+
+  return (
+    <View style={styles.barColumn}>
+      {xp > 0 ? (
+        <Text variant="caption" color="textTertiary" style={styles.barValue}>
+          {xp}
+        </Text>
+      ) : null}
+      <Animated.View
+        accessibilityLabel={`${label}: ${xp} XP`}
+        style={[styles.bar, { backgroundColor: tone }, style]}
+      />
     </View>
   );
 }

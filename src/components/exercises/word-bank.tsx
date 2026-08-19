@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { LinearTransition, ZoomIn, ZoomOut } from 'react-native-reanimated';
 
 import { AudioButton } from '@/components/exercises/audio-button';
 import type { ExerciseViewProps } from '@/components/exercises/shared';
 import { PressScale } from '@/components/ui/press-scale';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { WordBankExercise } from '@/learning/exercise';
 
@@ -81,28 +81,43 @@ export function WordBankView({
           </Text>
         ) : (
           line.map((token) => (
-            <PressScale key={token.id} onPress={() => put(token)} scaleTo={0.92} disabled={locked}>
-              <View style={[styles.token, { backgroundColor: theme.tintSoft, borderColor: theme.tint }]}>
-                <Text variant="bodyBold" tone={theme.tintText}>
-                  {token.text}
-                </Text>
-              </View>
-            </PressScale>
+            // The token has to look like it *moved* between the bank and the
+            // line rather than being deleted in one place and created in the
+            // other — which is exactly what it looked like before, because the
+            // container's LinearTransition only ever animated the survivors.
+            <Animated.View
+              key={token.id}
+              entering={ZoomIn.duration(Motion.fast)}
+              exiting={ZoomOut.duration(Motion.fast)}>
+              <PressScale onPress={() => put(token)} scaleTo={0.92} disabled={locked}>
+                <View
+                  style={[styles.token, { backgroundColor: theme.tintSoft, borderColor: theme.tint }]}>
+                  <Text variant="bodyBold" tone={theme.tintText}>
+                    {token.text}
+                  </Text>
+                </View>
+              </PressScale>
+            </Animated.View>
           ))
         )}
       </Animated.View>
 
       <Animated.View layout={LinearTransition.duration(180)} style={styles.bank}>
         {bank.map((token) => (
-          <PressScale key={token.id} onPress={() => take(token)} scaleTo={0.92} disabled={locked}>
-            <View
-              style={[
-                styles.token,
-                { backgroundColor: theme.backgroundElement, borderColor: theme.borderStrong },
-              ]}>
-              <Text variant="bodyBold">{token.text}</Text>
-            </View>
-          </PressScale>
+          <Animated.View
+            key={token.id}
+            entering={ZoomIn.duration(Motion.fast)}
+            exiting={ZoomOut.duration(Motion.fast)}>
+            <PressScale onPress={() => take(token)} scaleTo={0.92} disabled={locked}>
+              <View
+                style={[
+                  styles.token,
+                  { backgroundColor: theme.backgroundElement, borderColor: theme.borderStrong },
+                ]}>
+                <Text variant="bodyBold">{token.text}</Text>
+              </View>
+            </PressScale>
+          </Animated.View>
         ))}
       </Animated.View>
     </View>

@@ -22,6 +22,7 @@ npm run typecheck                # tsc --noEmit
 npm run audit:content            # curriculum coverage report + gap list
 npm run lint
 npx expo export --platform web   # full-graph bundle + static render of every route
+node scripts/make-sounds.mjs     # regenerate the UI sound cues in assets/audio/
 ```
 
 Running a subset of tests:
@@ -94,9 +95,9 @@ show next; they render what the learning layer produced. `src/hooks/` holds the 
 that are neither (`use-theme`, `use-now`).
 
 **`src/lib/` — platform seams, and nothing else.**
-`speech.ts` (TTS), `storage.ts` (AsyncStorage), `snapshots.ts` (the snapshot ring),
-`backup-file.ts` (file export/import), `feedback.ts` (haptics), `navigation.ts`, `date.ts`,
-`environment.ts` (which build this is). Each one exists so exactly one file imports a
+`speech.ts` (TTS), `sound.ts` (UI sound cues), `storage.ts` (AsyncStorage), `snapshots.ts` (the
+snapshot ring), `backup-file.ts` (file export/import), `feedback.ts` (haptics), `navigation.ts`,
+`date.ts`, `environment.ts` (which build this is). Each one exists so exactly one file imports a
 platform API — swapping AsyncStorage for MMKV, or synthesis for recorded audio, is a change
 to one file. **Policy never lives here.** When `snapshots.ts` first held the "three rolling
 snapshots, never let an empty state displace a full one" rules they could not be tested at
@@ -357,9 +358,92 @@ These have each caused a real bug here; most are invisible on native and only bi
   lived inside `typed.tsx` for a while, which left conversation and build-a-response — the two
   hardest production kinds — with no way to reach á or ñ but a long press. Spanish inputs also
   want `spellCheck={false}`, or iOS red-underlines correct Spanish.
+- **A plain style object after an animated style silently wins.** `PressScale` applied
+  `{ opacity: disabled ? 0.45 : 1 }` unconditionally *after* its animated style, so the
+  press-in fade it had been carrying all along had never once rendered — RN flattens a style
+  array last-wins, and an unconditional override is indistinguishable from a deliberate one.
+  Conditional overrides only, and put animated styles last when they are meant to win.
 - **An uncaught render error is a blank app in a release build**, and a learner facing a blank
   app reinstalls — the one action that deletes their progress. `_layout.tsx` exports an
   `ErrorBoundary` that says the progress is safe and offers a retry.
+
+## Motion, sound and haptics
+
+Three feedback channels, one ladder. The point of writing this down is that the top of the
+ladder is only worth anything because the bottom is held back.
+
+### The vocabulary
+
+`components/ui/motion.tsx` defines the five things a surface is allowed to do. A screen that
+wants a sixth has nearly always wanted one of these:
+
+| primitive | the thing it means |
+|---|---|
+| `Reveal` + `stagger()` | arriving. `from="right"` for anything advancing through a queue |
+| `usePop` / `Pop` | acknowledging — fires **on change, never on mount** |
+| `useEntrancePop` | acknowledging on arrival — the exact opposite, and never on change |
+| `useShake` / `Shake` | refusing |
+| `useCountUp` / `CountUp` | counting |
+| `Burst` | celebrating |
+
+The `usePop` / `useEntrancePop` split is load-bearing rather than stylistic. A streak counter
+that pops when the screen opens is claiming something just happened, and nothing did.
+
+`useCountUp` counts **from wherever it currently is**, not from zero, so a header total that
+gains three XP continues rather than re-introducing itself.
+
+**Reduce Motion is already honoured** — every Reanimated animation defaults to
+`ReduceMotion.System`, so the system setting applies without anyone opting in. The two that
+need their own check are `useCountUp` (a plain rAF loop the library knows nothing about) and
+`Burst`, which has no quiet form and therefore renders *nothing* rather than a slower version
+of the thing the setting exists to avoid.
+
+### The escalation ladder
+
+answer → lesson → unit → stage → level. Each rung gets strictly more than the one below it.
+
+| moment | haptic | sound | motion |
+|---|---|---|---|
+| answer | `correct` / `incorrect` | `correct` / `incorrect` | option pops or shakes; XP pill rolls |
+| lesson finished | — | `complete` | results ladder, accuracy ring, XP roll |
+| unit or stage finished | — | `unlock` | milestone card **+ burst** |
+| level crossed | `celebrate` | `levelUp` | mascot pop and tilt, rank badge, **burst** |
+
+A burst on a correct answer would spend the level-up. `Burst` appears in exactly three places —
+`LevelUp`, `MilestoneCard` and the placement result — and adding a fourth should be argued for.
+
+Milestones are **diffed, not derived**: `crossedMilestone` in `session.tsx` compares the learner
+before and after, because "the unit is complete" is a state seen on every visit and "the unit just
+became complete" is an event that happens once. The same applies to the streak card, which only
+appears on the session that actually banked the day.
+
+### Sound
+
+`src/lib/sound.ts` is shaped exactly like `feedback.ts` — plumbing plus a flag, configured by
+`LearnerContext` on hydration and on change, so call sites stay synchronous. **Policy is not in
+`lib/`**: which moment earns which cue lives at the call site, the same split that moved the
+snapshot rules out of `snapshots.ts`.
+
+The rule is **haptics marks every interaction; sound marks a graded outcome.** Sound carries
+further than a vibration, so it gets the higher bar. The one deliberate exception is a mismatched
+pair in `match.tsx`, which argues its own case in a comment.
+
+Cues are synthesised, not sourced: `node scripts/make-sounds.mjs` writes `assets/audio/*.wav`.
+Edit the script and re-run rather than hand-editing a WAV. All five are built from the same
+A-major triad so that two firing close together stack instead of clashing, and the audio session
+is explicitly `mixWithOthers` — taking audio focus for a 300ms chime and stopping the learner's
+music is the rudest thing a sound effect can do.
+
+`settings.sounds` is non-optional in the type but defaulted in `DEFAULT_SETTINGS`, which is the
+`haptics` shape and **needs no `STATE_VERSION` bump**.
+
+### Hover is web-only, and it is not press at half strength
+
+`PressScale` moves the two on different axes: hover **raises**, press **shrinks**. Pass
+`hover="lift"` for anything large or text-heavy and `"grow"` (the default) for small controls —
+a scaled text layer is resampled during the transition, which is invisible on a chip and
+unmissable across a card of copy. Releasing settles back to the *hover* pose when the pointer is
+still there, which is what stops a web button feeling like it forgot you.
 
 ## Conventions
 
@@ -370,10 +454,9 @@ These have each caused a real bug here; most are invisible on native and only bi
 - Use `PressScale` rather than bare `Pressable`; the app's tactility depends on it. It drives
   shared values through `.set()` from memoised handlers — assigning to `.value` inside a handler
   created during render reads to the React Compiler as mutating a value it holds.
-- **Reduce Motion is already honoured**: every Reanimated animation defaults to
-  `ReduceMotion.System`. `components/ui/motion.tsx` is not an accessibility shim — `Reveal` exists
-  so entrance timings are one delay ladder instead of fifteen hand-tuned numbers. `useCountUp`
-  *is* the piece that needs an explicit check, being a plain rAF loop the library knows nothing about.
+- **Motion comes from `components/ui/motion.tsx`, never from a screen.** See "Motion, sound and
+  haptics" below for the vocabulary and the escalation ladder. A one-off animation written inline
+  in a screen is the thing that file exists to prevent.
 - **Never call `Date.now()` in a render body.** Use `useNow()`. A fresh timestamp every render is a
   fresh dependency every render, which silently turns every memo that depends on it into a no-op.
 - `<Text numeric>` for anything that counts or ticks — proportional digits make a changing

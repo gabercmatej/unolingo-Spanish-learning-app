@@ -63,6 +63,10 @@ export function Card({
         onPress={onPress}
         scaleTo={0.985}
         haptic="press"
+        // Cards lift rather than grow. A card is mostly text, and scaling a
+        // text layer on web resamples it — the wobble is invisible on a chip
+        // and unmissable across a full-width block of copy.
+        hover="lift"
         accessibilityLabel={accessibilityLabel}
         style={cardStyle}>
         {children}

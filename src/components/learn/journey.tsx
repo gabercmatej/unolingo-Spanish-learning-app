@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import { Icon, type IconName } from '@/components/ui/icon';
+import { stagger, usePop } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
-import { Elevation, Radius, Spacing } from '@/constants/theme';
+import { Elevation, Motion, Radius, Spacing } from '@/constants/theme';
 import type { Lesson } from '@/content/types';
 import { useTheme } from '@/hooks/use-theme';
 import type { StageProgress, UnitProgress, UnitState } from '@/learning/mastery';
@@ -80,6 +88,19 @@ function StageSection({
   const theme = useTheme();
   const { state } = stage;
 
+  /**
+   * The chevron rotates rather than being swapped for its opposite. Swapping
+   * two glyphs states the result; rotating one states the *change*, which is
+   * the only thing a disclosure control has to communicate.
+   */
+  const turn = useSharedValue(expanded ? 1 : 0);
+  useEffect(() => {
+    turn.set(withSpring(expanded ? 1 : 0, Motion.spring));
+  }, [expanded, turn]);
+  const chevron = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${turn.get() * 180}deg` }],
+  }));
+
   const accent =
     state === 'complete' ? theme.success : state === 'current' ? theme.tint : theme.textTertiary;
 
@@ -107,6 +128,7 @@ function StageSection({
       <PressScale
         onPress={onToggle}
         scaleTo={0.995}
+        hover="lift"
         haptic="tap"
         accessibilityLabel={`${stage.stage.levelRange} ${stage.stage.title}, ${stage.unitsDone} of ${stage.unitCount} units`}
         accessibilityState={{ selected: expanded }}>
@@ -135,11 +157,9 @@ function StageSection({
             </Text>
           </View>
 
-          <Icon
-            name={expanded ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color="textTertiary"
-          />
+          <Animated.View style={chevron}>
+            <Icon name="chevron-down" size={18} color="textTertiary" />
+          </Animated.View>
         </View>
       </PressScale>
 
@@ -154,7 +174,14 @@ function StageSection({
       ) : null}
 
       {expanded ? (
-        <Animated.View entering={FadeIn.duration(160)} style={styles.units}>
+        // `exiting` is what makes this an accordion rather than a toggle: the
+        // parent's LinearTransition already animates the height change, so
+        // without a matching exit the rows disappear on the first frame and
+        // the card is left collapsing around nothing.
+        <Animated.View
+          entering={FadeIn.duration(Motion.base)}
+          exiting={FadeOut.duration(Motion.fast)}
+          style={styles.units}>
           {stage.units.map((unit, index) => (
             <UnitRow
               key={unit.unit.id}
@@ -205,6 +232,14 @@ function UnitRow({
   const theme = useTheme();
   const { state } = unit;
   const node = nodeAppearance(state, theme);
+  /**
+   * The node pops when the unit's state changes underneath it — which in
+   * practice means the moment a learner comes back from the session that
+   * finished it, and the dot they left as "current" is now a tick. `usePop`
+   * skips its first run, so a screen opening on an already-complete unit stays
+   * still; only the transition is worth marking.
+   */
+  const nodePop = usePop(state, { scale: 1.35 });
   const tone = theme[unit.unit.tone];
   const soft = theme[`${unit.unit.tone}Soft` as keyof typeof theme] as string;
 
@@ -215,7 +250,7 @@ function UnitRow({
     <View style={styles.unitRow}>
       {/* Rail: node plus the connector down to the next unit. */}
       <View style={styles.rail}>
-        <View
+        <Animated.View
           style={[
             styles.node,
             {
@@ -223,9 +258,10 @@ function UnitRow({
               borderColor: node.ring,
               borderStyle: state === 'planned' ? 'dashed' : 'solid',
             },
+            nodePop,
           ]}>
           {node.icon ? <Icon name={node.icon} size={12} tone={node.iconTone} /> : null}
-        </View>
+        </Animated.View>
         {!isLast ? (
           <View
             style={[
@@ -253,6 +289,7 @@ function UnitRow({
           onPress={onOpen}
           disabled={state === 'planned'}
           scaleTo={0.99}
+          hover="lift"
           haptic="press"
           accessibilityLabel={`${unit.unit.title}, ${unitStateLabel(unit)}`}>
           <View style={styles.unitTop}>
@@ -284,15 +321,22 @@ function UnitRow({
               {unit.unit.topics.join(' · ')}
             </Text>
             <View style={styles.lessonList}>
-              {unit.unit.lessons.map((lesson) => (
-                <LessonLine
+              {unit.unit.lessons.map((lesson, lessonIndex) => (
+                <Animated.View
                   key={lesson.id}
-                  lesson={lesson}
-                  done={unit.completedLessonIds.includes(lesson.id)}
-                  isNext={unit.nextLesson?.id === lesson.id}
-                  tone={tone}
-                  onPress={() => onStartLesson(lesson)}
-                />
+                  // Keyed on the lesson's position in its own unit, not on the
+                  // unit's position in the stage — offsetting by the unit index
+                  // means the seventh unit's lessons start arriving a third of
+                  // a second late for no reason the learner can see.
+                  entering={FadeIn.duration(Motion.base).delay(stagger(lessonIndex))}>
+                  <LessonLine
+                    lesson={lesson}
+                    done={unit.completedLessonIds.includes(lesson.id)}
+                    isNext={unit.nextLesson?.id === lesson.id}
+                    tone={tone}
+                    onPress={() => onStartLesson(lesson)}
+                  />
+                </Animated.View>
               ))}
             </View>
           </>

@@ -30,6 +30,7 @@ import {
 import { xpForAnswer } from '@/learning/xp';
 import { nextStreak, toISODate } from '@/lib/date';
 import { configureFeedback } from '@/lib/feedback';
+import { configureSound } from '@/lib/sound';
 import { primeSpanishVoice, setPreferredVoice } from '@/lib/speech';
 import { maybeSnapshot, snapshotNow } from '@/lib/snapshots';
 import { StorageKeys, storage } from '@/lib/storage';
@@ -234,6 +235,10 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     configureFeedback({ haptics: learner.settings.haptics });
   }, [learner.settings.haptics]);
+
+  useEffect(() => {
+    configureSound({ sounds: learner.settings.sounds });
+  }, [learner.settings.sounds]);
 
   useEffect(() => {
     setPreferredVoice(learner.settings.voiceId);

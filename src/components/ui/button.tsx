@@ -62,6 +62,16 @@ export function Button({
    */
   const ramp = scheme.ramp && !tone ? gradients[scheme.ramp] : undefined;
 
+  /**
+   * A ramped button always carries white; a flat one carries `onTint`.
+   *
+   * The two cases genuinely differ. A ramp is the same colour in both themes,
+   * so its foreground can be too. A `tone` is a channel colour straight from
+   * the palette — light in dark mode — and needs the dark `onTint` on top of
+   * it, which is why this cannot simply be white everywhere.
+   */
+  const foreground = ramp ? theme.onGradient : scheme.fg;
+
   return (
     <PressScale
       testID={testID}
@@ -87,23 +97,22 @@ export function Button({
           colors={ramp}
           start={GRADIENT_START}
           end={GRADIENT_END}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
+          style={styles.fill}
         />
       ) : null}
       {loading ? (
-        <ActivityIndicator color={scheme.fg} />
+        <ActivityIndicator color={foreground} />
       ) : (
         <View style={styles.row}>
-          {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 19} tone={scheme.fg} /> : null}
+          {icon ? <Icon name={icon} size={size === 'sm' ? 16 : 19} tone={foreground} /> : null}
           <Text
             variant={size === 'lg' ? 'subheading' : size === 'sm' ? 'smallBold' : 'bodyBold'}
-            tone={scheme.fg}
+            tone={foreground}
             numberOfLines={1}>
             {title}
           </Text>
           {iconRight ? (
-            <Icon name={iconRight} size={size === 'sm' ? 16 : 19} tone={scheme.fg} />
+            <Icon name={iconRight} size={size === 'sm' ? 16 : 19} tone={foreground} />
           ) : null}
         </View>
       )}
@@ -116,6 +125,10 @@ const GRADIENT_START = { x: 0, y: 0 } as const;
 const GRADIENT_END = { x: 1, y: 1 } as const;
 
 const styles = StyleSheet.create({
+  // `pointerEvents` belongs in the style, not as a prop — the prop form is
+  // deprecated and warns on every render on web, and this gradient sits on
+  // nearly every screen in the app.
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' },
   base: {
     borderRadius: Radius.md,
     alignItems: 'center',

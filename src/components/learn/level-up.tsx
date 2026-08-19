@@ -12,11 +12,13 @@ import Animated, {
 import { useEffect } from 'react';
 
 import { Icon, type IconName } from '@/components/ui/icon';
+import { Burst } from '@/components/ui/motion';
 import { ProgressBar } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
 import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { feedback } from '@/lib/feedback';
+import { sound } from '@/lib/sound';
 import type { Rank } from '@/learning/ranks';
 
 export interface LevelUpProps {
@@ -36,8 +38,13 @@ export interface LevelUpProps {
  * information; this is the reward, and it goes first.
  *
  * The mascot is one asset, so the reaction is carried by motion and by what the
- * rank says — not by a different face. A pop and a settle reads as arriving; a
- * second face would read as a different animal.
+ * rank says — not by a different face. A pop, a tilt and a settle reads as the
+ * panda noticing; a second face would read as a different animal.
+ *
+ * It is also the only place in the app that fires all three feedback channels at
+ * once — haptic, sound and a particle burst. That is the point: the crescendo
+ * from answer to lesson to level only exists if the top of it is reserved. A
+ * burst on a correct answer would spend it.
  */
 export function LevelUp({ level, rank, progress }: LevelUpProps) {
   const theme = useTheme();
@@ -46,34 +53,57 @@ export function LevelUp({ level, rank, progress }: LevelUpProps) {
 
   const scale = useSharedValue(reduced ? 1 : 0.86);
   const lift = useSharedValue(reduced ? 0 : 10);
+  const tilt = useSharedValue(0);
+  const badge = useSharedValue(reduced ? 1 : 0);
 
   useEffect(() => {
     feedback.celebrate();
+    sound.levelUp();
     if (reduced) return;
     // Arrive, overshoot slightly, settle. One gesture, not a bounce loop.
     scale.set(withSequence(withTiming(1.04, { duration: Motion.base }), withSpring(1, Motion.spring)));
     lift.set(withSpring(0, Motion.spring));
-  }, [lift, reduced, scale]);
+    tilt.set(
+      withSequence(
+        withTiming(-7, { duration: Motion.fast }),
+        withTiming(4, { duration: Motion.fast }),
+        withSpring(0, Motion.springBouncy),
+      ),
+    );
+    // The rank badge lands after the mascot rather than with it: two things
+    // arriving on the same frame is one event, and this is meant to read as
+    // "you levelled up — *and* you made Viajero".
+    badge.set(withDelay(220, withSpring(1, Motion.springPop)));
+  }, [badge, lift, reduced, scale, tilt]);
 
   const mascotStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.get() }, { translateY: lift.get() }],
+    transform: [
+      { scale: scale.get() },
+      { translateY: lift.get() },
+      { rotate: `${tilt.get()}deg` },
+    ],
   }));
 
   const badgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.get() }],
+    transform: [{ scale: badge.get() }, { rotate: `${(1 - badge.get()) * -40}deg` }],
+    opacity: badge.get(),
   }));
 
   return (
     <View style={[styles.card, { backgroundColor: theme.backgroundRaised, borderColor: tone }]}>
       <View style={styles.head}>
-        <Animated.View style={mascotStyle}>
-          <Image
-            source={require('@/assets/images/brand/face.png')}
-            style={styles.mascot}
-            contentFit="contain"
-            accessibilityLabel="Unolingo mascot"
-          />
-        </Animated.View>
+        <View style={styles.mascotWrap}>
+          {/* Behind the mascot, so the panda is what the burst comes out of. */}
+          <Burst tones={[tone, theme.accent, theme.tint]} radius={64} />
+          <Animated.View style={mascotStyle}>
+            <Image
+              source={require('@/assets/images/brand/face.png')}
+              style={styles.mascot}
+              contentFit="contain"
+              accessibilityLabel="Unolingo mascot"
+            />
+          </Animated.View>
+        </View>
 
         <View style={styles.flex}>
           <Text variant="overline" tone={tone}>
@@ -104,7 +134,10 @@ export function LevelUp({ level, rank, progress }: LevelUpProps) {
         </View>
       ) : null}
 
-      <ProgressBar value={progress} height={8} tone={tone} />
+      {/* Last, and late. The bar filling from near-empty is the "and now you
+          start the next one" beat, and it only reads that way once the arrival
+          has finished. */}
+      <ProgressBar value={progress} height={8} tone={tone} delay={380} />
     </View>
   );
 }
@@ -117,12 +150,19 @@ export function LevelUp({ level, rank, progress }: LevelUpProps) {
 export function MascotNote({ accuracy }: { accuracy: number }) {
   const reduced = useReducedMotion();
   const scale = useSharedValue(reduced ? 1 : 0.9);
+  const tilt = useSharedValue(0);
 
   useEffect(() => {
-    if (!reduced) scale.set(withDelay(120, withSpring(1, Motion.springBouncy)));
-  }, [reduced, scale]);
+    if (reduced) return;
+    scale.set(withDelay(120, withSpring(1, Motion.springBouncy)));
+    // A nod rather than the level-up's tilt — smaller, and in the other
+    // direction, so the two moments are not the same animation at two sizes.
+    tilt.set(withDelay(120, withSequence(withTiming(5, { duration: 160 }), withSpring(0, Motion.spring))));
+  }, [reduced, scale, tilt]);
 
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.get() }, { rotate: `${tilt.get()}deg` }],
+  }));
 
   // One asset, so the difference is in the words, not the face.
   const line =
@@ -158,6 +198,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  mascotWrap: { alignItems: 'center', justifyContent: 'center' },
   mascot: { width: 56, height: 56 },
   faceSmall: { width: 34, height: 34 },
   badge: {

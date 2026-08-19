@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   name: '',
   appearance: 'system',
   haptics: true,
+  sounds: true,
   autoPlayAudio: true,
   strictAccents: false,
   hardMode: false,

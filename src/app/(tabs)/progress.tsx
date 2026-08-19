@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { ActivityCalendar, XpChart } from '@/components/progress/charts';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Section, Stat, StatGrid } from '@/components/ui/layout';
+import { stagger } from '@/components/ui/motion';
 import { ProgressBar, RingProgress } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
@@ -115,7 +116,7 @@ export default function ProgressScreen() {
         <Card variant="flat">
           {stages
             .filter((stage) => stage.unitCount > 0)
-            .map((stage) => (
+            .map((stage, index) => (
               <View key={stage.stage.id} style={styles.stageRow}>
                 <Text variant="small" style={styles.stageLabel}>
                   {stage.stage.levelRange}
@@ -125,6 +126,7 @@ export default function ProgressScreen() {
                     value={stage.progress}
                     height={7}
                     tone={stage.state === 'complete' ? theme.success : theme.tint}
+                    delay={stagger(index)}
                   />
                 </View>
                 <Text variant="caption" color="textTertiary" style={styles.stageValue}>
@@ -137,13 +139,18 @@ export default function ProgressScreen() {
 
       <Section title="Skill mastery">
         <Card variant="flat">
-          {skills.map((skill) => (
+          {skills.map((skill, index) => (
             <View key={skill.skill} style={styles.skillRow}>
               <Text variant="small" style={styles.skillLabel}>
                 {skill.label}
               </Text>
               <View style={styles.stageBar}>
-                <ProgressBar value={skill.mastery} height={8} tone={skillTone(skill.skill, theme)} />
+                <ProgressBar
+                  value={skill.mastery}
+                  height={8}
+                  tone={skillTone(skill.skill, theme)}
+                  delay={stagger(index)}
+                />
               </View>
               <Text variant="caption" color="textTertiary" style={styles.skillValue}>
                 {skill.seen === 0 ? '—' : `${Math.round(skill.mastery * 100)}%`}

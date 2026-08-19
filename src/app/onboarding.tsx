@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import { Icon } from '@/components/ui/icon';
 import { Logo } from '@/components/ui/logo';
 import { Pill } from '@/components/ui/pill';
+import { Burst, Reveal, stagger, useEntrancePop } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
@@ -29,6 +30,7 @@ import {
 } from '@/learning/placement';
 import { feedback } from '@/lib/feedback';
 import { goBack } from '@/lib/navigation';
+import { sound } from '@/lib/sound';
 
 type Phase = 'welcome' | 'test' | 'result';
 
@@ -66,6 +68,12 @@ export default function OnboardingScreen() {
   const [typed, setTyped] = useState('');
   const [score, setScore] = useState<PlacementScore | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  /**
+   * Declared up here with every other hook rather than beside the result markup
+   * it belongs to — the three phases are early returns, so a hook called inside
+   * one of them would run on some renders and not others.
+   */
+  const levelPop = useEntrancePop(180, 0.45);
 
   const beginTest = useCallback(() => {
     if (name.trim()) updateSettings({ name: name.trim() });
@@ -127,9 +135,12 @@ export default function OnboardingScreen() {
   const skipQuestion = useCallback(() => record(false), [record]);
 
   useEffect(() => {
-    if (phase === 'result' && score) {
-      feedback.celebrate();
-    }
+    if (phase !== 'result' || !score) return;
+    feedback.celebrate();
+    // `complete` rather than `levelUp`: finishing the placement is the end of a
+    // piece of work, not a level crossed. The fanfare belongs to the first time
+    // the learner earns one.
+    sound.complete();
   }, [phase, score]);
 
   const finish = () => {
@@ -259,9 +270,17 @@ export default function OnboardingScreen() {
           <Text variant="smallBold" color="textTertiary">
             Estimated level
           </Text>
-          <Text variant="display" rounded tone={theme.tint}>
-            {score.label}
-          </Text>
+          {/* The result of the test is the only thing on this screen the learner
+              came for, so it is the only thing that gets a celebration. The
+              breakdown below it is evidence, and evidence should sit still. */}
+          <View style={styles.levelStage}>
+            <Burst tones={[theme.tint, theme.accent]} radius={90} />
+            <Animated.View style={levelPop}>
+              <Text variant="display" rounded tone={theme.tint}>
+                {score.label}
+              </Text>
+            </Animated.View>
+          </View>
           <Text variant="body" color="textSecondary">
             {describeLevel(score.label)}
           </Text>
@@ -272,7 +291,7 @@ export default function OnboardingScreen() {
           {score.areas.length > 0 ? (
             <Card variant="flat">
               <Text variant="smallBold">How you did, by area</Text>
-              {score.areas.map((area) => (
+              {score.areas.map((area, index) => (
                 <View key={area.area} style={styles.areaRow}>
                   <Text variant="small" style={styles.areaLabel} numberOfLines={1}>
                     {area.label}
@@ -288,6 +307,7 @@ export default function OnboardingScreen() {
                             ? theme.danger
                             : theme.warning
                       }
+                      delay={280 + stagger(index)}
                     />
                   </View>
                   <Text variant="caption" color="textTertiary" numeric style={styles.areaValue}>
@@ -406,26 +426,28 @@ export default function OnboardingScreen() {
               {(question.options ?? []).map((option, index) => {
                 const selected = choice === index;
                 return (
-                  <PressScale
-                    key={option}
-                    onPress={() => setChoice(index)}
-                    scaleTo={0.98}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={option}>
-                    <View
-                      style={[
-                        styles.option,
-                        {
-                          borderColor: selected ? theme.text : theme.border,
-                          backgroundColor: selected
-                            ? theme.backgroundSelected
-                            : theme.backgroundElement,
-                        },
-                      ]}>
-                      <Text variant="bodyBold">{option}</Text>
-                    </View>
-                  </PressScale>
+                  <Reveal key={option} delay={stagger(index)}>
+                    <PressScale
+                      onPress={() => setChoice(index)}
+                      scaleTo={0.98}
+                      hover="lift"
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={option}>
+                      <View
+                        style={[
+                          styles.option,
+                          {
+                            borderColor: selected ? theme.text : theme.border,
+                            backgroundColor: selected
+                              ? theme.backgroundSelected
+                              : theme.backgroundElement,
+                          },
+                        ]}>
+                        <Text variant="bodyBold">{option}</Text>
+                      </View>
+                    </PressScale>
+                  </Reveal>
                 );
               })}
             </View>
@@ -477,6 +499,7 @@ const styles = StyleSheet.create({
     fontSize: Type.body.fontSize,
     minHeight: 48,
   },
+  levelStage: { alignSelf: 'flex-start', alignItems: 'center', justifyContent: 'center' },
   areaRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 26 },
   areaLabel: { width: 132 },
   areaBar: { flex: 1, minWidth: 0 },

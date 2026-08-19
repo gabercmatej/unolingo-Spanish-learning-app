@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { EmptyState, Section } from '@/components/ui/layout';
 import { Pill } from '@/components/ui/pill';
+import { Reveal } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { Screen } from '@/components/ui/screen';
 import { Segmented } from '@/components/ui/segmented';
@@ -146,6 +147,7 @@ export default function LibraryScreen() {
                         router.push({ pathname: '/word/[id]', params: { id: concept.id } })
                       }
                       scaleTo={0.985}
+                      hover="lift"
                       style={styles.flex}
                       accessibilityLabel={`${concept.es}, ${concept.en}`}>
                       <View style={styles.wordMain}>
@@ -178,69 +180,91 @@ export default function LibraryScreen() {
         </>
       ) : null}
 
+      {/* One fade per tab switch, not one per row.
+          The Library runs to hundreds of entries, and a stagger down a list
+          that long stops being a rhythm and becomes a wait — as well as several
+          hundred entering animations to mount. Animating the *switch* is the
+          part that carries the information anyway: it says the content under
+          your finger is now something else. */}
       {tab === 'grammar' ? (
-        <Section title="Grammar" caption="In the order the course teaches it — tap any rule to read more">
-          <View style={styles.list}>
-            {orderedGrammar.map((concept) => {
-              const state = learner.concepts[concept.id];
-              const value = state ? mastery(state, now) : 0;
-              return (
-                <Card
-                  key={concept.id}
-                  variant="flat"
-                  onPress={() => router.push({ pathname: '/grammar/[id]', params: { id: concept.id } })}>
-                  <View style={styles.row}>
-                    <View style={styles.flex}>
-                      <Text variant="bodyBold">{concept.title}</Text>
-                      <Text variant="caption" color="textSecondary" numberOfLines={2}>
-                        {concept.short}
-                      </Text>
-                    </View>
-                    <View style={styles.rightCol}>
-                      <Pill label={concept.level} tone={theme.grammar} background={theme.grammarSoft} />
-                      {state ? (
-                        <Text variant="caption" color="textTertiary">
-                          {Math.round(value * 100)}%
+        <Reveal>
+          <Section
+            title="Grammar"
+            caption="In the order the course teaches it — tap any rule to read more">
+            <View style={styles.list}>
+              {orderedGrammar.map((concept) => {
+                const state = learner.concepts[concept.id];
+                const value = state ? mastery(state, now) : 0;
+                return (
+                  <Card
+                    key={concept.id}
+                    variant="flat"
+                    onPress={() =>
+                      router.push({ pathname: '/grammar/[id]', params: { id: concept.id } })
+                    }>
+                    <View style={styles.row}>
+                      <View style={styles.flex}>
+                        <Text variant="bodyBold">{concept.title}</Text>
+                        <Text variant="caption" color="textSecondary" numberOfLines={2}>
+                          {concept.short}
                         </Text>
-                      ) : null}
+                      </View>
+                      <View style={styles.rightCol}>
+                        <Pill
+                          label={concept.level}
+                          tone={theme.grammar}
+                          background={theme.grammarSoft}
+                        />
+                        {state ? (
+                          <Text variant="caption" color="textTertiary">
+                            {Math.round(value * 100)}%
+                          </Text>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        </Section>
+                  </Card>
+                );
+              })}
+            </View>
+          </Section>
+        </Reveal>
       ) : null}
 
       {tab === 'verbs' ? (
-        <Section
-          title="Verbs"
-          caption="In the order the course teaches them — full conjugations, irregular forms highlighted">
-          <View style={styles.list}>
-            {orderedVerbs.map((verb) => (
-              <Card
-                key={verb.id}
-                variant="flat"
-                onPress={() => router.push({ pathname: '/verb/[id]', params: { id: verb.id } })}>
-                <View style={styles.row}>
-                  <View style={styles.flex}>
-                    <View style={styles.wordTop}>
-                      <Text variant="bodyBold">{verb.infinitive}</Text>
-                      {verb.irregular ? (
-                        <Pill label="irregular" tone={theme.warning} background={theme.warningSoft} />
-                      ) : null}
+        <Reveal>
+          <Section
+            title="Verbs"
+            caption="In the order the course teaches them — full conjugations, irregular forms highlighted">
+            <View style={styles.list}>
+              {orderedVerbs.map((verb) => (
+                <Card
+                  key={verb.id}
+                  variant="flat"
+                  onPress={() => router.push({ pathname: '/verb/[id]', params: { id: verb.id } })}>
+                  <View style={styles.row}>
+                    <View style={styles.flex}>
+                      <View style={styles.wordTop}>
+                        <Text variant="bodyBold">{verb.infinitive}</Text>
+                        {verb.irregular ? (
+                          <Pill
+                            label="irregular"
+                            tone={theme.warning}
+                            background={theme.warningSoft}
+                          />
+                        ) : null}
+                      </View>
+                      <Text variant="caption" color="textSecondary">
+                        {verb.en}
+                      </Text>
                     </View>
-                    <Text variant="caption" color="textSecondary">
-                      {verb.en}
-                    </Text>
+                    <Pill label={verb.level} />
+                    <Icon name="chevron-forward" size={16} color="textTertiary" />
                   </View>
-                  <Pill label={verb.level} />
-                  <Icon name="chevron-forward" size={16} color="textTertiary" />
-                </View>
-              </Card>
-            ))}
-          </View>
-        </Section>
+                </Card>
+              ))}
+            </View>
+          </Section>
+        </Reveal>
       ) : null}
     </Screen>
   );

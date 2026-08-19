@@ -28,6 +28,11 @@ export const Colors = {
     // Top edge of a lifted surface. Light mode gets its depth from the tinted
     // shadow, so this is only a whisper; dark mode leans on it entirely.
     highlight: 'rgba(255,255,255,0)',
+    // Specular pass used by the progress bar's completion sweep. White in both
+    // themes because it is light, not paint — deriving it from a surface colour
+    // makes it a *dark* sweep on dark, which reads as a fault rather than a
+    // flourish.
+    gleam: 'rgba(255,255,255,0.6)',
 
     // Text
     text: '#1C1714',
@@ -44,6 +49,13 @@ export const Colors = {
     accent: '#F2A93B',
     accentSoft: '#FDF0DA',
     accentText: '#9A6407',
+    /**
+     * Text and icons on a gradient-filled surface — white in both themes,
+     * because the ramps beneath it are the same in both. Distinct from
+     * `onTint`, which sits on *flat* channel fills: those are light in dark
+     * mode and genuinely need dark text on them.
+     */
+    onGradient: '#FFFFFF',
 
     // Semantic
     success: '#15926B',
@@ -86,6 +98,7 @@ export const Colors = {
     borderStrong: '#4A424A',
     shadow: '#000000',
     highlight: 'rgba(255,255,255,0.07)',
+    gleam: 'rgba(255,255,255,0.3)',
 
     // Text
     text: '#F6F1EA',
@@ -102,6 +115,7 @@ export const Colors = {
     accent: '#F7BC5C',
     accentSoft: '#3A2C15',
     accentText: '#F7C87A',
+    onGradient: '#FFFFFF',
 
     // Semantic
     success: '#2ECC96',
@@ -217,18 +231,25 @@ export type TypeToken = keyof typeof Type;
  *
  * They live outside `Colors` because a palette entry has to stay a single
  * string; read them with `useGradients()`.
+ *
+ * **The same ramps serve both themes**, which is the one place in this file
+ * that rule applies. Every other colour here is a *surface* and takes its value
+ * from the page it sits on; a gradient-filled button is a **lit object**, and a
+ * light source does not change colour because the room got darker. Dark mode
+ * used to lighten these — correct instinct, wrong subject. It left the primary
+ * action at 2.3:1 against white and so forced near-black text onto it, which is
+ * why the same button read as orange-on-white in light mode and orange-on-black
+ * in dark.
  */
+const RAMPS = {
+  tint: ['#F0713F', '#D8431C'],
+  success: ['#1BA97C', '#0E7C57'],
+  danger: ['#E23A5B', '#BE1839'],
+} as const;
+
 export const Gradients = {
-  light: {
-    tint: ['#F0713F', '#D8431C'],
-    success: ['#1BA97C', '#0E7C57'],
-    danger: ['#E23A5B', '#BE1839'],
-  },
-  dark: {
-    tint: ['#FF8C63', '#EF5F35'],
-    success: ['#39D8A2', '#1FA57A'],
-    danger: ['#FF7C94', '#E24A67'],
-  },
+  light: RAMPS,
+  dark: RAMPS,
 } as const;
 
 export type GradientName = keyof typeof Gradients.light;
@@ -247,13 +268,45 @@ export const Elevation = {
   }),
 } as const;
 
-/** Motion. Kept short — feedback should feel immediate, not choreographed. */
+/**
+ * Motion. Kept short — feedback should feel immediate, not choreographed.
+ *
+ * Four springs, and the reason there are four rather than one is that a spring
+ * is a *character*, not a duration: `spring` is the neutral one almost
+ * everything uses, `springBouncy` is the release of a press, `springPop` is the
+ * only one allowed to overshoot visibly and is reserved for the moments that
+ * are actually rewards, and `springSoft` is for large surfaces, where the same
+ * energy that reads as lively on a 40px badge reads as wobbly on a full card.
+ *
+ * `stagger` is the delay ladder unit. Entrance timings used to be fifteen
+ * hand-tuned numbers; one number times an index is a rhythm, and fifteen
+ * numbers is a list of accidents.
+ */
 export const Motion = {
   fast: 140,
   base: 220,
   slow: 380,
   spring: { damping: 18, stiffness: 220, mass: 0.9 },
   springBouncy: { damping: 12, stiffness: 260, mass: 0.8 },
+  /** Visible overshoot. Celebration only — it looks broken on a control. */
+  springPop: { damping: 9, stiffness: 300, mass: 0.75 },
+  /** Heavier and calmer, for cards, sheets and anything full-width. */
+  springSoft: { damping: 22, stiffness: 150, mass: 1 },
+  /** One step of the entrance ladder, in ms. */
+  stagger: 55,
+} as const;
+
+/**
+ * How far a surface lifts under a web pointer.
+ *
+ * Hover and press have to read as *different states*, not the same state at two
+ * strengths, so they move on different axes: hover raises (translateY + a
+ * fractional scale), press shrinks. A pointer resting on something is not a
+ * weaker version of clicking it.
+ */
+export const Hover = {
+  scale: 1.015,
+  lift: -2,
 } as const;
 
 /**

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExerciseView } from '@/components/exercises';
@@ -15,20 +16,24 @@ import { FeedbackBar } from '@/components/learn/feedback-bar';
 import {
   SessionResults,
   type ConceptDelta,
+  type Milestone,
   type SessionSummary,
 } from '@/components/learn/session-results';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { CountUp, Reveal, Shake, usePop } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Motion, Radius, Spacing } from '@/constants/theme';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { WhyPanel } from '@/components/session/why-panel';
+import { getStageForUnit, getUnitForLesson } from '@/content';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import { buildSession, type SessionKind } from '@/learning/session';
+import { stageProgress, unitProgress } from '@/learning/mastery';
 import { mastery } from '@/learning/srs';
 import type { LearnerState } from '@/learning/types';
 import { levelInfo } from '@/learning/xp';
@@ -36,6 +41,7 @@ import { newlyUnlocked } from '@/learning/achievements';
 import { toISODate } from '@/lib/date';
 import { feedback } from '@/lib/feedback';
 import { goBack } from '@/lib/navigation';
+import { primeSounds, sound } from '@/lib/sound';
 import { speakSpanish, stopSpeaking } from '@/lib/speech';
 
 /**
@@ -56,6 +62,16 @@ const LESSON_KINDS: SessionKind[] = ['lesson', 'conversation', 'story', 'checkpo
 /** The session as it stood when it ended — see `ending` below for why. */
 interface SessionEnding {
   seconds: number;
+  /**
+   * The instant the session ended.
+   *
+   * Passed explicitly into every `mastery`/`unitProgress` call below rather than
+   * letting them default to `Date.now()`. A results screen is a record of a
+   * session that is over, so every figure on it has to be measured from the
+   * same moment — and a fresh timestamp read during render is the exact thing
+   * this codebase forbids, because it makes every derived value a new one.
+   */
+  endedAt: number;
   /** Level at the moment the session ended, before its XP was banked. */
   levelBefore: number;
   /** The learner as they were before this session's results were committed. */
@@ -98,6 +114,14 @@ export default function SessionScreen() {
   const [result, setResult] = useState<ExerciseResult | null>(null);
   const [xpEarned, setXpEarned] = useState(0);
   const [lastXp, setLastXp] = useState(0);
+  /**
+   * Bumped on every wrong answer, purely to drive the shake.
+   *
+   * It has to be a fresh value each time rather than a boolean, because two
+   * wrong answers in a row are two events and a boolean that is already true
+   * cannot report the second one.
+   */
+  const [wrongAt, setWrongAt] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [answered, setAnswered] = useState(0);
   /**
@@ -125,7 +149,23 @@ export default function SessionScreen() {
   const exercise = queue[index];
   const total = queue.length;
 
+  /**
+   * The running XP total pops each time it grows. It is the only number on the
+   * player, and a reward that changes without moving is a reward the learner
+   * has to go looking for.
+   */
+  const xpPop = usePop(xpEarned, { scale: 1.22 });
+
   useEffect(() => () => stopSpeaking(), []);
+
+  /**
+   * Decode the cues now rather than on the first correct answer. A session is
+   * the only place they fire, and opening one is already a moment the learner
+   * expects to take a beat.
+   */
+  useEffect(() => {
+    primeSounds();
+  }, []);
 
   // Teaching cards mark their concepts as met the moment they are shown.
   useEffect(() => {
@@ -145,6 +185,7 @@ export default function SessionScreen() {
 
     setEnding({
       seconds,
+      endedAt: Date.now(),
       // Captured before completeSession commits the XP, so the results screen
       // can say "you crossed a level" rather than only "here is your level".
       levelBefore: levelInfo(learner.xp).level,
@@ -210,6 +251,8 @@ export default function SessionScreen() {
 
     if (outcome.grade === 'incorrect') {
       feedback.incorrect();
+      sound.incorrect();
+      setWrongAt(Date.now());
       exercise.conceptIds.forEach((id) => needsReview.current.add(id));
       // One second pass later in this session, then it belongs to the scheduler.
       if (!retried.current.has(exercise.id)) {
@@ -219,6 +262,7 @@ export default function SessionScreen() {
     } else {
       setCorrect((value) => value + 1);
       feedback.correct();
+      sound.correct();
       if (settings.autoPlayAudio && outcome.expected && exerciseSpeaksSpanish(exercise)) {
         speakSpanish(outcome.expected);
       }
@@ -268,12 +312,14 @@ export default function SessionScreen() {
     // "After" is read from the live learner state, which is now fully updated.
     const improved: ConceptDelta[] = ending.before.map(([conceptId, before]) => {
       const state = learner.concepts[conceptId];
-      return { conceptId, before, after: state ? mastery(state) : before };
+      return { conceptId, before, after: state ? mastery(state, ending.endedAt) : before };
     });
 
     const after = levelInfo(learner.xp);
     const unlocked = newlyUnlocked(ending.learnerBefore, learner);
     const summary: SessionSummary = {
+      milestone: crossedMilestone(kind, source, ending, learner),
+      streakBefore: ending.learnerBefore.streak,
       unlocked,
       title: plan.title,
       levelBefore: ending.levelBefore,
@@ -327,12 +373,15 @@ export default function SessionScreen() {
         <View style={styles.flex}>
           <ProgressBar value={progress} height={12} tone={theme.tint} />
         </View>
-        <View style={[styles.xpPill, { backgroundColor: theme.accentSoft }]}>
+        <Animated.View style={[styles.xpPill, { backgroundColor: theme.accentSoft }, xpPop]}>
           <Icon name="flash" size={13} tone={theme.accentText} />
-          <Text variant="caption" tone={theme.accentText}>
-            {xpEarned}
-          </Text>
-        </View>
+          <CountUp
+            value={xpEarned}
+            duration={Motion.slow}
+            variant="caption"
+            tone={theme.accentText}
+          />
+        </Animated.View>
       </View>
 
       <KeyboardAvoidingView
@@ -343,17 +392,21 @@ export default function SessionScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: result ? 320 : 160 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          <View style={styles.column} key={exercise.id}>
-            <ExerciseView
-              exercise={exercise}
-              answer={answer}
-              onAnswer={setAnswer}
-              result={result}
-              settings={settings}
-              onSubmit={submit}
-            />
-            <WhyPanel exercise={exercise} />
-          </View>
+          {/* Shake sits outside the keyed child so it survives the remount —
+              the thing being refused is the question you are still on. */}
+          <Shake trigger={wrongAt} style={styles.column}>
+            <Reveal key={exercise.id} from="right">
+              <ExerciseView
+                exercise={exercise}
+                answer={answer}
+                onAnswer={setAnswer}
+                result={result}
+                settings={settings}
+                onSubmit={submit}
+              />
+              <WhyPanel exercise={exercise} />
+            </Reveal>
+          </Shake>
         </ScrollView>
 
         {result === null ? (
@@ -386,6 +439,62 @@ export default function SessionScreen() {
       </KeyboardAvoidingView>
     </View>
   );
+}
+
+/**
+ * Whether this session finished a unit, or the stage that unit belongs to.
+ *
+ * Diffed rather than derived: "the unit is complete" is a state a learner sees
+ * every time they open it, and "the unit *just became* complete" is an event
+ * that happens once. Only the second is worth celebrating, and the only way to
+ * know which one you have is to hold both sides.
+ *
+ * The stage is checked first because finishing a stage necessarily finishes a
+ * unit, and being told both at once would spend the larger moment on the
+ * smaller one.
+ */
+function crossedMilestone(
+  kind: SessionKind,
+  source: string,
+  ending: SessionEnding,
+  after: LearnerState,
+): Milestone | undefined {
+  if (!LESSON_KINDS.includes(kind)) return undefined;
+
+  const unit = getUnitForLesson(source);
+  if (!unit) return undefined;
+
+  const { learnerBefore: before, endedAt } = ending;
+  const stage = getStageForUnit(unit.id);
+
+  if (
+    stage &&
+    stageProgress(stage, before, endedAt).state !== 'complete' &&
+    stageProgress(stage, after, endedAt).state === 'complete'
+  ) {
+    return {
+      scope: 'stage',
+      title: stage.title,
+      caption: `${stage.levelRange} complete — every unit in this stage is done.`,
+      icon: 'trophy',
+      tone: 'accent',
+    };
+  }
+
+  if (
+    unitProgress(unit, before, endedAt).state !== 'complete' &&
+    unitProgress(unit, after, endedAt).state === 'complete'
+  ) {
+    return {
+      scope: 'unit',
+      title: unit.title,
+      caption: 'Unit complete. It stays open — finishing it is not the same as knowing it.',
+      icon: unit.icon,
+      tone: unit.tone,
+    };
+  }
+
+  return undefined;
 }
 
 /** Only speak back answers that are actually Spanish. */

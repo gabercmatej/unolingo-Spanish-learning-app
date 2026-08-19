@@ -190,6 +190,15 @@ export interface Settings {
   name: string;
   appearance: Appearance;
   haptics: boolean;
+  /**
+   * UI sound cues on answers, level-ups and unlocks.
+   *
+   * Non-optional in the type but defaulted in `DEFAULT_SETTINGS`, which is the
+   * same shape as `haptics` and needs no `STATE_VERSION` bump: hydration merges
+   * defaults *under* the saved object, so a record written before this existed
+   * comes back with sound switched on rather than undefined.
+   */
+  sounds: boolean;
   /** Speaks the Spanish aloud after a correct answer. */
   autoPlayAudio: boolean;
   /** Marks missing accents wrong instead of accepting with a note. */

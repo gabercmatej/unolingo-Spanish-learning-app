@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { Card } from '@/components/ui/card';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { EmptyState, Section } from '@/components/ui/layout';
+import { Reveal, stagger } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
@@ -16,6 +17,29 @@ import { useTheme } from '@/hooks/use-theme';
 import { useNow } from '@/hooks/use-now';
 import { dueConcepts, weakAreas } from '@/learning/mastery';
 import { unlockedStories } from '@/learning/session';
+
+/**
+ * The study modes, as data.
+ *
+ * They were six near-identical JSX blocks, which is fine until every one of
+ * them also needs a stagger index — at which point the copy is six chances to
+ * get the ladder wrong. A tone key rather than a colour keeps each tile paired
+ * with its `Soft` companion automatically.
+ */
+const MODES: {
+  kind: string;
+  icon: IconName;
+  title: string;
+  caption: string;
+  tone: 'accent' | 'vocab' | 'grammar' | 'listening' | 'danger' | 'speaking';
+}[] = [
+  { kind: 'quickPractice', icon: 'flash-outline', title: 'Quick Practice', caption: '~3 minutes', tone: 'accent' },
+  { kind: 'vocabulary', icon: 'book-outline', title: 'Vocabulary', caption: 'Words you have met', tone: 'vocab' },
+  { kind: 'grammar', icon: 'construct-outline', title: 'Grammar', caption: 'Rules and conjugation', tone: 'grammar' },
+  { kind: 'listening', icon: 'headset-outline', title: 'Listening', caption: 'Spain Spanish, spoken', tone: 'listening' },
+  { kind: 'hardMode', icon: 'barbell-outline', title: 'Hard Mode', caption: 'No banks, no hints', tone: 'danger' },
+  { kind: 'random', icon: 'shuffle-outline', title: 'Random', caption: 'Anything, any form', tone: 'speaking' },
+];
 
 /**
  * Practice. The app already knows what needs work — this screen shows it and
@@ -53,7 +77,11 @@ export default function PracticeScreen() {
 
   return (
     <Screen title="Practice" subtitle="Targeted review, built from your history">
-      <PressScale onPress={() => start('smartReview', 'smart-review')} scaleTo={0.985} haptic="press">
+      <PressScale
+        onPress={() => start('smartReview', 'smart-review')}
+        scaleTo={0.985}
+        hover="lift"
+        haptic="press">
         <View style={[styles.hero, { backgroundColor: theme.text }]}>
           <View style={styles.flex}>
             <Text variant="overline" tone={theme.background}>
@@ -75,7 +103,7 @@ export default function PracticeScreen() {
       {weak.length > 0 ? (
         <Section title="Your weak areas" caption="Tap any one to drill it right now">
           <Card variant="flat" padding="four">
-            {weak.map((area) => {
+            {weak.map((area, index) => {
               const tone =
                 area.mastery < 0.5 ? theme.danger : area.mastery < 0.7 ? theme.warning : theme.accent;
               return (
@@ -90,7 +118,7 @@ export default function PracticeScreen() {
                       <Text variant="small" numberOfLines={1}>
                         {area.label}
                       </Text>
-                      <ProgressBar value={area.mastery} height={5} tone={tone} />
+                      <ProgressBar value={area.mastery} height={5} tone={tone} delay={stagger(index)} />
                     </View>
                     <Text variant="smallBold" tone={tone}>
                       {Math.round(area.mastery * 100)}%
@@ -105,54 +133,18 @@ export default function PracticeScreen() {
 
       <Section title="Study modes">
         <View style={styles.grid}>
-          <ModeTile
-            icon="flash-outline"
-            title="Quick Practice"
-            caption="~3 minutes"
-            tone={theme.accent}
-            soft={theme.accentSoft}
-            onPress={() => start('quickPractice')}
-          />
-          <ModeTile
-            icon="book-outline"
-            title="Vocabulary"
-            caption="Words you have met"
-            tone={theme.vocab}
-            soft={theme.vocabSoft}
-            onPress={() => start('vocabulary')}
-          />
-          <ModeTile
-            icon="construct-outline"
-            title="Grammar"
-            caption="Rules and conjugation"
-            tone={theme.grammar}
-            soft={theme.grammarSoft}
-            onPress={() => start('grammar')}
-          />
-          <ModeTile
-            icon="headset-outline"
-            title="Listening"
-            caption="Spain Spanish, spoken"
-            tone={theme.listening}
-            soft={theme.listeningSoft}
-            onPress={() => start('listening')}
-          />
-          <ModeTile
-            icon="barbell-outline"
-            title="Hard Mode"
-            caption="No banks, no hints"
-            tone={theme.danger}
-            soft={theme.dangerSoft}
-            onPress={() => start('hardMode')}
-          />
-          <ModeTile
-            icon="shuffle-outline"
-            title="Random"
-            caption="Anything, any form"
-            tone={theme.speaking}
-            soft={theme.speakingSoft}
-            onPress={() => start('random')}
-          />
+          {MODES.map((mode, index) => (
+            <Reveal key={mode.kind} delay={stagger(index)} style={styles.tile}>
+              <ModeTile
+                icon={mode.icon}
+                title={mode.title}
+                caption={mode.caption}
+                tone={theme[mode.tone]}
+                soft={theme[`${mode.tone}Soft` as keyof typeof theme] as string}
+                onPress={() => start(mode.kind)}
+              />
+            </Reveal>
+          ))}
         </View>
       </Section>
 
@@ -247,7 +239,7 @@ function ModeTile({
 }) {
   const theme = useTheme();
   return (
-    <PressScale onPress={onPress} scaleTo={0.96} haptic="press" style={styles.tile}>
+    <PressScale onPress={onPress} scaleTo={0.96} hover="lift" haptic="press" style={styles.tileFill}>
       <View style={[styles.tileInner, { backgroundColor: soft }]}>
         <View style={[styles.tileIcon, { backgroundColor: theme.backgroundElement }]}>
           <Icon name={icon} size={18} tone={tone} />
@@ -277,6 +269,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: Radius.full },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three },
   tile: { flexBasis: '48%', flexGrow: 1 },
+  tileFill: { width: '100%' },
   tileInner: { gap: Spacing.one, padding: Spacing.four, borderRadius: Radius.md, minHeight: 108 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   badge: {

@@ -59,6 +59,15 @@ function RootNavigator() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: palette.background },
+          /**
+           * Stated rather than left to the platform. The default differs per
+           * OS — iOS slides from the right, Android fades from the bottom —
+           * and "push means the thing moves in from the leading edge" is a
+           * spatial claim the whole app makes, not a per-platform preference.
+           * Modals below opt out, because a modal is not further along; it is
+           * on top.
+           */
+          animation: 'slide_from_right',
         }}>
         {/*
           Onboarding stays registered even once the learner is in, so a retake

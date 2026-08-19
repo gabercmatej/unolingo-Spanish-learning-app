@@ -4,9 +4,10 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { AudioButton } from '@/components/exercises/audio-button';
 import type { ExerciseViewProps } from '@/components/exercises/shared';
 import { Icon } from '@/components/ui/icon';
+import { stagger, useEntrancePop, usePop, useShake } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ChoiceExercise } from '@/learning/exercise';
 
@@ -70,65 +71,116 @@ export function ChoiceView({
       ) : null}
 
       <View style={styles.options}>
-        {exercise.options.map((option, index) => {
-          const isSelected = selected === index;
-          const isAnswer = index === exercise.answerIndex;
-
-          let border = theme.border;
-          let background = theme.backgroundElement;
-          let icon: 'checkmark-circle' | 'close-circle' | null = null;
-          let iconTone = theme.text;
-
-          if (locked && isAnswer) {
-            border = theme.success;
-            background = theme.successSoft;
-            icon = 'checkmark-circle';
-            iconTone = theme.success;
-          } else if (locked && isSelected) {
-            border = theme.danger;
-            background = theme.dangerSoft;
-            icon = 'close-circle';
-            iconTone = theme.danger;
-          } else if (isSelected) {
-            // Deliberately ink rather than brand: the brand is a warm
-            // vermilion, and a red-tinted option before checking reads as
-            // "you got this wrong".
-            border = theme.text;
-            background = theme.backgroundSelected;
-          }
-
-          return (
-            <PressScale
-              key={`${option.text}-${index}`}
-              disabled={locked}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={option.text}
-              scaleTo={0.98}
-              onPress={() => {
-                onAnswer(String(index));
-                onSubmit?.();
-              }}>
-              <View style={[styles.option, { borderColor: border, backgroundColor: background }]}>
-                <View style={styles.optionText}>
-                  <Text variant="bodyBold">{option.text}</Text>
-                  {option.sub ? (
-                    <Text variant="small" color="textSecondary">
-                      {option.sub}
-                    </Text>
-                  ) : null}
-                </View>
-                {icon ? (
-                  <Animated.View entering={FadeIn.duration(180)}>
-                    <Icon name={icon} size={22} tone={iconTone} />
-                  </Animated.View>
-                ) : null}
-              </View>
-            </PressScale>
-          );
-        })}
+        {exercise.options.map((option, index) => (
+          <Option
+            key={`${option.text}-${index}`}
+            text={option.text}
+            sub={option.sub}
+            index={index}
+            locked={locked}
+            isSelected={selected === index}
+            isAnswer={index === exercise.answerIndex}
+            onPress={() => {
+              onAnswer(String(index));
+              onSubmit?.();
+            }}
+          />
+        ))}
       </View>
     </View>
+  );
+}
+
+/**
+ * One answer option.
+ *
+ * Split out of the map so it can hold hooks, which buys the two things that
+ * make the verdict land: the right answer **pops** and a wrong pick **shakes**.
+ * Colour alone states the outcome, but it states it in the past tense — by the
+ * time the eye has read a green border the moment has gone. Motion puts the
+ * verdict on the frame the learner is already looking at.
+ *
+ * Both are driven off `locked`, so they fire once when the answer is graded and
+ * never on selection.
+ */
+function Option({
+  text,
+  sub,
+  index,
+  locked,
+  isSelected,
+  isAnswer,
+  onPress,
+}: {
+  text: string;
+  sub?: string;
+  index: number;
+  locked: boolean;
+  isSelected: boolean;
+  isAnswer: boolean;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+
+  const revealed = locked && isAnswer;
+  const wrongPick = locked && isSelected && !isAnswer;
+
+  const pop = usePop(revealed, { scale: 1.04 });
+  const shake = useShake(wrongPick ? index : null, 6);
+  const iconPop = useEntrancePop(0, 0.4);
+
+  let border = theme.border;
+  let background = theme.backgroundElement;
+  let icon: 'checkmark-circle' | 'close-circle' | null = null;
+  let iconTone = theme.text;
+
+  if (revealed) {
+    border = theme.success;
+    background = theme.successSoft;
+    icon = 'checkmark-circle';
+    iconTone = theme.success;
+  } else if (wrongPick) {
+    border = theme.danger;
+    background = theme.dangerSoft;
+    icon = 'close-circle';
+    iconTone = theme.danger;
+  } else if (isSelected) {
+    // Deliberately ink rather than brand: the brand is a warm
+    // vermilion, and a red-tinted option before checking reads as
+    // "you got this wrong".
+    border = theme.text;
+    background = theme.backgroundSelected;
+  }
+
+  return (
+    <Animated.View
+      entering={FadeIn.duration(Motion.base).delay(stagger(index))}
+      style={[pop, shake]}>
+      <PressScale
+        disabled={locked}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={text}
+        scaleTo={0.98}
+        hover="lift"
+        onPress={onPress}>
+        <View style={[styles.option, { borderColor: border, backgroundColor: background }]}>
+          <View style={styles.optionText}>
+            <Text variant="bodyBold">{text}</Text>
+            {sub ? (
+              <Text variant="small" color="textSecondary">
+                {sub}
+              </Text>
+            ) : null}
+          </View>
+          {icon ? (
+            <Animated.View style={iconPop}>
+              <Icon name={icon} size={22} tone={iconTone} />
+            </Animated.View>
+          ) : null}
+        </View>
+      </PressScale>
+    </Animated.View>
   );
 }
 

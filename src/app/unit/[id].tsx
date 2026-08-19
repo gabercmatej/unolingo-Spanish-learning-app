@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { EmptyState, Section } from '@/components/ui/layout';
 import { Pill } from '@/components/ui/pill';
+import { Reveal, stagger } from '@/components/ui/motion';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
@@ -153,7 +154,7 @@ export default function UnitScreen() {
                 <Text variant="heading" rounded>
                   {progress.lessonsDone}/{progress.lessonCount}
                 </Text>
-                <ProgressBar value={progress.progress} height={5} tone={tone} />
+                <ProgressBar value={progress.progress} height={5} tone={tone} delay={stagger(1)} />
               </View>
               <View style={styles.divider} />
               <View style={styles.flex}>
@@ -170,6 +171,7 @@ export default function UnitScreen() {
                   value={progress.mastery}
                   height={5}
                   tone={progress.needsReview ? theme.warning : theme.success}
+                  delay={stagger(2)}
                 />
               </View>
             </View>
@@ -239,31 +241,34 @@ export default function UnitScreen() {
           {/* Lessons */}
           <Section title="Lessons" caption="Replay any of them at any time">
             <View style={styles.lessonList}>
-              {unit.lessons.map((lesson) => {
+              {unit.lessons.map((lesson, index) => {
                 const done = progress.completedLessonIds.includes(lesson.id);
                 const isNext = progress.nextLesson?.id === lesson.id;
                 return (
-                  <Card
-                    key={lesson.id}
-                    variant={isNext ? 'flat' : 'outline'}
-                    onPress={() => openLesson(lesson)}>
-                    <View style={styles.row}>
-                      <Icon
-                        name={done ? 'checkmark-circle' : isNext ? 'play-circle' : 'ellipse-outline'}
-                        size={20}
-                        tone={done ? theme.success : isNext ? tone : theme.textTertiary}
-                      />
-                      <View style={styles.flex}>
-                        <Text variant="bodyBold">{lesson.title}</Text>
-                        <Text variant="caption" color="textSecondary" numberOfLines={2}>
-                          {lesson.goal}
+                  <Reveal key={lesson.id} delay={stagger(index)}>
+                    <Card
+                      variant={isNext ? 'flat' : 'outline'}
+                      onPress={() => openLesson(lesson)}>
+                      <View style={styles.row}>
+                        <Icon
+                          name={
+                            done ? 'checkmark-circle' : isNext ? 'play-circle' : 'ellipse-outline'
+                          }
+                          size={20}
+                          tone={done ? theme.success : isNext ? tone : theme.textTertiary}
+                        />
+                        <View style={styles.flex}>
+                          <Text variant="bodyBold">{lesson.title}</Text>
+                          <Text variant="caption" color="textSecondary" numberOfLines={2}>
+                            {lesson.goal}
+                          </Text>
+                        </View>
+                        <Text variant="caption" color="textTertiary">
+                          {lesson.estMinutes}m
                         </Text>
                       </View>
-                      <Text variant="caption" color="textTertiary">
-                        {lesson.estMinutes}m
-                      </Text>
-                    </View>
-                  </Card>
+                    </Card>
+                  </Reveal>
                 );
               })}
             </View>
@@ -338,7 +343,7 @@ function PracticeOption({
 }) {
   const theme = useTheme();
   return (
-    <PressScale onPress={onPress} scaleTo={0.99} haptic="press" accessibilityLabel={title}>
+    <PressScale onPress={onPress} scaleTo={0.99} hover="lift" haptic="press" accessibilityLabel={title}>
       <View
         style={[
           styles.practiceRow,

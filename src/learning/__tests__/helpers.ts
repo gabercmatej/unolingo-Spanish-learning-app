@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS_FOR_TEST: Settings = {
   name: 'Test',
   appearance: 'system',
   haptics: false,
+  sounds: false,
   autoPlayAudio: false,
   strictAccents: false,
   hardMode: false,

@@ -1,9 +1,22 @@
 import { Image } from 'expo-image';
+import { useCallback, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { Icon } from '@/components/ui/icon';
+import { PressScale } from '@/components/ui/press-scale';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { speakSpanish } from '@/lib/speech';
 
 const MASCOT = require('@/assets/images/brand/mascot.png');
 
@@ -32,33 +45,81 @@ export interface CoachProps {
  * It speaks Spanish first. A greeting the learner can actually read is a free
  * repetition, so the English sits underneath as a gloss and disappears entirely
  * for anyone running in immersion mode.
+ *
+ * **And it is tappable.** That started as a place to put a bit of delight and
+ * turned out to be the most defensible interaction on the screen: the panda is
+ * already saying a real Spanish sentence, so hearing it is another free
+ * repetition, on the one surface a learner passes every single day. The tap
+ * feedback is the panda leaning in — motion the mascot could plausibly make,
+ * rather than a UI element pretending to be a character.
  */
 export function Coach({ line, showTranslation = true, size = 72 }: CoachProps) {
   const theme = useTheme();
+  const reduced = useReducedMotion();
+
+  const scale = useSharedValue(reduced ? 1 : 0.82);
+  const tilt = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduced) return;
+    scale.set(withDelay(80, withSpring(1, Motion.springPop)));
+  }, [reduced, scale]);
+
+  const speak = useCallback(() => {
+    speakSpanish(line.es);
+    if (reduced) return;
+    // Lean in and back. Deliberately not the level-up's choreography — that one
+    // is a reward and this one is an acknowledgement, and they should not feel
+    // like the same event at two volumes.
+    scale.set(
+      withSequence(withTiming(1.1, { duration: Motion.fast }), withSpring(1, Motion.springBouncy)),
+    );
+    tilt.set(
+      withSequence(withTiming(-6, { duration: Motion.fast }), withSpring(0, Motion.springBouncy)),
+    );
+  }, [line.es, reduced, scale, tilt]);
+
+  const mascotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.get() }, { rotate: `${tilt.get()}deg` }],
+  }));
 
   return (
-    <View style={styles.row}>
-      <Image
-        source={MASCOT}
-        style={{ width: size, height: size * MASCOT_RATIO }}
-        contentFit="contain"
-        transition={0}
-        // Decorative: the bubble beside it already carries the message.
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        alt=""
-      />
+    <PressScale
+      onPress={speak}
+      scaleTo={0.985}
+      hover="lift"
+      haptic="tap"
+      accessibilityLabel={`Hear the coach say: ${line.es}`}>
+      <View style={styles.row}>
+        <Animated.View style={mascotStyle}>
+          <Image
+            source={MASCOT}
+            style={{ width: size, height: size * MASCOT_RATIO }}
+            contentFit="contain"
+            transition={0}
+            // Decorative: the bubble beside it already carries the message.
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            alt=""
+          />
+        </Animated.View>
 
-      <View style={[styles.bubble, { backgroundColor: theme.backgroundSunken }]}>
-        <View style={[styles.tail, { backgroundColor: theme.backgroundSunken }]} />
-        <Text variant="smallBold">{line.es}</Text>
-        {showTranslation ? (
-          <Text variant="caption" color="textSecondary">
-            {line.en}
-          </Text>
-        ) : null}
+        <View style={[styles.bubble, { backgroundColor: theme.backgroundSunken }]}>
+          <View style={[styles.tail, { backgroundColor: theme.backgroundSunken }]} />
+          <View style={styles.bubbleText}>
+            <Text variant="smallBold">{line.es}</Text>
+            {showTranslation ? (
+              <Text variant="caption" color="textSecondary">
+                {line.en}
+              </Text>
+            ) : null}
+          </View>
+          {/* A tappable mascot is not an obvious idea, and an affordance nobody
+              finds is the same as one that does not exist. */}
+          <Icon name="volume-medium-outline" size={14} color="textTertiary" />
+        </View>
       </View>
-    </View>
+    </PressScale>
   );
 }
 
@@ -106,11 +167,14 @@ const styles = StyleSheet.create({
     // Flex children size to their content in RN; without this a long line
     // pushes the bubble past the card edge instead of wrapping.
     minWidth: 0,
-    gap: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
     borderRadius: Radius.md,
   },
+  bubbleText: { flex: 1, minWidth: 0, gap: 2 },
   // A rotated square tucked under the bubble's left edge. Same fill, so the two
   // read as one shape.
   tail: {

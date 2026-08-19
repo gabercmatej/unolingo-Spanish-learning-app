@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SpeakIcon } from '@/components/exercises/audio-button';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { CountUp, useEntrancePop } from '@/components/ui/motion';
 import { Text } from '@/components/ui/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ExerciseResult } from '@/learning/check';
 
@@ -22,10 +23,20 @@ interface FeedbackBarProps {
  * The moment after answering. A wrong answer is never scolded — it shows the
  * right answer and explains why, because that explanation is the whole reason
  * the mistake was worth making.
+ *
+ * It rises from the bottom edge on a spring rather than fading down from above.
+ * The bar lives at the bottom of the screen, so entering downwards meant it
+ * arrived travelling away from where it came from — a small thing that reads,
+ * without being nameable, as the interface not knowing its own geography.
  */
 export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  // The verdict icon is the first thing the eye goes to, so it is the one thing
+  // here allowed to overshoot.
+  const iconPop = useEntrancePop(60, 0.5);
+  const xpPop = useEntrancePop(140, 0.6);
 
   const scheme = {
     correct: {
@@ -52,7 +63,11 @@ export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBa
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(220)}
+      entering={
+        reduced
+          ? FadeIn.duration(Motion.fast)
+          : SlideInDown.springify().damping(20).stiffness(190).mass(0.9)
+      }
       style={[
         styles.container,
         {
@@ -62,16 +77,22 @@ export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBa
         },
       ]}>
       <View style={styles.head}>
-        <Icon name={scheme.icon} size={24} tone={scheme.tone} />
+        <Animated.View style={iconPop}>
+          <Icon name={scheme.icon} size={24} tone={scheme.tone} />
+        </Animated.View>
         <Text variant="subheading" tone={scheme.tone} style={styles.flex}>
           {scheme.title}
         </Text>
         {xpEarned > 0 ? (
-          <View style={[styles.xp, { backgroundColor: theme.accent }]}>
-            <Text variant="caption" tone={theme.textInverse}>
-              +{xpEarned} XP
-            </Text>
-          </View>
+          <Animated.View style={[styles.xp, { backgroundColor: theme.accent }, xpPop]}>
+            <CountUp
+              value={xpEarned}
+              duration={Motion.slow}
+              format={(value) => `+${value} XP`}
+              variant="caption"
+              tone={theme.textInverse}
+            />
+          </Animated.View>
         ) : null}
       </View>
 

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { Coach, coachLine } from '@/components/learn/coach';
 import { Journey } from '@/components/learn/journey';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Section } from '@/components/ui/layout';
+import { Reveal, stagger, usePop } from '@/components/ui/motion';
 import { Pill } from '@/components/ui/pill';
 import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar } from '@/components/ui/progress';
@@ -70,136 +72,170 @@ export default function LearnScreen() {
       title={settings.name ? `Hola, ${settings.name}` : 'Hola'}
       subtitle={upcoming ? upcoming.goal : 'You have finished everything available — for now.'}>
       {/* Status */}
-      <View style={styles.strip}>
+      <Reveal style={styles.strip}>
         <StatusChip icon="flame" value={`${streak}`} label={streak === 1 ? 'day' : 'days'} tone={theme.tint} />
         <StatusChip icon="flash" value={`${levels.level}`} label="level" tone={theme.accentText} />
         <StatusChip icon="ribbon" value={level} label={`${Math.round(progress * 100)}%`} tone={theme.grammar} />
-      </View>
+      </Reveal>
 
       {/* The mascot greets you on every visit, whatever the learner state — it
           is the app's face, so it is never conditional. */}
-      <Coach
-        line={coachLine({ due, streak, goalMet, todayXp })}
-        showTranslation={settings.showTranslations}
-      />
+      <Reveal delay={stagger(1)}>
+        <Coach
+          line={coachLine({ due, streak, goalMet, todayXp })}
+          showTranslation={settings.showTranslations}
+        />
+      </Reveal>
 
       {/* Daily goal — a target, never a gate */}
-      <Card variant="flat" padding="four">
-        <View style={styles.goalHead}>
-          <Text variant="smallBold" style={styles.flex}>
-            {goalMet ? 'Daily goal complete' : 'Today’s goal'}
-          </Text>
-          {goalMet ? <Icon name="checkmark-circle" size={16} tone={theme.success} /> : null}
-          <Text variant="caption" color="textTertiary" numeric>
-            {todayXp} / {goalXp} XP
-          </Text>
-        </View>
-        <ProgressBar value={goalProgress} height={8} tone={goalMet ? theme.success : theme.accent} />
-        {goalMet ? (
-          <Text variant="caption" color="textSecondary">
-            Nothing stops here — keep going as long as you like.
-          </Text>
-        ) : null}
-      </Card>
+      <Reveal delay={stagger(2)}>
+        <Card variant="flat" padding="four">
+          <View style={styles.goalHead}>
+            <Text variant="smallBold" style={styles.flex}>
+              {goalMet ? 'Daily goal complete' : 'Today’s goal'}
+            </Text>
+            {goalMet ? <Icon name="checkmark-circle" size={16} tone={theme.success} /> : null}
+            <Text variant="caption" color="textTertiary" numeric>
+              {todayXp} / {goalXp} XP
+            </Text>
+          </View>
+          <ProgressBar
+            value={goalProgress}
+            height={8}
+            tone={goalMet ? theme.success : theme.accent}
+          />
+          {goalMet ? (
+            <Text variant="caption" color="textSecondary">
+              Nothing stops here — keep going as long as you like.
+            </Text>
+          ) : null}
+        </Card>
+      </Reveal>
 
       {/* Continue */}
       {upcoming ? (
-        <Section title="Continue learning">
-          <Card>
-            <View style={styles.continueTop}>
-              {upcomingUnit ? (
-                <Pill label={upcomingUnit.title} tone={theme.tintText} background={theme.tintSoft} />
-              ) : null}
-              <Pill label={`${upcoming.estMinutes} min`} />
-              <Pill label={upcoming.level} />
-            </View>
-            <Text variant="heading" rounded>
-              {upcoming.title}
-            </Text>
-            <Text variant="small" color="textSecondary">
-              {upcoming.goal}
-            </Text>
-            <Button title="Start lesson" size="lg" icon="play" onPress={() => startLesson(upcoming)} />
-          </Card>
-        </Section>
+        <Reveal delay={stagger(3)}>
+          <Section title="Continue learning">
+            <Card>
+              <View style={styles.continueTop}>
+                {upcomingUnit ? (
+                  <Pill
+                    label={upcomingUnit.title}
+                    tone={theme.tintText}
+                    background={theme.tintSoft}
+                  />
+                ) : null}
+                <Pill label={`${upcoming.estMinutes} min`} />
+                <Pill label={upcoming.level} />
+              </View>
+              <Text variant="heading" rounded>
+                {upcoming.title}
+              </Text>
+              <Text variant="small" color="textSecondary">
+                {upcoming.goal}
+              </Text>
+              <Button
+                title="Start lesson"
+                size="lg"
+                icon="play"
+                onPress={() => startLesson(upcoming)}
+              />
+            </Card>
+          </Section>
+        </Reveal>
       ) : null}
 
       {/* Smart Review */}
-      <PressScale
-        onPress={() =>
-          router.push({ pathname: '/session', params: { kind: 'smartReview', source: 'smart-review' } })
-        }
-        scaleTo={0.985}
-        haptic="press"
-        accessibilityLabel="Start Smart Review">
-        <View style={[styles.smart, { backgroundColor: theme.text }]}>
-          <View style={styles.flex}>
-            <Text variant="smallBold" tone={theme.background}>
-              Smart Review
-            </Text>
-            <Text variant="caption" tone={theme.background} style={styles.dim}>
-              {due > 0
-                ? `${due} concept${due === 1 ? '' : 's'} ready — ordered by forgetting risk`
-                : 'Sharpen what you already know'}
-            </Text>
+      <Reveal delay={stagger(4)}>
+        <PressScale
+          onPress={() =>
+            router.push({
+              pathname: '/session',
+              params: { kind: 'smartReview', source: 'smart-review' },
+            })
+          }
+          scaleTo={0.985}
+          hover="lift"
+          haptic="press"
+          accessibilityLabel="Start Smart Review">
+          <View style={[styles.smart, { backgroundColor: theme.text }]}>
+            <View style={styles.flex}>
+              <Text variant="smallBold" tone={theme.background}>
+                Smart Review
+              </Text>
+              <Text variant="caption" tone={theme.background} style={styles.dim}>
+                {due > 0
+                  ? `${due} concept${due === 1 ? '' : 's'} ready — ordered by forgetting risk`
+                  : 'Sharpen what you already know'}
+              </Text>
+            </View>
+            <View style={[styles.smartIcon, { backgroundColor: theme.background }]}>
+              <Icon name="sparkles" size={19} tone={theme.text} />
+            </View>
           </View>
-          <View style={[styles.smartIcon, { backgroundColor: theme.background }]}>
-            <Icon name="sparkles" size={19} tone={theme.text} />
-          </View>
-        </View>
-      </PressScale>
+        </PressScale>
+      </Reveal>
 
       {/* Needs work */}
       {weak.length > 0 ? (
-        <Section title="Needs work" action={{ label: 'Practice', onPress: () => router.push('/practice') }}>
-          <Card variant="flat">
-            {weak.map((area) => (
-              <PressScale
-                key={area.id}
-                onPress={() =>
-                  router.push({
-                    pathname: '/session',
-                    params: {
-                      kind: 'concept',
-                      source: area.id,
-                      concepts: area.conceptIds.slice(0, 12).join(','),
-                    },
-                  })
-                }
-                scaleTo={0.98}
-                accessibilityLabel={`Practise ${area.label}`}>
-                <View style={styles.weakRow}>
-                  <View style={styles.weakText}>
-                    <Text variant="small" numberOfLines={1}>
-                      {area.label}
+        <Reveal delay={stagger(5)}>
+          <Section
+            title="Needs work"
+            action={{ label: 'Practice', onPress: () => router.push('/practice') }}>
+            <Card variant="flat">
+              {weak.map((area, index) => (
+                <PressScale
+                  key={area.id}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/session',
+                      params: {
+                        kind: 'concept',
+                        source: area.id,
+                        concepts: area.conceptIds.slice(0, 12).join(','),
+                      },
+                    })
+                  }
+                  scaleTo={0.98}
+                  accessibilityLabel={`Practise ${area.label}`}>
+                  <View style={styles.weakRow}>
+                    <View style={styles.weakText}>
+                      <Text variant="small" numberOfLines={1}>
+                        {area.label}
+                      </Text>
+                      <ProgressBar
+                        value={area.mastery}
+                        height={5}
+                        tone={masteryTone(area.mastery, theme)}
+                        delay={stagger(index)}
+                      />
+                    </View>
+                    <Text
+                      variant="caption"
+                      tone={masteryTone(area.mastery, theme)}
+                      numeric
+                      style={styles.weakValue}>
+                      {Math.round(area.mastery * 100)}%
                     </Text>
-                    <ProgressBar value={area.mastery} height={5} tone={masteryTone(area.mastery, theme)} />
                   </View>
-                  <Text
-                    variant="caption"
-                    tone={masteryTone(area.mastery, theme)}
-                    numeric
-                    style={styles.weakValue}>
-                    {Math.round(area.mastery * 100)}%
-                  </Text>
-                </View>
-              </PressScale>
-            ))}
-          </Card>
-        </Section>
+                </PressScale>
+              ))}
+            </Card>
+          </Section>
+        </Reveal>
       ) : null}
 
       {/* The journey */}
-      <Section
-        title="Your journey"
-        caption={`${unitsDone} of ${unitsTotal} units · A0 to C2`}>
-        <CourseRail stages={stages} />
-        <Journey
-          stages={stages}
-          onOpenUnit={(unitId) => router.push({ pathname: '/unit/[id]', params: { id: unitId } })}
-          onStartLesson={startLesson}
-        />
-      </Section>
+      <Reveal delay={stagger(6)}>
+        <Section title="Your journey" caption={`${unitsDone} of ${unitsTotal} units · A0 to C2`}>
+          <CourseRail stages={stages} />
+          <Journey
+            stages={stages}
+            onOpenUnit={(unitId) => router.push({ pathname: '/unit/[id]', params: { id: unitId } })}
+            onStartLesson={startLesson}
+          />
+        </Section>
+      </Reveal>
     </Screen>
   );
 }
@@ -224,26 +260,25 @@ function CourseRail({ stages }: { stages: ReturnType<typeof courseProgress> }) {
           const isCurrent = index === currentIndex && stage.state === 'current';
           return (
             <View key={stage.stage.id} style={styles.railSegment}>
-              <View
-                style={[
-                  styles.railFill,
-                  {
-                    backgroundColor: done
-                      ? theme.success
-                      : isCurrent
-                        ? theme.tint
-                        : theme.backgroundSelected,
-                  },
-                ]}>
-                {isCurrent ? (
-                  <View
-                    style={[
-                      styles.railProgress,
-                      { width: `${Math.max(6, stage.progress * 100)}%`, backgroundColor: theme.tint },
-                    ]}
-                  />
-                ) : null}
-              </View>
+              {/* The stage you are on is a real bar rather than a painted one,
+                  so it springs, stagger-delays and marks its own completion
+                  exactly like every other progress bar in the app. */}
+              {isCurrent ? (
+                <ProgressBar
+                  value={Math.max(0.06, stage.progress)}
+                  height={6}
+                  tone={theme.tint}
+                  track={theme.backgroundSelected}
+                  delay={stagger(index)}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.railFill,
+                    { backgroundColor: done ? theme.success : theme.backgroundSelected },
+                  ]}
+                />
+              )}
               <Text
                 variant="caption"
                 tone={done ? theme.success : isCurrent ? theme.tint : theme.textTertiary}>
@@ -280,8 +315,21 @@ function StatusChip({
   tone: string;
 }) {
   const theme = useTheme();
+  /**
+   * A streak that went up overnight, or a level crossed in the session you just
+   * left, is news — and this row is the first thing the learner sees on
+   * returning. `usePop` skips its first run, so the chips only move when the
+   * number actually changed while the screen was mounted or since it last was.
+   */
+  const pop = usePop(value, { scale: 1.2 });
+
   return (
-    <View style={[styles.chip, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+    <Animated.View
+      style={[
+        styles.chip,
+        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+        pop,
+      ]}>
       <Icon name={icon} size={14} tone={tone} />
       <Text variant="smallBold" numeric>
         {value}
@@ -289,7 +337,7 @@ function StatusChip({
       <Text variant="caption" color="textSecondary" numeric>
         {label}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -334,7 +382,6 @@ const styles = StyleSheet.create({
   railCard: { paddingBottom: Spacing.two },
   railTrack: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.one },
   railSegment: { flex: 1, gap: Spacing.one },
-  railFill: { height: 6, borderRadius: Radius.full, overflow: 'hidden' },
-  railProgress: { height: 6, borderRadius: Radius.full },
+  railFill: { height: 6, borderRadius: Radius.full },
   railEnd: { paddingLeft: Spacing.one },
 });
