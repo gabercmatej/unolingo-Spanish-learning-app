@@ -11,6 +11,7 @@
       ]
     },
     "types": [
+      "expo/types",
       "jest",
       "react",
       "node"
