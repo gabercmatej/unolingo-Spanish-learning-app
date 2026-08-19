@@ -366,6 +366,25 @@ snapshot is due); `src/lib/snapshots.ts` and `src/lib/backup-file.ts` are the pl
   a `STATE_VERSION` this build understands, with its concepts, lesson history, mistakes and
   sessions intact. Settings stay local — a phone backup must not redecorate a laptop.
 
+## Getting it onto a phone
+
+The device build is automated by the **`ios-device-builds`** skill
+(`~/.claude/skills/ios-device-builds/`), which is app-agnostic and owns the whole procedure:
+
+```bash
+~/.claude/skills/ios-device-builds/build-to-iphone.sh          # sync, gate, build, install
+~/.claude/skills/ios-device-builds/build-to-iphone.sh --check  # preflight only
+```
+
+It lives outside this repo on purpose — the same ritual applies to every app here, and a
+copy per repo would rot. What matters locally: a **free Apple certificate expires every
+seven days**, so this runs weekly; rebuilding over the top preserves the learner record and
+**deleting the app is the only thing that destroys it**; and `expo prebuild --clean` wipes
+`DEVELOPMENT_TEAM`, so it is never part of a routine rebuild.
+
+`plugins/with-local-notifications-only.js` exists for this reason — see the reminder section
+above for why removing `expo-notifications` from `plugins` cannot achieve the same thing.
+
 ## Platform traps
 
 These have each caused a real bug here; most are invisible on native and only bite on web.
