@@ -41,9 +41,13 @@ pass. Lint is not cosmetic here: the React Compiler rules in it have caught two 
 a results screen assembled from refs during render).
 
 `npm run audit:content` is the **definition-of-done gate** for course content. It is
-deliberately excluded from `npm test` (see `testPathIgnorePatterns` in package.json) and is
-*expected to fail* while curriculum gaps remain — its assertions encode "this stage is
-finished", not "the code works". Read its gap list; don't try to make it pass by weakening it.
+deliberately excluded from `npm test` (see `testPathIgnorePatterns` in package.json) because
+its assertions encode "this stage is finished", not "the code works".
+
+It was written expecting to fail, and for a long time it did. **It now passes 9/9 with zero
+warnings, so a failure is a regression rather than the normal state** — read its gap list and
+fix the content; never make it pass by weakening an assertion. Passing is still not the same
+as finished: the NOTES are a standing priority queue and are supposed to keep printing.
 
 It measures **distribution and depth, not presence**. The presence version of this file
 went green the moment every stage had one of everything, while thirteen of fourteen A1
@@ -333,7 +337,7 @@ is exactly what these tests exist to catch.
   dedicated listening, reading and conversation lessons, but those are *additional* depth,
   not the only place those skills live: every sentence can become audio, so a plain
   vocabulary or grammar lesson still generates listening and production. Measured across
-  the 78 core/grammar lessons, 100% contain at least one listening exercise and one
+  the 86 core/grammar lessons, 100% contain at least one listening exercise and one
   production exercise, and the overall mix is roughly 34% grammar / 27% production /
   25% listening / 14% vocabulary. A test in `session.test.ts` holds this at a floor of 80%,
   because a change to `candidateKinds` could quietly turn ordinary lessons back into
