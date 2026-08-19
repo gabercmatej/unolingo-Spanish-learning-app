@@ -42,8 +42,7 @@
         {
           "photosPermission": "Unolingo uses your photo library only to set your profile picture. The image never leaves your device."
         }
-      ],
-      "expo-notifications"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

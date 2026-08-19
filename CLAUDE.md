@@ -485,6 +485,16 @@ what makes it idempotent; without the cancel a fortnight of duplicates piles up 
 
 The horizon is deliberately 14 days. An app nobody opens should eventually stop talking.
 
+**`expo-notifications` is deliberately *not* in `app.json`'s `plugins`.** Its config plugin
+writes `aps-environment` into the entitlements — the Push Notifications capability — and a
+free Apple Personal Team cannot provision an app that asks for it: *"Personal development
+teams do not support the Push Notifications capability."* Nothing here needs push. Every
+notification is scheduled locally on the device, and the native module is autolinked from
+`node_modules` whether or not the plugin runs, so dropping it costs only the Android
+notification icon and colour. **Adding the plugin back breaks local device builds** until
+there is a paid developer account; if it is ever needed for Android styling, it has to be
+added under an Android-only condition.
+
 Permission is asked **at the moment the learner opts in**, never on launch — the system
 prompt appears once per install, and spending it on a cold start trades a permission for
 nothing. "Off" and "denied" are different states and the settings screen says which.
