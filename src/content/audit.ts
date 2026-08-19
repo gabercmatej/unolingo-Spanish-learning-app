@@ -17,11 +17,13 @@ import { errorDrills, naturalDrills } from '@/content/drills';
 import { reportVerbCorpus } from '@/content/verb-corpus';
 import {
   CEFR_LEVELS,
+  TENSE_LABELS,
   type CefrLevel,
   type Lesson,
   type LessonKind,
   type Person,
   type Stage,
+  type TenseId,
 } from '@/content/types';
 
 /**
@@ -495,9 +497,81 @@ function findDepthGaps(stages: StageAudit[]): Gap[] {
  * first and third singular — and in a Peninsular course the form that must not
  * be missing is `vosotros`.
  */
+/**
+ * Tenses the course knowingly does not conjugate. Anything listed here is a
+ * decision with a reason attached; anything *not* listed is expected to have
+ * real paradigms behind it, and the audit says so loudly when it does not.
+ *
+ * Empty today, and that is the point — every tense the type declares is now
+ * carried. The list exists so that dropping one later has to be written down.
+ */
+const DELIBERATELY_UNCONJUGATED: Partial<Record<TenseId, string>> = {};
+
+/**
+ * The check that a coverage percentage structurally cannot make.
+ *
+ * `withSentenceSupport / taught` reported 134 of 134 (100%) while
+ * `presentSubjunctive` and `imperative` — both declared members of `TenseId`,
+ * both labelled in the UI, both handled in the exercise generator — had no
+ * paradigm anywhere in the course. They were absent from the numerator and the
+ * denominator alike, so the metric was true and told nobody anything. A
+ * percentage over the rows that exist answers "of what I built, how much is
+ * good?"; this answers "of what the type promised, how much exists?".
+ */
+function findUncarriedTenses(): Gap[] {
+  const declared = Object.keys(TENSE_LABELS) as TenseId[];
+  const paradigms = new Map<TenseId, number>();
+  const taught = new Map<TenseId, number>();
+  for (const verb of verbs) {
+    for (const tense of Object.keys(verb.tenses) as TenseId[]) {
+      paradigms.set(tense, (paradigms.get(tense) ?? 0) + 1);
+      if (getLessonThatIntroduces(`f.${verb.id}.${tense}`)) {
+        taught.set(tense, (taught.get(tense) ?? 0) + 1);
+      }
+    }
+  }
+
+  const gaps: Gap[] = [];
+  for (const tense of declared) {
+    const excuse = DELIBERATELY_UNCONJUGATED[tense];
+    const count = paradigms.get(tense) ?? 0;
+    if (count === 0) {
+      gaps.push({
+        severity: excuse ? 'info' : 'warn',
+        where: 'verbs',
+        message: excuse
+          ? `${tense} is declared but deliberately not conjugated: ${excuse}`
+          : `${tense} is a declared tense with zero paradigms. It is labelled in the UI and ` +
+            `handled by the generator, but no verb supplies it, so it can never be taught, ` +
+            `scheduled or reviewed. Add it to some verbs, or record why not in ` +
+            `DELIBERATELY_UNCONJUGATED.`,
+      });
+      continue;
+    }
+    if ((taught.get(tense) ?? 0) === 0 && !excuse) {
+      gaps.push({
+        severity: 'warn',
+        where: 'verbs',
+        message:
+          `${tense} has ${count} paradigm(s) but no lesson teaches any of them, so every one ` +
+          `is stranded: derived, never reached.`,
+      });
+    }
+  }
+
+  gaps.push({
+    severity: 'info',
+    where: 'verbs',
+    message:
+      'paradigms per declared tense: ' +
+      declared.map((tense) => `${tense}=${paradigms.get(tense) ?? 0}`).join(' '),
+  });
+  return gaps;
+}
+
 function findParadigmGaps(): Gap[] {
   const report = reportVerbCorpus((id) => !!getLessonThatIntroduces(id));
-  const gaps: Gap[] = [];
+  const gaps: Gap[] = [...findUncarriedTenses()];
 
   if (report.unsupported.length > 0) {
     gaps.push({

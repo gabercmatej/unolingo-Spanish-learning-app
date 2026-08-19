@@ -16,8 +16,9 @@ const SEEDS: VerbSeed[] = [
     irregularityNote: 'Completely irregular — one of the two "to be" verbs.',
     participle: 'sido',
     gerund: 'siendo',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     overrides: {
+      presentSubjunctive: { yo: 'sea', tu: 'seas', el: 'sea', nosotros: 'seamos', vosotros: 'seáis', ellos: 'sean' },
       present: { yo: 'soy', tu: 'eres', el: 'es', nosotros: 'somos', vosotros: 'sois', ellos: 'son' },
       preterite: {
         yo: 'fui',
@@ -51,8 +52,9 @@ const SEEDS: VerbSeed[] = [
     level: 'A0',
     irregular: true,
     irregularityNote: 'Irregular yo form and accents throughout the present.',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive'],
     overrides: {
+      presentSubjunctive: { yo: 'esté', tu: 'estés', el: 'esté', nosotros: 'estemos', vosotros: 'estéis', ellos: 'estén' },
       present: { yo: 'estoy', tu: 'estás', el: 'está', ellos: 'están' },
       preterite: {
         yo: 'estuve',
@@ -78,7 +80,7 @@ const SEEDS: VerbSeed[] = [
     level: 'A0',
     irregular: true,
     irregularityNote: 'e → ie stem change, plus an irregular yo form (tengo).',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'tendr', conditional: 'tendr' },
     overrides: {
       present: { yo: 'tengo', tu: 'tienes', el: 'tiene', ellos: 'tienen' },
@@ -113,8 +115,10 @@ const SEEDS: VerbSeed[] = [
     irregularityNote: 'Wildly irregular; shares its preterite with ser.',
     participle: 'ido',
     gerund: 'yendo',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     overrides: {
+      presentSubjunctive: { yo: 'vaya', tu: 'vayas', el: 'vaya', nosotros: 'vayamos', vosotros: 'vayáis', ellos: 'vayan' },
+      imperative: { nosotros: 'vamos' },
       present: { yo: 'voy', tu: 'vas', el: 'va', nosotros: 'vamos', vosotros: 'vais', ellos: 'van' },
       preterite: {
         yo: 'fui',
@@ -149,7 +153,7 @@ const SEEDS: VerbSeed[] = [
     irregular: true,
     irregularityNote: 'Irregular yo form, irregular preterite stem, participle hecho.',
     participle: 'hecho',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'har', conditional: 'har' },
     overrides: {
       present: { yo: 'hago' },
@@ -177,9 +181,10 @@ const SEEDS: VerbSeed[] = [
     level: 'A1',
     irregular: true,
     irregularityNote: 'e → ie in the present; irregular preterite stem quis-.',
-    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional', 'presentSubjunctive'],
     stems: { future: 'querr', conditional: 'querr' },
     overrides: {
+      presentSubjunctive: { nosotros: 'queramos', vosotros: 'queráis' },
       present: { yo: 'quiero', tu: 'quieres', el: 'quiere', ellos: 'quieren' },
       preterite: {
         yo: 'quise',
@@ -206,9 +211,10 @@ const SEEDS: VerbSeed[] = [
     irregular: true,
     irregularityNote: 'o → ue in the present; preterite stem pud-.',
     gerund: 'pudiendo',
-    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional', 'presentSubjunctive'],
     stems: { future: 'podr', conditional: 'podr' },
     overrides: {
+      presentSubjunctive: { nosotros: 'podamos', vosotros: 'podáis' },
       present: { yo: 'puedo', tu: 'puedes', el: 'puede', ellos: 'pueden' },
       preterite: {
         yo: 'pude',
@@ -227,9 +233,10 @@ const SEEDS: VerbSeed[] = [
     level: 'A2',
     irregular: true,
     irregularityNote: 'Irregular yo (sé) and preterite stem sup-.',
-    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'imperfect', 'future', 'conditional', 'presentSubjunctive'],
     stems: { future: 'sabr', conditional: 'sabr' },
     overrides: {
+      presentSubjunctive: { yo: 'sepa', tu: 'sepas', el: 'sepa', nosotros: 'sepamos', vosotros: 'sepáis', ellos: 'sepan' },
       present: { yo: 'sé' },
       preterite: {
         yo: 'supe',
@@ -280,7 +287,7 @@ const SEEDS: VerbSeed[] = [
     level: 'A2',
     irregular: true,
     irregularityNote: 'Irregular yo (salgo) and future stem saldr-.',
-    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'saldr', conditional: 'saldr' },
     overrides: { present: { yo: 'salgo' } },
     patterns: [
@@ -299,7 +306,7 @@ const SEEDS: VerbSeed[] = [
     irregular: true,
     irregularityNote: 'e → ie present, preterite stem vin-, future stem vendr-.',
     gerund: 'viniendo',
-    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'vendr', conditional: 'vendr' },
     overrides: {
       present: { yo: 'vengo', tu: 'vienes', el: 'viene', ellos: 'vienen' },
@@ -322,7 +329,7 @@ const SEEDS: VerbSeed[] = [
     irregularityNote: 'e → i present, preterite stem dij-, participle dicho.',
     participle: 'dicho',
     gerund: 'diciendo',
-    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'dir', conditional: 'dir' },
     overrides: {
       present: { yo: 'digo', tu: 'dices', el: 'dice', ellos: 'dicen' },
@@ -343,21 +350,21 @@ const SEEDS: VerbSeed[] = [
     infinitive: 'hablar',
     en: 'to speak',
     level: 'A0',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'presentSubjunctive', 'imperative'],
   },
   {
     id: 'comer',
     infinitive: 'comer',
     en: 'to eat / to have lunch',
     level: 'A0',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'presentSubjunctive', 'imperative'],
   },
   {
     id: 'vivir',
     infinitive: 'vivir',
     en: 'to live',
     level: 'A0',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'presentSubjunctive', 'imperative'],
   },
   { id: 'trabajar', infinitive: 'trabajar', en: 'to work', level: 'A1', tenses: ['present', 'preterite'] },
   { id: 'estudiar', infinitive: 'estudiar', en: 'to study', level: 'A1', tenses: ['present', 'preterite'] },
@@ -376,7 +383,7 @@ const SEEDS: VerbSeed[] = [
       },
     ],
   },
-  { id: 'escuchar', infinitive: 'escuchar', en: 'to listen to', level: 'A1', tenses: ['present'] },
+  { id: 'escuchar', infinitive: 'escuchar', en: 'to listen to', level: 'A1', tenses: ['present', 'imperative'] },
   { id: 'viajar', infinitive: 'viajar', en: 'to travel', level: 'A1', tenses: ['present', 'preterite'] },
   { id: 'cocinar', infinitive: 'cocinar', en: 'to cook', level: 'A1', tenses: ['present'] },
   { id: 'comprar', infinitive: 'comprar', en: 'to buy', level: 'A1', tenses: ['present', 'preterite'] },
@@ -559,8 +566,9 @@ const SEEDS: VerbSeed[] = [
     level: 'A2',
     irregular: true,
     irregularityNote: 'Irregular yo form (doy) and an -er/-ir style preterite with no accents.',
-    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect'],
+    tenses: ['present', 'preterite', 'imperfect', 'presentPerfect', 'presentSubjunctive'],
     overrides: {
+      presentSubjunctive: { yo: 'dé', tu: 'des', el: 'dé', nosotros: 'demos', vosotros: 'deis', ellos: 'den' },
       present: { yo: 'doy', vosotros: 'dais' },
       preterite: {
         yo: 'di',
@@ -592,7 +600,7 @@ const SEEDS: VerbSeed[] = [
     irregular: true,
     irregularityNote: 'Irregular yo form (pongo), pus- preterite stem, participle puesto.',
     participle: 'puesto',
-    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional'],
+    tenses: ['present', 'preterite', 'presentPerfect', 'future', 'conditional', 'presentSubjunctive', 'imperative'],
     stems: { future: 'pondr', conditional: 'pondr' },
     overrides: {
       present: { yo: 'pongo' },

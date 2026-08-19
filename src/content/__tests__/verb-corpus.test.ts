@@ -162,3 +162,59 @@ describe('verb corpus: multi-word forms', () => {
     expect(reflexive.sentenceIds.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * The imperative shares its surface with two other paradigms, and unlike every
+ * other collision in this file it cannot be resolved by corroboration: "Ella
+ * habla despacio" and "¡Habla más despacio!" are both tagged `v.hablar`, both
+ * genuinely about hablar, and are different paradigms. The separator is
+ * syntactic — an opening ¡ with the verb first — and it has to be applied in
+ * both directions or the same sentence feeds two paradigms and inflates both.
+ */
+describe('verb corpus: commands are separated by position, not by tag', () => {
+  it('credits an exclamation-initial form to the imperative', () => {
+    const commands = sentencesFor('hablar', 'imperative');
+    expect(commands).toContain('¡Habla más despacio, por favor!');
+  });
+
+  it('does not also credit that sentence to the present indicative', () => {
+    // Same six letters, same verb, different job. Before the positional rule
+    // this sentence counted for both, and both numbers looked healthy.
+    expect(sentencesFor('hablar', 'present')).not.toContain('¡Habla más despacio, por favor!');
+  });
+
+  it('keeps ordinary statements out of the imperative', () => {
+    const commands = sentencesFor('hablar', 'imperative');
+    for (const text of commands) expect(text.trimStart().startsWith('¡')).toBe(true);
+  });
+
+  it('does not let one verb’s command feed another verb’s indicative', () => {
+    /**
+     * `ve` is the tú imperative of *ir* and the third-person present of *ver*.
+     * A rule scoped to the verb that owns the imperative would have let
+     * f.ver.present harvest every "¡Ve...!" in the corpus, which is why the
+     * exclusion is global.
+     */
+    const verPresent = sentencesFor('ver', 'present');
+    expect(verPresent).not.toContain('¡Ve al médico si te duele tanto!');
+    expect(sentencesFor('ir', 'imperative')).toContain('¡Ve al médico si te duele tanto!');
+  });
+
+  it('does not credit the discourse marker "venga" as a command without corroboration', () => {
+    // "¡Venga ya!" is disbelief, not an instruction to come. It is tagged
+    // p.venga-ya rather than v.venir, and the ambiguity guard requires the
+    // verb's own vocabulary concept before it counts.
+    const commands = sentencesFor('venir', 'imperative');
+    expect(commands).not.toContain('¡Venga ya! Eso no se lo cree nadie.');
+    expect(commands).toContain('¡Venga conmigo, le enseño la sala!');
+  });
+
+  it('never gives an imperative paradigm a yo form to look for', () => {
+    for (const verb of verbs) {
+      const imperative = verb.tenses.imperative;
+      if (!imperative) continue;
+      expect(imperative.forms.yo).toBeUndefined();
+      expect(usageOf(verb.id, 'imperative').byPerson.yo).toEqual([]);
+    }
+  });
+});

@@ -137,17 +137,30 @@ describe('content integrity', () => {
 });
 
 describe('verb conjugation', () => {
-  it('produces a form for every person in every listed tense', () => {
+  /**
+   * Every gap is deliberate and named. Asserting "every person has a form"
+   * stopped being true when the imperative arrived — but relaxing it to "some
+   * persons may be missing" would let a genuine hole through anywhere. So the
+   * assertion is the exact list of holes: the imperative has no first-person
+   * singular, and nothing else is allowed to be missing anything.
+   */
+  it('produces a form for every person except the imperative yo', () => {
+    const gaps: string[] = [];
     for (const verb of verbs) {
       for (const [tense, conjugation] of Object.entries(verb.tenses)) {
         for (const person of PERSONS) {
           const form = conjugation.forms[person];
-          expect(typeof form).toBe('string');
-          expect(form.length).toBeGreaterThan(0);
+          if (typeof form !== 'string' || form.length === 0) {
+            gaps.push(`${verb.id}.${tense}.${person}`);
+          }
         }
         expect(verbFormConceptId(verb.id, tense)).toContain(verb.id);
       }
     }
+    const expected = verbs
+      .filter((verb) => verb.tenses.imperative)
+      .map((verb) => `${verb.id}.imperative.yo`);
+    expect(gaps.sort()).toEqual(expected.sort());
   });
 
   it('conjugates regular verbs correctly', () => {

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { LevelHero, RankJourney } from '@/components/profile/level-card';
@@ -19,6 +19,7 @@ import { SkeletonRows } from '@/components/ui/skeleton';
 import { Text } from '@/components/ui/text';
 import { Toggle } from '@/components/ui/toggle';
 import { Fonts, Radius, Spacing, Type } from '@/constants/theme';
+import { hasReminderPermission, requestReminderPermission } from '@/lib/notifications';
 import { STATE_VERSION, useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { achievements, achievementsByGroup, type AchievementTier } from '@/learning/achievements';
@@ -60,6 +61,12 @@ export default function ProfileScreen() {
   const [name, setName] = useState(settings.name);
 
   const [showAllBadges, setShowAllBadges] = useState(false);
+  /**
+   * "Off" and "the OS said no" look identical on a switch, and they need
+   * different words: one is a preference, the other is a thing the learner has
+   * to go and fix in iOS Settings.
+   */
+  const [reminderDenied, setReminderDenied] = useState(false);
   const badges = useMemo(() => achievements(learner), [learner]);
   const groups = useMemo(() => achievementsByGroup(learner), [learner]);
   const unlocked = badges.filter((badge) => badge.unlocked);
@@ -90,6 +97,17 @@ export default function ProfileScreen() {
   const mastered = useMemo(() => wordsMastered(learner), [learner]);
   const proficiency = useMemo(() => estimateProficiency(learner), [learner]);
   const courseLevel = useMemo(() => curriculumLevel(learner), [learner]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !settings.reminders) return;
+    let live = true;
+    void hasReminderPermission().then((granted) => {
+      if (live) setReminderDenied(!granted);
+    });
+    return () => {
+      live = false;
+    };
+  }, [settings.reminders]);
 
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [backupNote, setBackupNote] = useState<string | null>(null);
@@ -410,6 +428,34 @@ export default function ProfileScreen() {
               }
             }}
           />
+          {Platform.OS !== 'web' ? (
+            <>
+              <Divider />
+              <SettingSwitch
+                label="Daily reminder"
+                caption={
+                  reminderDenied
+                    ? 'Blocked in iOS Settings — turn notifications on for Unolingo there'
+                    : `A nudge at ${String(settings.reminderHour).padStart(2, '0')}:00, only on days you haven’t studied`
+                }
+                value={settings.reminders && !reminderDenied}
+                onChange={(reminders) => {
+                  updateSettings({ reminders });
+                  /**
+                   * Ask at the moment the learner opts in, never on launch. The
+                   * system prompt appears once in the life of the install, so
+                   * spending it on a cold start — before anyone has reason to
+                   * want a reminder — trades a permission for nothing.
+                   */
+                  if (reminders) {
+                    void requestReminderPermission().then((granted) =>
+                      setReminderDenied(!granted),
+                    );
+                  }
+                }}
+              />
+            </>
+          ) : null}
         </Card>
       </Section>
 

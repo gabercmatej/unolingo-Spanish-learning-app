@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS: Settings = {
   slowAudioDefault: false,
   showTranslations: true,
   dailyGoal: 10,
+  reminders: true,
+  reminderHour: 18,
 };
 
 /**

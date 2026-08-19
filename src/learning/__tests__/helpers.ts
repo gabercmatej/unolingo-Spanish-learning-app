@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS_FOR_TEST: Settings = {
   slowAudioDefault: false,
   showTranslations: true,
   dailyGoal: 10,
+  reminders: false,
+  reminderHour: 18,
 };
 
 export function makeLearner(overrides: Partial<LearnerState> = {}): LearnerState {

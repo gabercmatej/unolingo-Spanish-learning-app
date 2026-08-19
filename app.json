@@ -36,11 +36,23 @@
         }
       ],
       "expo-sharing",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Unolingo uses your photo library only to set your profile picture. The image never leaves your device."
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.gabercmatej.unolingo",
+      "buildNumber": "1",
+      "supportsTablet": true
     }
   }
 }

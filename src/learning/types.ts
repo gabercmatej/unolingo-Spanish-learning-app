@@ -229,6 +229,19 @@ export interface Settings {
    * during dogfooding, not a feature of the course.
    */
   developerMode?: boolean;
+  /**
+   * A local reminder at `reminderHour` on any day the learner has not studied.
+   *
+   * Non-optional but defaulted, the `sounds` shape — hydration merges defaults
+   * *under* the saved object, so a record written before this existed comes
+   * back with reminders on rather than undefined, and no `STATE_VERSION` bump
+   * is needed. Scheduling is best-effort: the OS permission is asked for once
+   * and a refusal leaves the flag on but the queue empty, which is why the
+   * settings screen distinguishes "off" from "denied".
+   */
+  reminders: boolean;
+  /** Local hour for the daily nudge, 0–23. Six in the evening by default. */
+  reminderHour: number;
 }
 
 export interface PlacementResult {

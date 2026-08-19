@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { SpeakIcon } from '@/components/exercises/audio-button';
+import { personsWithForms } from '@/content/verb-utils';
 import { ExampleRow } from '@/components/learn/grammar-blocks';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,7 +15,7 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { getVerb, verbFormConceptId } from '@/content';
-import { PERSONS, PERSON_LABELS, TENSE_LABELS, type Conjugation, type TenseId } from '@/content/types';
+import { PERSON_LABELS, TENSE_LABELS, type Conjugation, type TenseId } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { hasMetVerbTense } from '@/learning/mastery';
@@ -120,14 +121,15 @@ export default function VerbScreen() {
                   <ProgressBar value={value} height={4} tone={theme.grammar} />
                 </View>
               ) : null}
-              {PERSONS.map((person, index) => {
+              {personsWithForms(conjugation).map((person, index, shown) => {
                 const irregular = conjugation.irregular?.includes(person);
+                const form = conjugation.forms[person]!;
                 return (
                   <View
                     key={person}
                     style={[
                       styles.formRow,
-                      index < PERSONS.length - 1 && {
+                      index < shown.length - 1 && {
                         borderBottomWidth: StyleSheet.hairlineWidth,
                         borderBottomColor: theme.border,
                       },
@@ -139,12 +141,12 @@ export default function VerbScreen() {
                       variant="bodyBold"
                       tone={irregular ? theme.warning : theme.text}
                       style={styles.flex}>
-                      {conjugation.forms[person]}
+                      {form}
                     </Text>
                     {irregular ? (
                       <View style={[styles.irregularDot, { backgroundColor: theme.warning }]} />
                     ) : null}
-                    <SpeakIcon text={conjugation.forms[person]} />
+                    <SpeakIcon text={form} />
                   </View>
                 );
               })}

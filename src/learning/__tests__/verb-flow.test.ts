@@ -141,3 +141,89 @@ describe('verb conjugation pathway', () => {
     }
   });
 });
+
+/**
+ * The two moods that were declared and never carried.
+ *
+ * These walk the same chain as the test above, but they are the reason the
+ * chain is worth walking twice: the conjugation engine, the corpus index, the
+ * generator and the curriculum all had to change together, and any one of them
+ * reverting alone leaves a subjunctive that is taught but unpractisable, or an
+ * imperative that asks the learner to produce a form Spanish does not have.
+ */
+describe('subjunctive and imperative pathways', () => {
+  const answerOf = (exercise: { form: string; answerIndex?: number; accepted?: string[] }) =>
+    exercise.form === 'choice'
+      ? String(exercise.answerIndex)
+      : exercise.form === 'typed'
+        ? exercise.accepted![0]
+        : null;
+
+  it('carries a subjunctive paradigm from lesson to graded exercise', () => {
+    const conceptId = verbFormConceptId('tener', 'presentSubjunctive');
+    expect(paradigmUsage(conceptId)!.sentenceIds.length).toBeGreaterThan(1);
+
+    const lessonId = getLessonThatIntroduces(conceptId);
+    expect(lessonId).toBeTruthy();
+
+    let learner = makeLearner();
+    expect(hasMetVerbTense('tener', 'presentSubjunctive', learner)).toBe(false);
+    learner = introduce(learner, lessonId!);
+    expect(metVerbTenses('tener', learner)).toContain('presentSubjunctive');
+
+    const plan = buildLessonSession(lessonId!, { learner, seed: 7 });
+    const exercise = plan!.exercises.find((e) => e.conceptIds.includes(conceptId));
+    expect(exercise).toBeDefined();
+    const answer = answerOf(exercise!);
+    expect(checkExercise(exercise!, answer!, DEFAULT_SETTINGS_FOR_TEST).grade).toBe('correct');
+  });
+
+  it('never asks for a first-person singular imperative', () => {
+    /**
+     * The imperative has no `yo`. The generator used to fall back to
+     * `pick([...PERSONS]) ?? 'yo'`, which for this paradigm would have asked the
+     * learner to produce a form that does not exist — and, because `forms` was
+     * typed as total, would have rendered `undefined` rather than failing.
+     */
+    const imperatives = verbFormConcepts.filter((c) => c.id.endsWith('.imperative'));
+    expect(imperatives.length).toBeGreaterThan(0);
+
+    for (const concept of imperatives) {
+      const lessonId = getLessonThatIntroduces(concept.id);
+      expect(lessonId).toBeTruthy();
+      const learner = introduce(makeLearner(), lessonId!);
+      for (let seed = 0; seed < 12; seed += 1) {
+        const plan = buildLessonSession(lessonId!, { learner, seed });
+        for (const exercise of plan?.exercises ?? []) {
+          if (!exercise.conceptIds.includes(concept.id)) continue;
+          // Only what the exercise *asks*. A verb's irregularity note may
+          // mention its yo form ("irregular yo form (tengo)") without the
+          // exercise ever requesting one.
+          const asked = exercise as { instruction?: string; prompt?: string };
+          const text = `${asked.instruction ?? ''} ${asked.prompt ?? ''}`;
+          expect(text).not.toMatch(/\byo\b/);
+          expect(text).not.toContain('undefined');
+        }
+      }
+    }
+  });
+
+  it('teaches every imperative and subjunctive paradigm it derives', () => {
+    // A paradigm no lesson introduces never enters a learner's state, so it is
+    // derived, invisible and dead — the exact shape of the original defect.
+    const stranded = verbFormConcepts
+      .filter((c) => c.id.endsWith('.imperative') || c.id.endsWith('.presentSubjunctive'))
+      .filter((c) => !getLessonThatIntroduces(c.id))
+      .map((c) => c.id);
+    expect(stranded).toEqual([]);
+  });
+
+  it('supports every imperative with five persons of corpus evidence', () => {
+    // Five, not six: the missing one is `yo`, and it is missing on purpose.
+    const thin = verbFormConcepts
+      .filter((c) => c.id.endsWith('.imperative'))
+      .map((c) => ({ id: c.id, covered: paradigmUsage(c.id)?.personsCovered ?? 0 }))
+      .filter((row) => row.covered < 5);
+    expect(thin).toEqual([]);
+  });
+});

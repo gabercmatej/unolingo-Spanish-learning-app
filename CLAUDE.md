@@ -96,7 +96,8 @@ that are neither (`use-theme`, `use-now`).
 
 **`src/lib/` — platform seams, and nothing else.**
 `speech.ts` (TTS), `sound.ts` (UI sound cues), `storage.ts` (AsyncStorage), `snapshots.ts` (the
-snapshot ring), `backup-file.ts` (file export/import), `feedback.ts` (haptics), `navigation.ts`,
+snapshot ring), `backup-file.ts` (file export/import), `feedback.ts` (haptics),
+`notifications.ts` (local reminders), `navigation.ts`,
 `date.ts`, `environment.ts` (which build this is). Each one exists so exactly one file imports a
 platform API — swapping AsyncStorage for MMKV, or synthesis for recorded audio, is a change
 to one file. **Policy never lives here.** When `snapshots.ts` first held the "three rolling
@@ -210,6 +211,15 @@ is exactly what these tests exist to catch.
     *deliberately not equal* — `él` and `yo` dominate real Spanish — but **`vosotros`** is
     the one to watch, because it is what makes this course Peninsular and it was the least
     represented form in the corpus.
+  - **The imperative is separated by position, not by tag.** "Ella habla despacio" and
+    "¡Habla más despacio!" are the same six letters, the same verb, the same `v.hablar`
+    tag, and different paradigms — corroboration cannot tell them apart. So a command in
+    this corpus is written the way Spanish writes one: opening `¡`, verb first, and the
+    index applies that **symmetrically** — the imperative counts only sentence-initial
+    forms in `¡…!`, and every other paradigm skips them. Without the second half one
+    sentence feeds two paradigms and both numbers are wrong upwards. The rule is global
+    rather than per-verb because the collision is: `ve` is *ir*'s imperative and *ver*'s
+    third-person present.
   - **Surface forms collide, and a naive match inflates exposure silently.** ser and ir
     share their whole preterite; `trabajo`, `vino`, `paga` and `como` are also nouns or
     conjunctions; `era` is both `yo` and `él`. The index guards all three — a preceding
@@ -219,6 +229,29 @@ is exactly what these tests exist to catch.
     locks each case with the real example that exposed it. Extending the guards means adding
     a case there first: the failure mode is a number quietly being too high, which nothing
     else notices.
+- **A declared tense with no paradigm is invisible to a coverage percentage.** `TenseId`
+  declares eight tenses. For a long time `presentSubjunctive` and `imperative` had no
+  paradigm on any verb, so they were absent from the numerator *and* the denominator, and
+  the audit reported "134 of 134 paradigms taught (100%)" — true, and about the wrong set.
+  A percentage over the rows that exist answers "of what I built, how much is good?"; the
+  question is "of what the type promised, how much exists?". `audit:content` now walks
+  `TENSE_LABELS`' keys and **warns on any declared tense with zero paradigms**, with
+  `DELIBERATELY_UNCONJUGATED` as the written-down escape hatch. It is empty, and that is
+  the point. `tense-coverage.test.ts` holds both halves.
+- **`buildVerb` throws rather than falling through.** Its `default:` branch used to
+  generate *present-indicative* endings for any tense it did not recognise, so the first
+  verb to declare a subjunctive would have been handed "hablo, hablas, habla" and the
+  course would have taught the indicative under a subjunctive label. A tense with no
+  builder, a subjunctive whose stem cannot be derived, and a reflexive imperative all
+  raise now. The subjunctive stem is **the present-tense yo form minus its -o** — that is
+  the actual rule, and it is why tengo → tenga and conozco → conozca need no hand-written
+  forms. Where the yo form does not end in -o (soy, estoy, voy, sé, doy) the precondition
+  failing *is* the signal that an override is required.
+- **The imperative has no `yo`, and `Conjugation.forms` is `Partial` because of it.**
+  Typing it as total made that gap a `string` that was really `undefined`: the one
+  paradigm with a genuine hole looked complete to the compiler and broke at the call
+  site. Iterate with `personsWithForms`. The generator's old `?? 'yo'` fallback asked
+  learners "venir — which form goes with 'yo'?" for the imperative.
 - **A lesson cannot teach more concepts than its session can generate.** The session target
   is `clamp(estMinutes × 1.8, 10, 20)`, and a concept that is never generated never enters
   the learner's state, is never scheduled, and never reaches the Library — so `teaches`
@@ -437,6 +470,25 @@ music is the rudest thing a sound effect can do.
 `settings.sounds` is non-optional in the type but defaulted in `DEFAULT_SETTINGS`, which is the
 `haptics` shape and **needs no `STATE_VERSION` bump**.
 
+### The daily reminder
+
+`settings.reminders` + `settings.reminderHour` (18 by default), both non-optional but
+defaulted, so **no `STATE_VERSION` bump** — the `sounds` shape.
+
+The rule is "remind me at six if I haven't studied yet today", and the *yet* is the hard
+part: a repeating daily trigger cannot ask a question at fire time, so a learner who
+studied at ten in the morning still gets told off at six. `learning/reminders.ts` solves it
+by not treating the reminder as one recurring thing at all — it emits a **finite queue of
+individual days**, recomputed whenever the app has new information (launch, backgrounding,
+and the moment `lastStudyDate` moves). `lib/notifications.ts` cancels and re-arms, which is
+what makes it idempotent; without the cancel a fortnight of duplicates piles up in a week.
+
+The horizon is deliberately 14 days. An app nobody opens should eventually stop talking.
+
+Permission is asked **at the moment the learner opts in**, never on launch — the system
+prompt appears once per install, and spending it on a cold start trades a permission for
+nothing. "Off" and "denied" are different states and the settings screen says which.
+
 ### Hover is web-only, and it is not press at half strength
 
 `PressScale` moves the two on different axes: hover **raises**, press **shrinks**. Pass
@@ -525,7 +577,9 @@ those tests cross-check content against logic.
 | `migrate.test.ts` | what a saved record must prove before it is opened, and that a refusal never returns a blank learner for the debounced save to commit |
 | `explain.test.ts` | that the developer diagnostics report the scheduler's own signals, and carry nothing personal |
 | `verb-corpus.test.ts` | the ambiguity guards — cross-verb syncretism, homographs, person syncretism, multi-word forms |
-| `verb-flow.test.ts` | the whole conjugation pathway, end to end |
+| `verb-flow.test.ts` | the whole conjugation pathway, end to end, including the subjunctive and imperative moods |
+| `tense-coverage.test.ts` | that every declared `TenseId` is carried, and that an unbuildable tense throws instead of fabricating forms |
+| `reminders.test.ts` | when the daily nudge is due and when it must stay quiet |
 | `journey.test.ts` | the whole learner pathway, end to end — placement through losing the phone and restoring onto a new one |
 | `audit.test.ts` | **not** in `npm test` — the definition-of-done gate for content |
 
@@ -544,8 +598,10 @@ subsystem stayed dead through 119 passing tests because every link was tested in
 - **`vosotros` (79) and `tú` (106) remain the thinnest persons against `él` (532).** Partly
   legitimate: third-person narration dominates any corpus. The target is not parity — it is that
   group dialogue keeps appearing, since that is where those forms live.
-- **`presentPerfect` (66) and `future` (47) are now the thinnest tenses**; `conditional` went from
-  16 to 104 when the future/conditional stems were paired.
+- **`future` (47), `imperative` (60) and `presentPerfect` (67) are the thinnest tenses.**
+  `presentSubjunctive` arrived at 217 — second only to the present — because the mood was
+  added to sixteen verbs with a corpus behind it rather than to one with a table.
+  `conditional` went from 16 to 104 when the future/conditional stems were paired.
 - **Nine paradigms cover only one person each**, which the audit reports without warning on. That
   is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no

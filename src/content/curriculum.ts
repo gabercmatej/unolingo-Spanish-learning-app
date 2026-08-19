@@ -1419,6 +1419,42 @@ export const curriculum: Stage[] = [
             story: 'story.aviso-metro',
             sentences: ['s.a1', 's.a5', 's.a8', 's.e24'],
           },
+          {
+            id: 'l.commands',
+            title: 'Telling people what to do',
+            goal: 'Give, soften and understand a command in all four Spanish "you"s',
+            kind: 'grammar',
+            level: 'A2',
+            estMinutes: 12,
+            requires: ['l.directions'],
+            teaches: [
+              // Verb paradigms this lesson makes practisable. The imperative was
+              // declared by the type system and carried by nothing for a long
+              // time; these are the twelve verbs a learner actually commands with.
+              'f.hablar.imperative',
+              'f.comer.imperative',
+              'f.vivir.imperative',
+              'f.tener.imperative',
+              'f.hacer.imperative',
+              'f.decir.imperative',
+              'f.venir.imperative',
+              'f.salir.imperative',
+              'f.poner.imperative',
+              'f.ser.imperative',
+              'f.ir.imperative',
+              'f.escuchar.imperative',
+            ],
+            grammar: ['g.commands'],
+            sentences: [
+              's.j1', 's.j2', 's.j3', 's.j4', 's.j5', 's.j6', 's.j7', 's.j8', 's.j9',
+              's.j10', 's.j11', 's.j12', 's.j13', 's.j15', 's.j16', 's.j17', 's.j18',
+              's.j19', 's.j20', 's.j21', 's.j22', 's.j23', 's.j25', 's.j26', 's.j27',
+              's.j28', 's.j29', 's.j30', 's.j31', 's.j32', 's.j33', 's.j34', 's.j35',
+              's.j37', 's.j38', 's.j39', 's.j40', 's.j41', 's.j42', 's.j43', 's.j45',
+              's.j46', 's.j47', 's.j49', 's.j50', 's.j51', 's.j52', 's.j53', 's.j54',
+              's.j55', 's.j58', 's.j60',
+            ],
+          },
           ],
       },
       {
@@ -1437,7 +1473,7 @@ export const curriculum: Stage[] = [
             kind: 'core',
             level: 'A2',
             estMinutes: 9,
-            requires: ['l.directions'],
+            requires: ['l.commands'],
             teaches: [
               'v.metro',
               'v.autobus',
@@ -2051,9 +2087,30 @@ export const curriculum: Stage[] = [
             level: 'B1',
             estMinutes: 11,
             requires: ['l.opinions'],
-            teaches: [],
+            teaches: [
+              // Verb paradigms this lesson makes practisable. The subjunctive is
+              // a mood before it is a form: teaching the trigger without the
+              // conjugations leaves the learner unable to answer their own
+              // "quiero que…".
+              'f.ser.presentSubjunctive',
+              'f.estar.presentSubjunctive',
+              'f.tener.presentSubjunctive',
+              'f.ir.presentSubjunctive',
+              'f.hacer.presentSubjunctive',
+              'f.querer.presentSubjunctive',
+              'f.poder.presentSubjunctive',
+              'f.saber.presentSubjunctive',
+              'f.hablar.presentSubjunctive',
+              'f.comer.presentSubjunctive',
+            ],
             grammar: ['g.subjunctive-intro'],
-            sentences: ['s.s34', 's.s35', 's.b53', 's.b54', 's.b55', 's.b56', 's.b57', 's.b58'],
+            sentences: [
+              's.s34', 's.s35', 's.b53', 's.b54', 's.b55', 's.b56', 's.b57', 's.b58',
+              's.j61', 's.j62', 's.j64', 's.j65', 's.j69', 's.j70', 's.j71', 's.j72',
+              's.j73', 's.j74', 's.j108', 's.j109', 's.j110', 's.j111', 's.j112',
+              's.j113', 's.j116', 's.j118', 's.j123', 's.j124', 's.j125', 's.j126',
+              's.j127', 's.j128', 's.j134', 's.j137', 's.j145',
+            ],
           },
           {
             id: 'l.piso-conversation',
@@ -2509,9 +2566,23 @@ export const curriculum: Stage[] = [
               'p.estoy-de-acuerdo-en-parte',
               'p.no-lo-veo-asi',
               'p.lo-que-pasa-es',
+              // The paradigms the B1 lesson did not reach — introduced here
+              // because disagreeing is where they actually get used.
+              'f.venir.presentSubjunctive',
+              'f.decir.presentSubjunctive',
+              'f.vivir.presentSubjunctive',
+              'f.salir.presentSubjunctive',
+              'f.dar.presentSubjunctive',
+              'f.poner.presentSubjunctive',
             ],
             grammar: ['g.subjunctive-opinion'],
-            sentences: ['s.c1', 's.c2', 's.c3', 's.c4', 's.c5', 's.c6', 's.c105', 's.c106', 's.c107', 's.c108', 's.c109', 's.c110'],
+            sentences: [
+              's.c1', 's.c2', 's.c3', 's.c4', 's.c5', 's.c6', 's.c105', 's.c106',
+              's.c107', 's.c108', 's.c109', 's.c110',
+              's.j77', 's.j78', 's.j79', 's.j82', 's.j84', 's.j85', 's.j86', 's.j87',
+              's.j92', 's.j93', 's.j94', 's.j98', 's.j99', 's.j100', 's.j101',
+              's.j106', 's.j107', 's.j143',
+            ],
           },
           {
             id: 'l.debate-conversation',

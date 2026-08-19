@@ -97,14 +97,27 @@ for (const concept of vocabConcepts) {
   }
 }
 
-/** Which verbs produce each single-token form, to catch cross-verb collisions. */
+/**
+ * Which verbs produce each single-token form, to catch cross-verb collisions.
+ *
+ * The imperative is deliberately excluded. Its forms are borrowed wholesale
+ * from other paradigms — tú from the third-person present, usted/nosotros/
+ * ustedes from the subjunctive — so folding them in here would invent
+ * collisions that do not exist in the language and quietly demand corroboration
+ * from paradigms that were previously unambiguous: adding `ven` (venir,
+ * imperative) would have made every existing `ven` (ver, present, ellos) need a
+ * tag it never needed. The imperative is separated by *position* instead, below.
+ */
 const formOwners = new Map<string, Set<string>>();
 for (const verb of verbs) {
   for (const tense of Object.keys(verb.tenses) as TenseId[]) {
+    if (tense === 'imperative') continue;
     const conjugation = verb.tenses[tense];
     if (!conjugation) continue;
     for (const person of PERSONS) {
-      const parts = conjugation.forms[person].split(/\s+/);
+      const raw = conjugation.forms[person];
+      if (!raw) continue;
+      const parts = raw.split(/\s+/);
       if (parts.length > 1) continue;
       const form = bare(parts[0]);
       const owners = formOwners.get(form) ?? new Set<string>();
@@ -113,6 +126,33 @@ for (const verb of verbs) {
     }
   }
 }
+
+/**
+ * The imperative shares its surface with two other paradigms and can only be
+ * told apart by syntax: "Ella habla despacio" and "¡Habla más despacio!" are
+ * the same six letters doing different jobs. Corroboration cannot separate them
+ * — both sentences are tagged `v.hablar` — so the signal has to be positional.
+ *
+ * A command in this corpus is written the way Spanish writes one: opening `¡`,
+ * verb first. That gives a rule with no false positives in either direction,
+ * and it is applied *symmetrically* — the imperative only counts sentences that
+ * look like commands, and every other paradigm skips them when the surface is
+ * one the verb's own imperative also produces. Without the second half the
+ * evidence would be counted twice, once per paradigm, and both numbers would be
+ * wrong in the direction that looks like success.
+ */
+const isCommandSentence = new Map<string, boolean>();
+for (const sentence of sentences) {
+  isCommandSentence.set(sentence.id, sentence.es.trimStart().startsWith('¡'));
+}
+
+/**
+ * The rule is global rather than per-verb, because the collision is too. `ve`
+ * is the imperative of *ir* and the third-person present of *ver*; scoping the
+ * exclusion to the verb that owns the imperative would have let `f.ver.present`
+ * quietly harvest every "¡Ve al médico!" in the corpus. So: the first word of
+ * an exclamation is a command, and only an imperative paradigm may claim it.
+ */
 
 /**
  * Forms that collide with a common function word rather than with a noun or
@@ -175,6 +215,8 @@ for (const verb of verbs) {
 
     for (const person of PERSONS) {
       const form = conjugation.forms[person];
+      // The imperative has no `yo`; a paradigm with a genuine gap is not a bug.
+      if (!form) continue;
       const needle = tokens(form);
       const ambiguous = isAmbiguous(bare(form), verb.id);
       const corroborator = vocabForVerb.get(verb.id);
@@ -183,6 +225,13 @@ for (const verb of verbs) {
         const haystack = sentenceTokens.get(sentence.id)!;
         const at = sequenceIndex(haystack, needle);
         if (at === -1) continue;
+
+        const command = isCommandSentence.get(sentence.id) === true && at === 0;
+
+        // The imperative counts commands and nothing else, and nothing else
+        // counts commands — so one sentence never feeds two paradigms.
+        if (tense === 'imperative' && !command) continue;
+        if (tense !== 'imperative' && command) continue;
 
         // "del trabajo", "un vino" — the token is a noun here, not a verb.
         if (at > 0 && NOUN_MARKERS.has(haystack[at - 1])) continue;
@@ -290,7 +339,9 @@ export function reportVerbCorpus(isTaught: (conceptId: string) => boolean): Verb
     const shareCount = new Map<string, number>();
     if (forms) {
       for (const person of PERSONS) {
-        const key = bare(forms[person]);
+        const raw = forms[person];
+        if (!raw) continue;
+        const key = bare(raw);
         shareCount.set(key, (shareCount.get(key) ?? 0) + 1);
       }
     }
@@ -299,7 +350,8 @@ export function reportVerbCorpus(isTaught: (conceptId: string) => boolean): Verb
     for (const person of PERSONS) {
       const hits = usage.byPerson[person].length;
       exposureByTense[tense] = (exposureByTense[tense] ?? 0) + hits;
-      const key = forms ? bare(forms[person]) : person;
+      const own = forms?.[person];
+      const key = own ? bare(own) : person;
       if ((shareCount.get(key) ?? 1) > 1) {
         // Credit the shared surface once, not once per person wearing it.
         if (!countedShared.has(key)) {

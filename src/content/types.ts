@@ -247,7 +247,13 @@ export const TENSE_LABELS: Record<TenseId, string> = {
 };
 
 export interface Conjugation {
-  forms: Record<Person, string>;
+  /**
+   * Partial on purpose. The imperative has no first-person singular, and typing
+   * it as total meant `forms.yo` was a `string` that was actually `undefined` —
+   * so the one paradigm with a genuine gap looked complete to the compiler and
+   * blew up at the call site instead. Use `personsWithForms` to iterate.
+   */
+  forms: Partial<Record<Person, string>>;
   /** Persons that deviate from the regular pattern — highlighted in the UI. */
   irregular?: Person[];
 }

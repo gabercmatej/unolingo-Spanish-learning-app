@@ -20,6 +20,7 @@ import { everydaySentences } from '@/content/sentences/everyday';
 import { foundationsSentences } from '@/content/sentences/foundations';
 import { routineSentences } from '@/content/sentences/routine';
 import { socialSentences } from '@/content/sentences/social';
+import { subjunctiveImperativeSentences } from '@/content/sentences/subjunctive-imperative';
 import { a1CoreVocab } from '@/content/vocab/a1-core';
 import { a2CoreVocab } from '@/content/vocab/a2-core';
 import { b1CoreVocab } from '@/content/vocab/b1-core';
@@ -118,6 +119,7 @@ export const sentences: Sentence[] = [
   ...routineSentences,
   ...socialSentences,
   ...aroundSpainSentences,
+  ...subjunctiveImperativeSentences,
 ];
 
 export { conversations, cultureNotes, curriculum, stories, verbs };

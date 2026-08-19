@@ -18,10 +18,10 @@ import {
   sentencesForForm,
   supportedPersons,
 } from '@/content/verb-corpus';
+import { personsWithForms } from '@/content/verb-utils';
 import {
   CEFR_LEVELS,
   PERSON_LABELS,
-  PERSONS,
   type CefrLevel,
   type Sentence,
   type VocabConcept,
@@ -825,9 +825,17 @@ function buildVerbForm(
    */
   const supported = supportedPersons(conceptId);
   const preferContext = supported.length > 0 && ctx.rng() > 0.25;
+  /**
+   * Only persons this paradigm actually has. The imperative has no first-person
+   * singular, so a blind `?? 'yo'` fallback would ask the learner to produce a
+   * form that does not exist in the language.
+   */
+  const available = personsWithForms(conjugation);
+  if (available.length === 0) return null;
   const person =
-    (preferContext ? pick(supported, ctx.rng) : pick([...PERSONS], ctx.rng)) ?? 'yo';
+    (preferContext ? pick(supported, ctx.rng) : pick(available, ctx.rng)) ?? available[0];
   const answer = conjugation.forms[person];
+  if (!answer) return null;
 
   if (preferContext) {
     const sentence = pick(sentencesForForm(conceptId, person), ctx.rng);
@@ -869,8 +877,10 @@ function buildVerbForm(
    * Dedupe against the answer and against each other.
    */
   const wrongForms = [
-    ...new Set(PERSONS.filter((p) => p !== person).map((p) => conjugation.forms[p])),
-  ].filter((form) => form !== answer);
+    ...new Set(
+      available.filter((p) => p !== person).map((p) => conjugation.forms[p]),
+    ),
+  ].filter((form): form is string => !!form && form !== answer);
 
   // A paradigm too syncretic to offer a real choice (haber, say) is not a
   // multiple-choice question at all. Let the caller try another kind.

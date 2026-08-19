@@ -27,9 +27,11 @@ import {
   type SessionRecord,
   type Settings,
 } from '@/learning/types';
+import { reminderBody, reminderSchedule } from '@/learning/reminders';
 import { xpForAnswer } from '@/learning/xp';
 import { nextStreak, toISODate } from '@/lib/date';
 import { configureFeedback } from '@/lib/feedback';
+import { scheduleReminders } from '@/lib/notifications';
 import { configureSound } from '@/lib/sound';
 import { primeSpanishVoice, setPreferredVoice } from '@/lib/speech';
 import { maybeSnapshot, snapshotNow } from '@/lib/snapshots';
@@ -239,6 +241,33 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     configureSound({ sounds: learner.settings.sounds });
   }, [learner.settings.sounds]);
+
+  /**
+   * Re-arm the reminder queue whenever the app has new information: after
+   * hydration, when the setting changes, and — the one that makes "if I
+   * haven't studied yet" work at all — the moment `lastStudyDate` moves.
+   * `reminderSchedule` decides whether today's six o'clock slot is still worth
+   * taking; this only carries the answer to the OS.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const when = reminderSchedule({
+      now: new Date(),
+      lastStudyDate: learner.lastStudyDate,
+      enabled: learner.settings.reminders,
+      hour: learner.settings.reminderHour,
+    });
+    void scheduleReminders(when, {
+      title: 'Unolingo',
+      body: reminderBody(learner.streak),
+    });
+  }, [
+    ready,
+    learner.settings.reminders,
+    learner.settings.reminderHour,
+    learner.lastStudyDate,
+    learner.streak,
+  ]);
 
   useEffect(() => {
     setPreferredVoice(learner.settings.voiceId);
