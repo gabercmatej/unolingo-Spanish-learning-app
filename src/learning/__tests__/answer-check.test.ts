@@ -332,6 +332,28 @@ describe('accents mean different things in different tasks', () => {
   });
 });
 
+describe('Spanish punctuation is taught, not silently ignored', () => {
+  it('accepts a missing opening mark and says so', () => {
+    const result = checkAnswer('Cómo estás?', ['¿Cómo estás?']);
+    expect(result.error).toBe('punctuation');
+    expect(result.grade).toBe('correct');
+    expect(result.note).toContain('¿');
+  });
+
+  it('says nothing when the punctuation was right', () => {
+    expect(checkAnswer('¿Cómo estás?', ['¿Cómo estás?']).error).toBe('none');
+  });
+
+  it('does not complain about punctuation the answer never needed', () => {
+    expect(checkAnswer('Tengo un perro', ['Tengo un perro.']).error).toBe('none');
+  });
+
+  it('never lets a punctuation note outrank a real error', () => {
+    // Wrong word AND missing marks: the wrong word is what matters.
+    expect(checkAnswer('Como estas tu?', ['¿Cómo está usted?']).verdict).toBe('incorrect');
+  });
+});
+
 describe('English meaning reversals', () => {
   const wrong = (given: string, accepted: string) =>
     expect(checkAnswer(given, [accepted], { language: 'en' }).grade).toBe('incorrect');

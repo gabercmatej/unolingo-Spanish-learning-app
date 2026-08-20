@@ -392,6 +392,23 @@ function differingWords(a: string, b: string): [string, string][] {
   return out;
 }
 
+/**
+ * Spanish opens a question and an exclamation as well as closing it, and
+ * `normalize` strips both marks before comparing — so the app has always
+ * accepted the omission and never once mentioned it. That is a keystroke the
+ * course asks for and then ignores, which is the same shape as the dialogue
+ * dash. The difference is that the dash carries nothing and the opening mark is
+ * real Spanish, so the fix is opposite: teach it rather than stop asking.
+ *
+ * Only reported when the answer is otherwise exactly right. A missing ¿ beside
+ * a wrong verb is not what the learner needs to hear about.
+ */
+function missingOpeningMark(input: string, expected: string): '¿' | '¡' | null {
+  if (expected.includes('¿') && !input.includes('¿')) return '¿';
+  if (expected.includes('¡') && !input.includes('¡')) return '¡';
+  return null;
+}
+
 export function checkAnswer(
   input: string,
   accepted: string[],
@@ -417,7 +434,10 @@ export function checkAnswer(
 
   for (const candidate of candidates) {
     if (givenForms.includes(candidate.variant)) {
-      return outcome('none', candidate.display);
+      const mark = missingOpeningMark(input, candidate.display);
+      return mark === null
+        ? outcome('none', candidate.display)
+        : outcome('punctuation', candidate.display, `Spanish opens it too: ${candidate.display}`);
     }
 
     const candidateBare = deaccent(candidate.variant);
