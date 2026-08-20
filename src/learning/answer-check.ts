@@ -1,6 +1,6 @@
 import { spanishVariants } from '@/learning/es-variants';
 import { gradeFor, verdictFor, type AnswerError, type Equivalences, type GradingProfile, type Verdict } from '@/learning/grading';
-import { COVERAGE_THRESHOLD, contentWords, meaningCoverage, polarity } from '@/learning/meaning';
+import { COVERAGE_THRESHOLD, contentWords, meaningCoverage, polarityOf } from '@/learning/meaning';
 import type { Grade } from '@/learning/types';
 
 /**
@@ -308,19 +308,25 @@ function isTypo(given: string, candidate: string): boolean {
  * multiset, so word order and filler differences do not matter but a genuinely
  * different meaning still fails.
  *
- * `contentWords` and `polarity` live in `@/learning/meaning` rather than here —
- * a second private copy of "what counts as a content word" is exactly how the
- * app's own stopword and polarity lists could drift from the ones `meaningCoverage`
- * uses for a free turn, and `contentWords`'s `-s`-stripping already once hid
- * "jamas" and "unless" from a polarity check that had its own inline copy.
+ * `contentWords` and `polarityOf` live in `@/learning/meaning` rather than
+ * here — a second private copy of "what counts as a content word" is exactly
+ * how the app's own stopword and polarity lists could drift from the ones
+ * `meaningCoverage` uses for a free turn. The polarity check below calls
+ * `polarityOf` on the raw strings, not `contentWords`' output: this function
+ * used to run `contentWords`' `-s`-stripped tokens through `polarity`
+ * directly, which silently turned "unless" into "unles" and let "I will call
+ * you unless" pass as "I will call you". `polarityOf` tokenises for itself
+ * for exactly this reason — see `meaning.ts` for why the array-taking form
+ * is no longer exported.
  */
 function sameEnglishMeaning(a: string, b: string, equivalences?: Equivalences): boolean {
   const left = contentWords(a, equivalences);
   const right = contentWords(b, equivalences);
   if (left.length === 0 || right.length === 0) return false;
   if (Math.abs(left.length - right.length) > 1) return false;
-  // Negation is never the word we let slide.
-  if (polarity(left) !== polarity(right)) return false;
+  // Negation is never the word we let slide. Counted from the raw strings,
+  // not from `left`/`right` — see the doc comment above.
+  if (polarityOf(a, equivalences) !== polarityOf(b, equivalences)) return false;
 
   // Every content word in the shorter list must appear in the longer one.
   const longer = left.length >= right.length ? [...left] : [...right];

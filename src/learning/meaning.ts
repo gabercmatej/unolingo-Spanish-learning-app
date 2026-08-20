@@ -60,25 +60,31 @@ export function contentWords(text: string, equivalences?: Equivalences): string[
     .sort();
 }
 
-/** How many polarity words a phrase carries. Two cancel; one does not. */
-export function polarity(words: string[]): number {
+/**
+ * How many polarity words a phrase carries. Two cancel; one does not.
+ *
+ * Not exported. `contentWords`' `-s`-stripping folds `jamas` and `unless`
+ * down to `jama` and `unles` — useful for an ordinary plural, ruinous for the
+ * two words this count exists to catch — so a caller handed already-stripped
+ * tokens gets a guard that silently never fires. That happened twice: once
+ * inside this module, when `meaningCoverage` ran the answer through
+ * `contentWords` and the model through its own unstripped inline split, and
+ * again in `answer-check.ts`'s `sameEnglishMeaning`, which called this
+ * function directly on `contentWords`' output and let "I will call you
+ * unless" pass as "I will call you". Keeping `polarity` private removes the
+ * footgun rather than documenting around it again: the only way to count
+ * polarity from outside this module is `polarityOf`, which tokenises for
+ * itself and can't be handed pre-stripped words by mistake.
+ */
+function polarity(words: string[]): number {
   return words.filter((word) => POLARITY.has(word)).length;
 }
 
 /**
  * Polarity count for a whole phrase, deaccented and equivalence-folded but
- * deliberately *not* run through `contentWords`' `-s` stripping. That
- * stripping is useful for ordinary content words — it folds a plural onto
- * its singular — but `jamas` and `unless` are both in `POLARITY` and both
- * longer than four characters, so the same rule silently turns them into
- * `jama` and `unles` and the guard stops recognising them. `meaningCoverage`
- * used to compute the two sides through different pipelines — the answer via
- * `contentWords` (stripped), the model via its own inline split (not
- * stripped) — which is the same failure this codebase already has a name
- * for: a checker holding a second copy of a rule silently stops enforcing
- * it, the reason `verb-corpus.ts` is the one shared index for both the
- * generator and the audit rather than each keeping its own. One path here,
- * called from both sides, so they cannot drift apart again.
+ * deliberately *not* run through `contentWords`' `-s` stripping. The one
+ * exported way to count polarity — see `polarity` above for why the
+ * array-taking form stays private.
  */
 export function polarityOf(text: string, equivalences?: Equivalences): number {
   const words = deaccent(text.toLowerCase())

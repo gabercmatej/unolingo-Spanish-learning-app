@@ -1,5 +1,5 @@
 import { EN_EQUIVALENCES } from '@/content/equivalences';
-import { COVERAGE_THRESHOLD, contentWords, meaningCoverage, polarity } from '@/learning/meaning';
+import { COVERAGE_THRESHOLD, contentWords, meaningCoverage, polarityOf } from '@/learning/meaning';
 
 describe('contentWords', () => {
   it('drops the words that carry no meaning for a comprehension check', () => {
@@ -17,11 +17,18 @@ describe('contentWords', () => {
   });
 });
 
-describe('polarity', () => {
+describe('polarityOf', () => {
   it('counts the words that reverse a sentence', () => {
-    expect(polarity(['i', 'do', 'not', 'like', 'coffee'])).toBe(1);
-    expect(polarity(['i', 'like', 'coffee'])).toBe(0);
-    expect(polarity(['nobody', 'never', 'goes'])).toBe(2);
+    expect(polarityOf('i do not like coffee')).toBe(1);
+    expect(polarityOf('i like coffee')).toBe(0);
+    expect(polarityOf('nobody never goes')).toBe(2);
+  });
+
+  it('counts "unless" even though it is over four letters and ends in s', () => {
+    // contentWords' "-s" stripping would fold "unless" to "unles" and drop it
+    // out of POLARITY; polarityOf tokenises for itself and never goes near
+    // that stripping.
+    expect(polarityOf('unless it rains')).toBe(1);
   });
 });
 

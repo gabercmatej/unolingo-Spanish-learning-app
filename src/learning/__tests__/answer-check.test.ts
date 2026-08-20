@@ -380,6 +380,19 @@ describe('English meaning reversals', () => {
     wrong('I have no money', 'I have money');
     wrong('She does not work here', 'She works here');
   });
+
+  it('never lets "unless" slide, even though it is over four letters and ends in s', () => {
+    // contentWords' "-s"-stripping folds "unless" to "unles", which used to
+    // fall out of the polarity guard when sameEnglishMeaning counted polarity
+    // from contentWords' own stripped output. An exception clause is not a
+    // near miss.
+    expect(
+      checkAnswer('I will call you unless', ['I will call you'], {
+        language: 'en',
+        equivalences: EN_EQUIVALENCES,
+      }).grade,
+    ).toBe('incorrect');
+  });
 });
 
 describe('paraphrase', () => {
