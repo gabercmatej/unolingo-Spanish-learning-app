@@ -80,6 +80,51 @@ export type SessionKind =
   /** One phase of a unit's guided teaching arc — see `learning/unit-arc.ts`. */
   | 'unitArc';
 
+/**
+ * Session kinds that write into `completedLessons`.
+ *
+ * `completedLessons` is keyed by string and nothing requires the keys to name
+ * lessons in the curriculum, which is what lets a unit's arc phases store their
+ * progress there under `arc:<unitId>:<phase>` with no `STATE_VERSION` bump.
+ */
+export const LESSON_KINDS: SessionKind[] = [
+  'lesson',
+  'conversation',
+  'story',
+  'checkpoint',
+  'unitArc',
+];
+
+/**
+ * Which lesson, if any, a session that is ending has actually finished.
+ *
+ * Answering is not finishing, and the two were being written by the same call.
+ * The session screen banks a session when it unmounts so that leaving partway
+ * does not throw the XP away — every answer is already committed as it happens,
+ * but the session record and the reward are written once, at the end, and
+ * losing those reads to a learner as having lost everything. That part is
+ * right.
+ *
+ * What went with it was `lessonId`, and the lesson tick is a different claim
+ * from the reward: XP is earned by work done, while the tick says the lesson
+ * was *walked*. So answering one exercise and pressing the close button marked
+ * the lesson complete. Measured against the curriculum, 36 of the course's 63
+ * units carry exactly one required lesson — so for more than half the course
+ * that finished the unit's teaching outright and moved the "units done" figure
+ * on the Learn tab. An arc phase could be ticked off the same way, without
+ * being played.
+ *
+ * Reaching the end of the queue is the only thing that finishes a lesson.
+ */
+export function completedLessonId(input: {
+  kind: SessionKind;
+  source: string;
+  reachedEnd: boolean;
+}): string | undefined {
+  if (!input.reachedEnd) return undefined;
+  return LESSON_KINDS.includes(input.kind) ? input.source : undefined;
+}
+
 export interface SessionPlan {
   id: string;
   kind: SessionKind;

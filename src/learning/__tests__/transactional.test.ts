@@ -2,7 +2,7 @@ import { curriculum, getUnitConcepts, getUnitTaughtConcepts } from '@/content';
 import type { Unit } from '@/content/types';
 import { makeLearner } from '@/learning/__tests__/helpers';
 import { unitProgress } from '@/learning/mastery';
-import { buildPracticeSession, buildSession, buildSmartReview } from '@/learning/session';
+import { buildPracticeSession, buildSession, buildSmartReview, completedLessonId } from '@/learning/session';
 import { createConceptState, introduce, mastery, masteryBand, review } from '@/learning/srs';
 import type { LearnerState } from '@/learning/types';
 
@@ -222,5 +222,46 @@ describe('encountered and retrieved stay separate downstream', () => {
     });
     const targets = new Set(plan.exercises.flatMap((exercise) => exercise.conceptIds));
     expect(targets.has(unmet)).toBe(true);
+  });
+});
+
+/**
+ * Answering is not finishing.
+ *
+ * The session screen banks a session on unmount so that leaving mid-lesson does
+ * not throw away the XP — every answer is already committed by `recordAnswer`,
+ * but the session record and the reward are written once, at the end. That part
+ * was right. What it also wrote was `lessonId`, and the lesson tick is a
+ * different claim from the reward: it says the lesson was *walked*.
+ *
+ * So one answered exercise followed by the close button marked the lesson
+ * complete. Measured against the curriculum, 36 of the course's 63 units carry
+ * exactly one required lesson — so for more than half the course, answering a
+ * single question and leaving finished the unit's teaching and moved the
+ * "units done" counter on the Learn tab. The same applied to an arc phase,
+ * which could be ticked off without being played.
+ */
+describe('a lesson is finished by reaching the end of it', () => {
+  it('marks the lesson complete when the queue was played out', () => {
+    expect(completedLessonId({ kind: 'lesson', source: 'l.1', reachedEnd: true })).toBe('l.1');
+  });
+
+  it('marks nothing complete when the learner left partway', () => {
+    expect(completedLessonId({ kind: 'lesson', source: 'l.1', reachedEnd: false })).toBeUndefined();
+  });
+
+  it('holds for every kind that writes into completedLessons', () => {
+    for (const kind of ['lesson', 'conversation', 'story', 'checkpoint', 'unitArc'] as const) {
+      expect(completedLessonId({ kind, source: 'x', reachedEnd: true })).toBe('x');
+      expect(completedLessonId({ kind, source: 'x', reachedEnd: false })).toBeUndefined();
+    }
+  });
+
+  it('never completes a lesson from a session that is not one', () => {
+    // Smart Review reaching its end is not a lesson being finished, and its
+    // `source` is a concept id or a unit id rather than a lesson id.
+    for (const kind of ['smartReview', 'mistakes', 'unitSmart', 'quickPractice'] as const) {
+      expect(completedLessonId({ kind, source: 'x', reachedEnd: true })).toBeUndefined();
+    }
   });
 });

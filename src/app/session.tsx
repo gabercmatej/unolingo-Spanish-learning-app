@@ -32,7 +32,13 @@ import { WhyPanel } from '@/components/session/why-panel';
 import { getStageForUnit, getUnitForLesson } from '@/content';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
-import { buildRetry, buildSession, type SessionKind } from '@/learning/session';
+import {
+  LESSON_KINDS,
+  buildRetry,
+  buildSession,
+  completedLessonId,
+  type SessionKind,
+} from '@/learning/session';
 import { estimateLevel, stageProgress, unitProgress } from '@/learning/mastery';
 import { teachingFor, type Teaching } from '@/learning/teaching';
 import { mastery, masteryBand } from '@/learning/srs';
@@ -45,34 +51,6 @@ import { goBack } from '@/lib/navigation';
 import { primeSounds, sound } from '@/lib/sound';
 import { speakSpanish, stopSpeaking } from '@/lib/speech';
 
-/**
- * The session player — the core loop.
- *
- * One screen runs every kind of session: lessons, Smart Review, conversations,
- * stories and every practice mode. It owns the queue, the grading, the feedback
- * moment and the results, so those behave identically no matter how the session
- * was started.
- *
- * A wrong answer re-queues the exercise once, later in the same session. Once —
- * repeating it until you get it right teaches the answer, not the language; the
- * spaced-repetition schedule handles the rest across days.
- */
-/**
- * Session kinds that count as completing a lesson on the path.
- *
- * `unitArc` is one of them, which is how a guided phase records that it was
- * played: `completeSession` writes `source` into `completedLessons`, and an arc
- * step's source is its own id ("arc:unit.meals:recall"). That map is keyed by
- * string and nothing requires the keys to name lessons in the curriculum, so
- * the arc needs no new persisted field and no `STATE_VERSION` bump.
- */
-const LESSON_KINDS: SessionKind[] = [
-  'lesson',
-  'conversation',
-  'story',
-  'checkpoint',
-  'unitArc',
-];
 
 /** The session as it stood when it ended — see `ending` below for why. */
 interface SessionEnding {
@@ -251,7 +229,12 @@ export default function SessionScreen() {
         total: totals.current.answered,
         seconds: Math.round((Date.now() - startedAt) / 1000),
         newConcepts: met.current.size,
-        lessonId: LESSON_KINDS.includes(how) ? from : undefined,
+        /**
+         * Deliberately not a completion. The XP and the session record are
+         * earned by the work done and are banked here; the lesson tick says
+         * the lesson was walked, which leaving partway is precisely not.
+         */
+        lessonId: completedLessonId({ kind: how, source: from, reachedEnd: false }),
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,7 +286,7 @@ export default function SessionScreen() {
       total: answered,
       seconds,
       newConcepts: newConcepts.current.size,
-      lessonId: LESSON_KINDS.includes(kind) ? source : undefined,
+      lessonId: completedLessonId({ kind, source, reachedEnd: true }),
     });
   }, [answered, completeSession, correct, kind, learner, plan?.title, source, startedAt, xpEarned]);
 
