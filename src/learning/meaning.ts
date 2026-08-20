@@ -66,6 +66,29 @@ export function polarity(words: string[]): number {
 }
 
 /**
+ * Polarity count for a whole phrase, deaccented and equivalence-folded but
+ * deliberately *not* run through `contentWords`' `-s` stripping. That
+ * stripping is useful for ordinary content words — it folds a plural onto
+ * its singular — but `jamas` and `unless` are both in `POLARITY` and both
+ * longer than four characters, so the same rule silently turns them into
+ * `jama` and `unles` and the guard stops recognising them. `meaningCoverage`
+ * used to compute the two sides through different pipelines — the answer via
+ * `contentWords` (stripped), the model via its own inline split (not
+ * stripped) — which is the same failure this codebase already has a name
+ * for: a checker holding a second copy of a rule silently stops enforcing
+ * it, the reason `verb-corpus.ts` is the one shared index for both the
+ * generator and the audit rather than each keeping its own. One path here,
+ * called from both sides, so they cannot drift apart again.
+ */
+export function polarityOf(text: string, equivalences?: Equivalences): number {
+  const words = deaccent(text.toLowerCase())
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => equivalences?.word.get(word) ?? word);
+  return polarity(words);
+}
+
+/**
  * Calibrated by the corpus tests in Task 13 and Task 14, not chosen by feel:
  * the lowest value at which every authored model still passes its own turn, and
  * the highest at which no mutated answer passes. If those bounds ever cross,
@@ -89,7 +112,7 @@ export function meaningCoverage(
   if (answer.length === 0 || target.length === 0) return 0;
 
   // Opposites are not near misses.
-  if (polarity(answer) !== polarity(model.toLowerCase().split(/\s+/).map(deaccent))) return 0;
+  if (polarityOf(given, equivalences) !== polarityOf(model, equivalences)) return 0;
 
   const pool = [...answer];
   let matched = 0;

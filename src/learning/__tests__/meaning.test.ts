@@ -44,6 +44,21 @@ describe('meaningCoverage', () => {
     expect(meaningCoverage('no me gusta el cafe', 'me gusta el cafe')).toBe(0);
   });
 
+  it('catches "jamas" as a polarity word even though it is 5 letters ending in s', () => {
+    // "jamas" is in POLARITY, but it is also long enough and shaped like a
+    // plural for contentWords' "-s" stripping to fold it to "jama" — which
+    // would make the polarity guard blind to it on the side that goes
+    // through contentWords. Both directions, since the two sides used to run
+    // through different pipelines.
+    expect(meaningCoverage('jamas voy', 'voy')).toBe(0);
+    expect(meaningCoverage('voy', 'jamas voy')).toBe(0);
+  });
+
+  it('catches "unless" as a polarity word for the same reason, in English', () => {
+    expect(meaningCoverage('unless it rains', 'it rains')).toBe(0);
+    expect(meaningCoverage('it rains', 'unless it rains')).toBe(0);
+  });
+
   it('scores low for a different sentence about a different thing', () => {
     const model = 'quiero reservar una mesa para dos personas';
     expect(meaningCoverage('donde esta la estacion de tren', model)).toBeLessThan(

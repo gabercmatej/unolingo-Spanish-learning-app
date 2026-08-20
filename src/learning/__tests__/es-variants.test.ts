@@ -41,4 +41,10 @@ describe('spanishVariants', () => {
     const out = spanishVariants('voy al cine');
     expect(new Set(out).size).toBe(out.length);
   });
+
+  it('does not climb a clitic across "en" — pensar en, quedar en do not license it', () => {
+    // "te pienso en ver" is not grammatical Spanish; "a", "de" and "que" are
+    // genuine periphrasis links but "en" is not one of them.
+    expect(spanishVariants('pienso en verte')).not.toContain('te pienso en ver');
+  });
 });

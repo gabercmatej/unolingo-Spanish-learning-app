@@ -25,8 +25,16 @@ const CLITICS = ['me', 'te', 'se', 'nos', 'os', 'lo', 'la', 'le', 'los', 'las', 
  * periphrasis — "voy A comprarlo", "acabo DE verlo", "tengo QUE hacerlo". The
  * clitic climbs past the link to sit before the conjugated verb, not before
  * the link itself: "lo voy a comprar", never "voy lo a comprar".
+ *
+ * `en` is deliberately not in this set. It looks like the same shape —
+ * "pienso EN verte" — but climbing across it is not standard Spanish:
+ * `pensar en`, `insistir en` and `quedar en` do not license clitic climbing
+ * the way `ir a`, `acabar de` and `tener que` do. `*te pienso en ver` is
+ * ungrammatical, and treating `en` as a link would generate exactly that as
+ * an accepted variant of `pienso en verte` — the over-generalisation a
+ * learner makes, taught back to them as correct.
  */
-const PERIPHRASIS_LINKS = new Set(['a', 'de', 'que', 'en']);
+const PERIPHRASIS_LINKS = new Set(['a', 'de', 'que']);
 
 /** The longest clitic attached to the end of this word, or null. */
 function attachedClitic(word: string): { stem: string; clitic: string } | null {
