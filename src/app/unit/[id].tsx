@@ -24,7 +24,7 @@ import {
 import type { Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
-import { unitProgress } from '@/learning/mastery';
+import { unitProgress, unitStrengthPlan, type UnitPhase } from '@/learning/mastery';
 import { mastery, masteryBand } from '@/learning/srs';
 import { goBack } from '@/lib/navigation';
 
@@ -36,6 +36,22 @@ import { goBack } from '@/lib/navigation';
  * replayable, and the practice options are ordered so that Smart Review — drill
  * only what has actually decayed — is the obvious first choice.
  */
+/**
+ * What each stage of a unit's life means, in the learner's terms.
+ *
+ * The old copy had two states — "finished, and still solid" or "finished, but
+ * faded" — which quietly agreed that a finished unit was either fine or broken.
+ * Most units are neither: covered, half-remembered, and waiting for the work
+ * that makes them stick. `unitProgress().phase` names that middle.
+ */
+const PHASE_CAPTION: Record<UnitPhase, string> = {
+  learning: 'Still learning the material here.',
+  practising:
+    'Lessons done — most of this has only been recognised so far, not recalled.',
+  strengthening: 'You know this. Now it needs to become reliable.',
+  maintaining: 'Solid. It will come back on its own through Smart Review.',
+};
+
 export default function UnitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -44,6 +60,10 @@ export default function UnitScreen() {
   const unit = id ? getUnit(id) : undefined;
   const progress = useMemo(
     () => (unit ? unitProgress(unit, learner) : null),
+    [unit, learner],
+  );
+  const strength = useMemo(
+    () => (unit ? unitStrengthPlan(unit, learner) : null),
     [unit, learner],
   );
 
@@ -176,13 +196,7 @@ export default function UnitScreen() {
               </View>
             </View>
             <Text variant="caption" color="textTertiary">
-              {progress.state === 'complete'
-                ? progress.needsReview
-                  ? 'Finished — but some of it has faded. A review would help.'
-                  : 'Finished, and still solid.'
-                : started
-                  ? 'In progress.'
-                  : 'Not started yet.'}
+              {PHASE_CAPTION[progress.phase]}
             </Text>
           </Card>
 
@@ -197,6 +211,63 @@ export default function UnitScreen() {
             />
           ) : null}
 
+          {/*
+            Once the lessons are done, the unit is not over — it moves into the
+            phase where the work is strengthening rather than covering. This is
+            the primary action for that phase, and it says what it will actually
+            do rather than offering a percentage and leaving the learner to
+            guess. `unitStrengthPlan` does the counting.
+          */}
+          {!progress.nextLesson && strength && strength.conceptIds.length > 0 ? (
+            <Card variant="raised">
+              <View style={styles.row}>
+                <Icon name="trending-up-outline" size={18} tone={theme.tint} />
+                <Text variant="bodyBold" style={styles.flex}>
+                  Strengthen this unit
+                </Text>
+                <Text variant="caption" color="textTertiary" numeric>
+                  ~{strength.estimatedMinutes} min
+                </Text>
+              </View>
+              <View style={styles.countList}>
+                <StrengthLine
+                  count={strength.unseen.length}
+                  label="still to meet"
+                  tone={theme.tint}
+                />
+                <StrengthLine
+                  count={strength.mistaken.length}
+                  label="to fix from your mistakes"
+                  tone={theme.danger}
+                />
+                <StrengthLine
+                  count={strength.developing.length}
+                  label="still developing"
+                  tone={theme.listening}
+                />
+                <StrengthLine count={strength.weak.length} label="faded since you met them" tone={theme.warning} />
+                <StrengthLine
+                  count={strength.unproduced.length}
+                  label="recognised but never produced"
+                  tone={theme.accent}
+                />
+                <StrengthLine count={strength.strong.length} label="solid" tone={theme.success} />
+              </View>
+              <Button
+                title="Continue mastering"
+                size="lg"
+                tone={tone}
+                icon="sparkles"
+                onPress={() =>
+                  router.push({
+                    pathname: '/session',
+                    params: { kind: 'unitSmart', source: unit.id },
+                  })
+                }
+              />
+            </Card>
+          ) : null}
+
           {/* Practice — Smart Review first, deliberately */}
           {started ? (
             <Section title="Practise this unit">
@@ -204,10 +275,19 @@ export default function UnitScreen() {
                 <PracticeOption
                   icon="sparkles-outline"
                   title="Smart Review"
-                  caption="Only what has weakened or is overdue"
+                  caption={
+                    strength && strength.conceptIds.length > 0
+                      ? 'Mistakes first, then what has faded, then what you have only recognised'
+                      : 'Only what has weakened or is overdue'
+                  }
                   tone={theme.tint}
                   recommended
-                  onPress={() => practice('unitSmart')}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/session',
+                      params: { kind: 'unitSmart', source: unit.id },
+                    })
+                  }
                 />
                 <PracticeOption
                   icon="repeat-outline"
@@ -274,6 +354,34 @@ export default function UnitScreen() {
             </View>
           </Section>
 
+          {/* What is solid and what is not — §11's "strong / needs practice". */}
+          {started && strength && strength.conceptIds.length > 0 ? (
+            <Section title="Where you stand">
+              <Card variant="flat">
+                <ConceptGroup
+                  title="Solid"
+                  ids={strength.strong}
+                  tone={theme.success}
+                  empty="Nothing has settled yet — that is what practice is for."
+                />
+                <ConceptGroup
+                  title="Needs practice"
+                  ids={[...strength.mistaken, ...strength.developing, ...strength.weak]}
+                  tone={theme.warning}
+                  empty="Nothing shaky right now."
+                />
+                {strength.unproduced.length > 0 ? (
+                  <ConceptGroup
+                    title="Recognised, never produced"
+                    ids={strength.unproduced}
+                    tone={theme.accent}
+                    empty=""
+                  />
+                ) : null}
+              </Card>
+            </Section>
+          ) : null}
+
           {/* What it taught */}
           {started && vocab.length > 0 ? (
             <Section title="What this unit taught you">
@@ -297,7 +405,7 @@ export default function UnitScreen() {
                             {
                               backgroundColor: theme.backgroundSunken,
                               borderColor:
-                                band === 'weak'
+                                band === 'familiar'
                                   ? theme.danger
                                   : band === 'mastered'
                                     ? theme.success
@@ -323,6 +431,70 @@ export default function UnitScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** One "3 still developing" line, hidden entirely when the count is zero. */
+function StrengthLine({ count, label, tone }: { count: number; label: string; tone: string }) {
+  if (count === 0) return null;
+  return (
+    <View style={styles.countRow}>
+      <View style={[styles.dot, { backgroundColor: tone }]} />
+      <Text variant="small" color="textSecondary" style={styles.flex}>
+        <Text variant="smallBold">{count}</Text> {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * A named group of concepts as chips.
+ *
+ * Deliberately shows the words themselves rather than a count: "encantado,
+ * ¿de dónde eres?" is something the learner can react to, and "3 concepts
+ * needing practice" is not.
+ */
+function ConceptGroup({
+  title,
+  ids,
+  tone,
+  empty,
+}: {
+  title: string;
+  ids: string[];
+  tone: string;
+  empty: string;
+}) {
+  const theme = useTheme();
+  const labels = [...new Set(ids)]
+    .map(getConcept)
+    .filter((concept): concept is NonNullable<typeof concept> => !!concept)
+    .map(conceptLabel)
+    .slice(0, 10);
+
+  if (labels.length === 0 && !empty) return null;
+
+  return (
+    <View style={styles.group}>
+      <Text variant="overline" tone={tone}>
+        {title.toUpperCase()}
+      </Text>
+      {labels.length === 0 ? (
+        <Text variant="caption" color="textTertiary">
+          {empty}
+        </Text>
+      ) : (
+        <View style={styles.chips}>
+          {labels.map((label) => (
+            <View
+              key={label}
+              style={[styles.chip, { backgroundColor: theme.backgroundSunken, borderColor: tone }]}>
+              <Text variant="caption">{label}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -416,6 +588,10 @@ const styles = StyleSheet.create({
   topicList: { gap: Spacing.two, paddingTop: Spacing.one },
   topicRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  countList: { gap: Spacing.two },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  dot: { width: 7, height: 7, borderRadius: Radius.full },
+  group: { gap: Spacing.two },
   chip: {
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.two,

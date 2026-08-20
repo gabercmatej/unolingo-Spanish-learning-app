@@ -170,7 +170,7 @@ export default function ProgressScreen() {
               [
                 ['mastered', counts.mastered, theme.success],
                 ['strong', counts.strong, theme.accent],
-                ['weak', counts.weak, theme.danger],
+                ['familiar', counts.familiar, theme.warning],
                 ['learning', counts.learning, theme.listening],
                 ['new', counts.new, theme.backgroundSelected],
               ] as const
@@ -183,7 +183,7 @@ export default function ProgressScreen() {
           <View style={styles.legend}>
             <Legend label="Mastered" value={counts.mastered} tone={theme.success} />
             <Legend label="Strong" value={counts.strong} tone={theme.accent} />
-            <Legend label="Weak" value={counts.weak} tone={theme.danger} />
+            <Legend label="Familiar" value={counts.familiar} tone={theme.warning} />
             <Legend label="Learning" value={counts.learning} tone={theme.listening} />
             <Legend label="Not met" value={counts.new} tone={theme.textTertiary} />
           </View>

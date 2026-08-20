@@ -110,4 +110,27 @@ describe('curriculum audit', () => {
       .map((stage) => `${stage.levelRange}: ${stage.drawnBelowLevel}/${stage.drawnSentences} below level`);
     expect(leaning).toEqual([]);
   });
+
+  /**
+   * The introduction-order gates. These are the content-side counterpart to
+   * `learning/eligibility.ts`: the runtime gate keeps an out-of-reach sentence
+   * away from the learner, and these keep it out of the course.
+   */
+  describe('introduced before produced', () => {
+    it('never introduces a concept with no sentence the learner could read', () => {
+      const gap = audit.gaps.find(
+        (entry) => entry.severity === 'warn' && entry.message.includes('could even read'),
+      );
+      expect(gap?.message ?? null).toBeNull();
+    });
+
+    it('never lets a lesson draw on sentences well above its own level', () => {
+      // A greetings lesson at A0 whose examples need the present perfect is the
+      // shape of the bug this pass was written to close.
+      const gap = audit.gaps.find(
+        (entry) => entry.severity === 'warn' && entry.message.includes('well above their own level'),
+      );
+      expect(gap?.message ?? null).toBeNull();
+    });
+  });
 });

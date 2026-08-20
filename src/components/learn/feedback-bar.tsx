@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/text';
 import { Motion, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { ExerciseResult } from '@/learning/check';
+import type { Teaching } from '@/learning/teaching';
 
 interface FeedbackBarProps {
   result: ExerciseResult;
@@ -17,6 +18,14 @@ interface FeedbackBarProps {
   onContinue: () => void;
   /** Adds a "practise this again" affordance for wrong answers. */
   isLast: boolean;
+  /**
+   * The one extra thing this answer is worth teaching. See `learning/teaching.ts`
+   * — the policy lives there so the bar renders a decision rather than making
+   * one, and so it can be tested without a renderer.
+   */
+  teaching?: Teaching | null;
+  /** What the learner actually gave, shown beside the model answer when wrong. */
+  given?: string;
 }
 
 /**
@@ -29,7 +38,14 @@ interface FeedbackBarProps {
  * arrived travelling away from where it came from — a small thing that reads,
  * without being nameable, as the interface not knowing its own geography.
  */
-export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBarProps) {
+export function FeedbackBar({
+  result,
+  xpEarned,
+  onContinue,
+  isLast,
+  teaching,
+  given,
+}: FeedbackBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -60,6 +76,18 @@ export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBa
   }[result.grade];
 
   const showAnswer = result.grade !== 'correct' && result.expected.length > 0;
+  /**
+   * Only worth showing beside the model answer when the two are actually
+   * different to look at — echoing "hola" back at somebody who typed "hola"
+   * with a missing accent is a comparison with nothing in it.
+   */
+  const showGiven =
+    showAnswer &&
+    !!given &&
+    given.trim().length > 0 &&
+    given.trim().toLowerCase() !== result.expected.trim().toLowerCase();
+
+  const note = teaching?.note ?? result.note;
 
   return (
     <Animated.View
@@ -96,11 +124,22 @@ export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBa
         ) : null}
       </View>
 
+      {showGiven ? (
+        <View>
+          <Text variant="caption" tone={scheme.tone}>
+            YOU WROTE
+          </Text>
+          <Text variant="esSmall" tone={scheme.tone} style={styles.given}>
+            {given}
+          </Text>
+        </View>
+      ) : null}
+
       {showAnswer ? (
         <View style={styles.answerRow}>
           <View style={styles.flex}>
             <Text variant="caption" tone={scheme.tone}>
-              ANSWER
+              {showGiven ? 'BETTER' : 'ANSWER'}
             </Text>
             <Text variant="esSmall" tone={scheme.tone}>
               {result.expected}
@@ -110,9 +149,42 @@ export function FeedbackBar({ result, xpEarned, onContinue, isLast }: FeedbackBa
         </View>
       ) : null}
 
-      {result.note ? (
+      {/*
+        The teaching moment. On a correct listening answer this is the whole
+        point of the bar: the learner heard it, picked it, and still may have no
+        idea what it meant.
+      */}
+      {teaching?.es ? (
+        <View style={[styles.reveal, { borderColor: scheme.tone }]}>
+          <View style={styles.answerRow}>
+            <Text variant="esSmall" tone={scheme.tone} style={styles.flex}>
+              {teaching.es}
+            </Text>
+            <SpeakIcon text={teaching.es} tone={scheme.tone} />
+          </View>
+          {teaching.en ? (
+            <Text variant="small" tone={scheme.tone}>
+              {teaching.en}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {teaching?.newToYou.length ? (
+        <View style={styles.newRow}>
+          <Icon name="sparkles" size={13} tone={scheme.tone} />
+          <Text variant="caption" tone={scheme.tone} style={styles.flex}>
+            {teaching.untaught && result.grade === 'incorrect' ? 'New here, not your fault — ' : 'New here — '}
+            {teaching.newToYou
+              .map((entry) => (entry.meaning ? `${entry.label}: ${entry.meaning}` : entry.label))
+              .join(' · ')}
+          </Text>
+        </View>
+      ) : null}
+
+      {note ? (
         <Text variant="small" tone={scheme.tone}>
-          {result.note}
+          {note}
         </Text>
       ) : null}
 
@@ -143,6 +215,13 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   answerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  given: { textDecorationLine: 'line-through', opacity: 0.75 },
+  reveal: {
+    gap: Spacing.one,
+    paddingLeft: Spacing.three,
+    borderLeftWidth: 3,
+  },
+  newRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
   xp: {
     paddingVertical: 3,
     paddingHorizontal: Spacing.two,

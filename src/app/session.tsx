@@ -33,8 +33,9 @@ import { getStageForUnit, getUnitForLesson } from '@/content';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import { buildSession, type SessionKind } from '@/learning/session';
-import { stageProgress, unitProgress } from '@/learning/mastery';
-import { mastery } from '@/learning/srs';
+import { estimateLevel, stageProgress, unitProgress } from '@/learning/mastery';
+import { teachingFor, type Teaching } from '@/learning/teaching';
+import { mastery, masteryBand } from '@/learning/srs';
 import type { LearnerState } from '@/learning/types';
 import { levelInfo } from '@/learning/xp';
 import { newlyUnlocked } from '@/learning/achievements';
@@ -112,6 +113,13 @@ export default function SessionScreen() {
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState<string | null>(null);
   const [result, setResult] = useState<ExerciseResult | null>(null);
+  /**
+   * The one extra thing this answer taught. Computed at submit time alongside
+   * the grade rather than in render: it depends on the learner as they were
+   * *before* the answer was committed, and rendering it later would show the
+   * concept as already known the moment it had been answered once.
+   */
+  const [teaching, setTeaching] = useState<Teaching | null>(null);
   const [xpEarned, setXpEarned] = useState(0);
   const [lastXp, setLastXp] = useState(0);
   /**
@@ -211,6 +219,7 @@ export default function SessionScreen() {
   const advance = useCallback(() => {
     stopSpeaking();
     setResult(null);
+    setTeaching(null);
     setAnswer(null);
     setLastXp(0);
 
@@ -245,6 +254,12 @@ export default function SessionScreen() {
     });
 
     setResult(outcome);
+    setTeaching(
+      teachingFor(exercise, outcome, {
+        level: estimateLevel(learner),
+        isKnown: (conceptId) => !!learner.concepts[conceptId]?.introduced,
+      }),
+    );
     setLastXp(recorded.xp);
     setXpEarned((value) => value + recorded.xp);
     setAnswered((value) => value + 1);
@@ -267,7 +282,7 @@ export default function SessionScreen() {
         speakSpanish(outcome.expected);
       }
     }
-  }, [advance, answer, exercise, learner.concepts, recordAnswer, result, settings]);
+  }, [advance, answer, exercise, learner, recordAnswer, result, settings]);
 
   const confirmExit = useCallback(async () => {
     if (answered === 0) {
@@ -312,7 +327,19 @@ export default function SessionScreen() {
     // "After" is read from the live learner state, which is now fully updated.
     const improved: ConceptDelta[] = ending.before.map(([conceptId, before]) => {
       const state = learner.concepts[conceptId];
-      return { conceptId, before, after: state ? mastery(state, ending.endedAt) : before };
+      return {
+        conceptId,
+        before,
+        after: state ? mastery(state, ending.endedAt) : before,
+        // Both bands measured from `endedAt`, like every other figure here —
+        // the results screen is a record of a session that is over, and a
+        // second timestamp would let two lines of the same card disagree.
+        bandBefore: masteryBand(
+          ending.learnerBefore.concepts[conceptId],
+          ending.endedAt,
+        ),
+        bandAfter: masteryBand(state, ending.endedAt),
+      };
     });
 
     const after = levelInfo(learner.xp);
@@ -434,6 +461,8 @@ export default function SessionScreen() {
             xpEarned={lastXp}
             onContinue={advance}
             isLast={index + 1 >= queue.length}
+            teaching={teaching}
+            given={result.given}
           />
         )}
       </KeyboardAvoidingView>

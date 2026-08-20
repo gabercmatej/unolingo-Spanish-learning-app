@@ -37,6 +37,25 @@ interface ExerciseBase {
   instruction: string;
   /** Teaching note revealed after answering. */
   note?: string;
+  /**
+   * The sentence this exercise was built from.
+   *
+   * Carried so the feedback moment can *teach*: a listening exercise the
+   * learner got right is proof they recognised the sounds and no proof at all
+   * that they knew what it meant, and "Correct ✓" alone leaves that gap exactly
+   * where it was. Present only for sentence-derived exercises.
+   */
+  source?: { es: string; en: string };
+  /**
+   * Concepts the exercise needs that the learner has not been introduced to.
+   *
+   * Kept out of `conceptIds` on purpose. `conceptIds` is what gets scored and
+   * scheduled, and scoring an unmet concept both marks it as taught and records
+   * a failure against a memory that was never formed. These are shown as new
+   * instead — the reason an input exercise is allowed a little unknown material
+   * at all.
+   */
+  supportIds?: string[];
 }
 
 // --- Presentation ----------------------------------------------------------

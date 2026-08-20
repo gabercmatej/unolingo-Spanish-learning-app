@@ -925,7 +925,12 @@ export const a2CoreSentences: Sentence[] = [
     id: 's.m105',
     es: 'Mis vecinos han visto el partido en el bar de abajo.',
     en: 'My neighbours watched the match at the bar downstairs.',
-    concepts: ['v.ver', 'g.present-perfect', 'v.amigo'],
+    // Not `v.amigo`: there is no "amigo" in this sentence, and the mis-tag put
+    // an A2 present-perfect line into the practice pool of a word taught in the
+    // first Family unit. `audit:content` now reports tags a sentence does not
+    // carry, and `learning/eligibility.ts` refuses to build production from a
+    // line like this whatever it is tagged with.
+    concepts: ['v.ver', 'g.present-perfect'],
     level: 'A2',
     topics: ['social', 'hobbies'],
   },

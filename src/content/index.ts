@@ -201,6 +201,26 @@ export const getUnit = (unitId: string): Unit | undefined => unitById.get(unitId
 export const getStage = (stageId: string): Stage | undefined => stageById.get(stageId);
 export const getStageForUnit = (unitId: string): Stage | undefined => stageByUnitId.get(unitId);
 
+/**
+ * Concepts a unit actually *claims to teach* — its lessons' `teaches` and
+ * `grammar`, and nothing else.
+ *
+ * Distinct from `getUnitConcepts`, which also sweeps in every concept appearing
+ * in the unit's sentences. That wider set is right for building practice from a
+ * unit and wrong for asking "what has this unit still not shown me?": the first
+ * greetings unit's sentences mention `v.ver` and `v.cafe`, which it does not
+ * teach and which arrive properly forty lessons later. Counting those as unmet
+ * material would leave the unit reporting itself unfinished for ever.
+ */
+export function getUnitTaughtConcepts(unit: Unit): string[] {
+  const ids = new Set<string>();
+  for (const lesson of unit.lessons) {
+    for (const id of lesson.teaches) ids.add(id);
+    for (const id of lesson.grammar ?? []) ids.add(id);
+  }
+  return [...ids];
+}
+
 /** Every concept a unit teaches or revises, for unit mastery and unit practice. */
 export function getUnitConcepts(unit: Unit): string[] {
   const ids = new Set<string>();

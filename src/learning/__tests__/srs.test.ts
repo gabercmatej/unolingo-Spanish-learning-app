@@ -63,10 +63,44 @@ describe('review', () => {
   });
 
   it('rewards harder exercises with a longer interval', () => {
-    const before = seen({ stability: 2 });
+    // Past the early phase, or the cap below flattens both and the comparison
+    // measures nothing.
+    const before = seen({ stability: 2, timesSeen: 6, strength: 0.8 });
     const easy = review(before, { grade: 'correct', difficulty: 1, kind: 'multipleChoice', now: NOW });
     const hard = review(before, { grade: 'correct', difficulty: 5, kind: 'buildResponse', now: NOW });
     expect(hard.stability).toBeGreaterThan(easy.stability);
+  });
+
+  describe('the early phase', () => {
+    it('brings freshly met material back within a couple of days, however well it went', () => {
+      // One free-production answer on a brand-new concept used to buy a
+      // multi-day absence, which is how a word learned on Monday is gone by the
+      // time it is next asked for.
+      let state = seen();
+      for (let i = 0; i < 3; i += 1) {
+        state = review(state, {
+          grade: 'correct',
+          difficulty: 5,
+          kind: 'buildResponse',
+          now: NOW + i * 1000,
+        });
+        expect(state.dueAt - state.lastReviewed).toBeLessThanOrEqual(2 * DAY_MS);
+      }
+    });
+
+    it('is not a blanket "everything returns tomorrow"', () => {
+      // A concept that has been round the loop enough times and is solid
+      // schedules normally — the cap releases rather than persisting.
+      let state = seen({ timesSeen: 6, strength: 0.85, stability: 4 });
+      state = review(state, { grade: 'correct', difficulty: 4, kind: 'translateToEs', now: NOW });
+      expect(state.dueAt - state.lastReviewed).toBeGreaterThan(5 * DAY_MS);
+    });
+
+    it('still shortens sharply on a wrong answer', () => {
+      const before = seen({ timesSeen: 1, stability: 1 });
+      const after = review(before, { grade: 'incorrect', difficulty: 3, kind: 'fillBlank', now: NOW });
+      expect(after.stability).toBeLessThan(before.stability);
+    });
   });
 
   it('raises strength faster for harder exercises', () => {
@@ -140,6 +174,50 @@ describe('masteryBand', () => {
   it('labels early exposures as learning', () => {
     const state = review(seen(), { grade: 'correct', difficulty: 1, kind: 'multipleChoice', now: NOW });
     expect(masteryBand(state, NOW)).toBe('learning');
+  });
+
+  /**
+   * The ladder is the point of the band: unseen → mastered is not a jump a
+   * concept is allowed to make because the learner pressed the right button
+   * twice. Each of these fixtures is the one below it plus exactly the thing
+   * the next rung requires.
+   */
+  describe('the ladder', () => {
+    /** Answers a concept `times` times, one day apart, at a given difficulty. */
+    function drill(times: number, difficulty: 1 | 3 | 4, spacing = DAY_MS) {
+      let state = seen();
+      for (let i = 0; i < times; i += 1) {
+        state = review(state, {
+          grade: 'correct',
+          difficulty,
+          kind: difficulty >= 4 ? 'translateToEs' : difficulty === 3 ? 'fillBlank' : 'multipleChoice',
+          now: NOW + i * spacing,
+        });
+      }
+      return state;
+    }
+
+    it('never reaches mastered on recognition alone', () => {
+      const state = drill(10, 1);
+      expect(state.timesSeen).toBe(10);
+      expect(masteryBand(state, state.lastReviewed)).not.toBe('mastered');
+    });
+
+    it('never reaches mastered inside a single sitting', () => {
+      // Ten hard, correct answers — but all within a few minutes.
+      const crammed = drill(10, 4, 60_000);
+      expect(masteryBand(crammed, crammed.lastReviewed)).toBe('strong');
+    });
+
+    it('reaches mastered on demanding retrieval spread over days', () => {
+      const spaced = drill(8, 4);
+      expect(masteryBand(spaced, spaced.lastReviewed)).toBe('mastered');
+    });
+
+    it('calls a mid-strength concept familiar rather than weak', () => {
+      const state = seen({ timesSeen: 4, strength: 0.4, depth: 2, stability: 3, lastReviewed: NOW });
+      expect(masteryBand(state, NOW)).toBe('familiar');
+    });
   });
 });
 

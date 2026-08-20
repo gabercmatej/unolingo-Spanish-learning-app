@@ -6,13 +6,14 @@ import {
   getLesson,
   getLessonSentences,
   getStageConcepts,
+  getUnit,
   getStory,
   isGrammarConcept,
   isVocabConcept,
   levelIndex,
   stories,
 } from '@/content';
-import type { Lesson } from '@/content/types';
+import type { CefrLevel, Lesson } from '@/content/types';
 import type { ChoiceExercise, Exercise } from '@/learning/exercise';
 import {
   buildConversationTurn,
@@ -25,7 +26,17 @@ import {
   shuffle,
   type GenContext,
 } from '@/learning/generator';
-import { atRiskConcepts, dueConcepts, estimateLevel, skillBalance, weakAreas } from '@/learning/mastery';
+import { knowledgeOf } from '@/learning/eligibility';
+import {
+  atRiskConcepts,
+  dueConcepts,
+  estimateLevel,
+  skillBalance,
+  unitStrengthPlan,
+  weakAreas,
+  SESSION_CAP,
+  type UnitStrengthPlan,
+} from '@/learning/mastery';
 import { mastery } from '@/learning/srs';
 import { KIND_DIFFICULTY, type ExerciseKind, type LearnerState } from '@/learning/types';
 
@@ -74,6 +85,8 @@ interface BuildOptions {
   forceHardMode?: boolean;
   /** Restrict practice to these concepts (weak-area drilling). */
   conceptIds?: string[];
+  /** The unit or lesson the session was started from, where the kind needs it. */
+  source?: string;
   targetLength?: number;
 }
 
@@ -92,6 +105,12 @@ function makeContext(options: BuildOptions): GenContext {
     // …and ability is not one number. This lets the mix stay hard in the skills
     // the learner is ahead in without over-reaching in the ones they are not.
     skills: skillBalance(options.learner, now),
+    // What the course has actually shown this learner. Everything the generator
+    // does with a sentence is gated on it — see `learning/eligibility.ts`.
+    knowledge: knowledgeOf(options.learner),
+    // Shared across the whole session so a concept coming back later comes back
+    // in a different sentence, not the same one under a new heading.
+    usedSentences: new Set<string>(),
   };
 }
 
@@ -168,28 +187,46 @@ export function buildLessonSession(lessonId: string, options: BuildOptions): Ses
     return buildCheckpointSession(lesson, options);
   }
 
+  /**
+   * How many *answerable* exercises the lesson is worth.
+   *
+   * Teaching cards are deliberately not counted against it. They used to be —
+   * cards were pushed into the same array the practice budget was measured
+   * against — and the consequence was a hard `slice(0, 8)` on new concepts,
+   * because any more would have eaten the whole session. Fifty of the course's
+   * lessons teach more than eight things, up to twenty, so most of what the
+   * course introduces was reaching the learner with no introduction at all:
+   * no "NEW WORD" card, no meaning, no example, just a multiple choice about a
+   * word they had never been shown. A card is a few seconds of reading, not an
+   * exercise, and budgeting it as one was the whole cause.
+   */
   const target = options.targetLength ?? clamp(Math.round(lesson.estMinutes * 1.8), 10, 20);
   const exercises: Exercise[] = [];
 
-  // 1. Grammar cards for anything new, before it is tested.
+  // 1. Grammar cards for anything new, before it is tested — a rule frames the
+  //    words that follow it.
   for (const grammarId of lesson.grammar ?? []) {
     if (learner.concepts[grammarId]?.introduced) continue;
     const card = buildGrammarCard(grammarId);
     if (card) exercises.push(card);
   }
 
-  // 2. Each new word gets a teaching card followed immediately by a light check.
-  const newConcepts = lesson.teaches.filter((id) => !learner.concepts[id]?.introduced);
+  const unmet = lesson.teaches.filter((id) => !learner.concepts[id]?.introduced);
   const knownConcepts = lesson.teaches.filter((id) => learner.concepts[id]?.introduced);
 
-  for (const conceptId of newConcepts.slice(0, 8)) {
-    const concept = getConcept(conceptId);
-    if (!concept) continue;
-    const card = generateForConcept(conceptId, undefined, ctx);
-    if (card) exercises.push(card);
-  }
+  /**
+   * What this sitting will introduce, and what waits for the next one.
+   *
+   * Anything beyond the cap is left genuinely untouched — not introduced, not
+   * practised, not scored. The alternative, which is what used to happen, is
+   * that the surplus reached the learner through the practice pool: marked as
+   * met, tested, and never once shown. A word the app has never displayed is
+   * not a word the learner has been taught, and recording it as one is how the
+   * Library fills up with things nobody has seen.
+   */
+  const newConcepts = unmet.slice(0, MAX_NEW_PER_SESSION);
 
-  // 3. Practice: new concepts first (now "introduced"), then revision of the
+  // 2. Practice: new concepts first (now "introduced"), then revision of the
   //    lesson's known concepts and its grammar.
   const introduced: LearnerState['concepts'] = { ...learner.concepts };
   for (const conceptId of newConcepts) {
@@ -199,6 +236,60 @@ export function buildLessonSession(lessonId: string, options: BuildOptions): Ses
     };
   }
   const practiceLearner: LearnerState = { ...learner, concepts: introduced };
+
+  /**
+   * Re-derive the knowledge set from the *post-teaching* learner.
+   *
+   * Without this the eligibility gate would refuse to let a lesson practise
+   * what it had just taught: `knowledge` was built at `makeContext` time, from
+   * the learner as they were before the teaching cards ran, so every sentence
+   * containing this lesson's new words would count them as unknown. The point
+   * of the gate is that introduction comes before production — not that they
+   * cannot happen in the same sitting.
+   */
+  ctx.knowledge = {
+    ...knowledgeOf(practiceLearner),
+    /**
+     * A lesson may practise at its own level, whatever the learner's history
+     * says.
+     *
+     * `productionCeiling` asks "how much has this learner been shown?", which
+     * is the right question for a review session assembled from everything they
+     * have ever met and the wrong one inside a lesson: on the first lesson of
+     * the course it answers A0, so every A1 sentence in that lesson's own list
+     * was refused and the session collapsed to the one exercise kind that needs
+     * no sentence at all — sixteen multiple choices in a row. Where a lesson is
+     * placed is a deliberate pedagogical decision by the author, and inside
+     * that lesson it outranks the estimate.
+     */
+    ceiling: higherLevel(knowledgeOf(practiceLearner).ceiling, lesson.level),
+  };
+
+  /**
+   * Every new concept gets its card, and its first use immediately after.
+   *
+   * The pairing is the point. Eight cards in a row followed by eight questions
+   * reads as a glossary and then a quiz; card → use → card → use is the shape
+   * of actually learning something, and it means the word is retrieved while
+   * the introduction is still on the previous screen.
+   */
+  for (const conceptId of newConcepts) {
+    const card = generateForConcept(conceptId, undefined, ctx);
+    if (!card) continue;
+    exercises.push(card);
+    /**
+     * `recentKinds` carries across the loop rather than being reset per word.
+     * Resetting it made every one of these checks a multiple choice — the
+     * freshness pass had nothing to steer by, so it returned the tier order
+     * unchanged every time and the first kind in it always had the material it
+     * needed.
+     */
+    const check = generateForConcept(conceptId, introduced[conceptId], ctx);
+    if (check && check.form !== 'presentation') {
+      exercises.push(check);
+      ctx.recentKinds = [check.kind, ...(ctx.recentKinds ?? [])].slice(0, 3);
+    }
+  }
 
   // Concepts implied by the lesson's own sentences. Without these, a lesson
   // that only lists sentences (a listening or consolidation lesson, which
@@ -219,7 +310,13 @@ export function buildLessonSession(lessonId: string, options: BuildOptions): Ses
     ...newConcepts,
   ];
 
-  const practice = generate(practicePool, practiceLearner, ctx, target - exercises.length);
+  const answeredSoFar = exercises.filter((exercise) => exercise.form !== 'presentation').length;
+  const practice = generate(
+    practicePool,
+    practiceLearner,
+    ctx,
+    Math.max(0, target - answeredSoFar),
+  );
   exercises.push(...interleave(practice));
 
   // 4. Interleave a couple of reviews from earlier lessons — spacing matters
@@ -245,7 +342,13 @@ export function buildLessonSession(lessonId: string, options: BuildOptions): Ses
     source: lesson.id,
     title: lesson.title,
     subtitle: lesson.goal,
-    exercises: final.slice(0, target + reviews.length + cultureCards.length),
+    /**
+     * Cards are additive to the budget, not deducted from it — see `target`
+     * above. The cap is on answerable work; a lesson that introduces twenty
+     * things is longer than one that introduces four, which is what it should
+     * be.
+     */
+    exercises: final.slice(0, target + cards(final) + reviews.length + cultureCards.length),
   };
 }
 
@@ -541,19 +644,46 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
       break;
 
     case 'unitSmart': {
-      title = 'Unit review';
-      subtitle = 'Weak and overdue concepts from this unit';
-      const pool = options.conceptIds ?? [];
-      const shaky = pool.filter((id) => {
-        const state = learner.concepts[id];
-        if (!state || state.timesSeen === 0) return false;
-        return state.dueAt <= now || mastery(state, now) < 0.78;
-      });
-      // If nothing is actually shaky, fall back to the whole unit rather than
-      // handing back an empty session.
-      ids = (shaky.length > 0 ? shaky : pool.filter((id) => learner.concepts[id])).sort(
-        byWeakness(learner, now),
-      );
+      /**
+       * Strengthening a unit, not replaying it.
+       *
+       * The order comes from `unitStrengthPlan`, which puts unresolved mistakes
+       * first, then concepts a single lesson pass met once and left, then what
+       * has decayed, then what has only ever been recognised. Replaying the
+       * original lesson would hand back the same exercises in the same order,
+       * which is the one thing a revisit must not do.
+       */
+      const unit = options.source ? getUnit(options.source) : undefined;
+      const plan = unit ? unitStrengthPlan(unit, learner, now) : null;
+
+      title = plan && plan.unseen.length > 0 ? 'Finish this unit' : 'Strengthen this unit';
+      subtitle = plan
+        ? strengthenSubtitle(plan)
+        : 'Weak and overdue concepts from this unit';
+      target = options.targetLength ?? SESSION_CAP;
+
+      if (plan && plan.conceptIds.length + plan.unseen.length > 0) {
+        /**
+         * Unmet concepts come first and generate teaching cards, because a
+         * lesson introduces at most `MAX_NEW_PER_SESSION` things a sitting and
+         * a large unit legitimately has some left over. Without this they would
+         * be reachable only by replaying the lesson, which the learner has no
+         * reason to do once it shows a tick.
+         */
+        ids = [...plan.unseen, ...plan.conceptIds];
+      } else {
+        const pool = options.conceptIds ?? [];
+        const shaky = pool.filter((id) => {
+          const state = learner.concepts[id];
+          if (!state || state.timesSeen === 0) return false;
+          return state.dueAt <= now || mastery(state, now) < 0.78;
+        });
+        // If nothing is actually shaky, fall back to the whole unit rather than
+        // handing back an empty session.
+        ids = (shaky.length > 0 ? shaky : pool.filter((id) => learner.concepts[id])).sort(
+          byWeakness(learner, now),
+        );
+      }
       break;
     }
 
@@ -565,7 +695,9 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
       break;
   }
 
-  if (options.conceptIds && kind !== 'concept') {
+  // `unitSmart` derives its own pool from the unit, and intersecting it with
+  // the caller's list would drop exactly the concepts the plan added.
+  if (options.conceptIds && kind !== 'concept' && kind !== 'unitSmart') {
     ids = options.conceptIds.filter((id) => ids.includes(id));
   }
 
@@ -593,28 +725,63 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
   };
 }
 
-/** Listening sessions force audio-first kinds regardless of concept depth. */
+/**
+ * Listening is three different skills, not one exercise in three costumes.
+ *
+ *   • `listenSelect` — sound discrimination. Which of these did you hear?
+ *   • `listenComprehend` — meaning. What did it say?
+ *   • `dictation` — transcription, the hardest of the three.
+ *
+ * Left to the ordinary ranking, a listening session collapsed onto whichever of
+ * them the learner's own history made freshest, and a "listening practice"
+ * session that only ever asks you to match waveforms trains an ear that cannot
+ * understand anything. So this rotates deliberately and only falls back to the
+ * general generator when a concept cannot support the kind it is due.
+ *
+ * The rotation is ordered easiest-first so a session opens on discrimination
+ * and works up, and it advances per exercise rather than per concept — the
+ * point is variety through the session, not per word.
+ */
+const LISTENING_ROTATION: ExerciseKind[] = ['listenSelect', 'listenComprehend', 'dictation'];
+
 function buildListeningExercises(
   ids: string[],
   learner: LearnerState,
   ctx: GenContext,
   target: number,
 ): Exercise[] {
-  const listeningKinds: ExerciseKind[] = ['listenSelect', 'listenComprehend', 'dictation'];
   const out: Exercise[] = [];
 
   for (const conceptId of ids) {
     if (out.length >= target) break;
-    // Bias the generator towards audio by pretending the other kinds are recent.
-    const listeningCtx: GenContext = {
-      ...ctx,
-      recentKinds: (['multipleChoice', 'wordBank', 'translateToEn'] as ExerciseKind[]).concat(
-        ctx.recentKinds ?? [],
-      ),
-    };
-    const exercise = generateForConcept(conceptId, learner.concepts[conceptId], listeningCtx);
-    if (exercise && listeningKinds.includes(exercise.kind)) out.push(exercise);
-    else if (exercise && out.length + 4 < target) out.push(exercise);
+    const state = learner.concepts[conceptId];
+
+    /**
+     * Dictation on a concept the learner has barely met is a spelling test with
+     * no memory behind it, so the rotation starts shallow and only reaches the
+     * hardest kind once there is something to transcribe from.
+     */
+    const depth = state && mastery(state, ctx.now) >= 0.5 ? LISTENING_ROTATION.length : 2;
+    const wanted = LISTENING_ROTATION[out.length % depth];
+
+    const exercise =
+      generateOfKind(conceptId, state, ctx, [
+        wanted,
+        ...LISTENING_ROTATION.filter((kind) => kind !== wanted),
+      ]) ??
+      // Nothing audible for this concept — a bare word with no sentence, or a
+      // `noAudio` line. Take whatever it can offer rather than dropping it,
+      // but only while the session still has room for real listening.
+      (out.length + 4 < target
+        ? generateForConcept(conceptId, state, {
+            ...ctx,
+            recentKinds: (['multipleChoice', 'wordBank', 'translateToEn'] as ExerciseKind[]).concat(
+              ctx.recentKinds ?? [],
+            ),
+          })
+        : null);
+
+    if (exercise) out.push(exercise);
   }
   return out;
 }
@@ -627,6 +794,17 @@ function byWeakness(learner: LearnerState, now: number) {
     const masteryB = stateB ? mastery(stateB, now) : 0;
     return masteryA - masteryB;
   };
+}
+
+/** "8 developing · 3 weak" — the reason this session exists, in the learner's terms. */
+function strengthenSubtitle(plan: UnitStrengthPlan): string {
+  const parts: string[] = [];
+  if (plan.unseen.length > 0) parts.push(`${plan.unseen.length} still to meet`);
+  if (plan.mistaken.length > 0) parts.push(`${plan.mistaken.length} to fix`);
+  if (plan.developing.length > 0) parts.push(`${plan.developing.length} still developing`);
+  if (plan.weak.length > 0) parts.push(`${plan.weak.length} faded`);
+  if (plan.unproduced.length > 0) parts.push(`${plan.unproduced.length} never produced`);
+  return parts.length > 0 ? parts.join(' · ') : 'A varied pass over everything this unit covered';
 }
 
 // --- Session router --------------------------------------------------------
@@ -649,7 +827,7 @@ export function buildSession(
     case 'hardMode':
       return buildPracticeSession('hardMode', { ...options, forceHardMode: true });
     default:
-      return buildPracticeSession(kind, options);
+      return buildPracticeSession(kind, { ...options, source });
   }
 }
 
@@ -684,6 +862,26 @@ export function unlockedStories(learner: LearnerState) {
 }
 
 // --- helpers ---------------------------------------------------------------
+
+/** The higher of two CEFR levels. */
+function higherLevel(a: CefrLevel, b: CefrLevel): CefrLevel {
+  return levelIndex(a) >= levelIndex(b) ? a : b;
+}
+
+/**
+ * The most new material one sitting may introduce.
+ *
+ * A ceiling on cognitive load, not on the curriculum: a lesson declaring more
+ * than this introduces the rest on a later pass, and `unitStrengthPlan` lists
+ * what is still unmet so it stays reachable. Twelve rather than eight — eight
+ * left too much of the course silently un-introduced, and a card is cheap.
+ */
+const MAX_NEW_PER_SESSION = 12;
+
+/** Presentation cards in a built session — they do not count against the budget. */
+function cards(exercises: Exercise[]): number {
+  return exercises.filter((exercise) => exercise.form === 'presentation').length;
+}
 
 function dedupe(ids: string[]): string[] {
   return [...new Set(ids)];

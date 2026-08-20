@@ -223,8 +223,8 @@ function bandLabel(band: ReturnType<typeof masteryBand>): string {
       return 'Not met yet';
     case 'learning':
       return 'Learning';
-    case 'weak':
-      return 'Needs work';
+    case 'familiar':
+      return 'Familiar';
     case 'strong':
       return 'Strong';
     case 'mastered':

@@ -233,6 +233,9 @@ export default function LearnScreen() {
             stages={stages}
             onOpenUnit={(unitId) => router.push({ pathname: '/unit/[id]', params: { id: unitId } })}
             onStartLesson={startLesson}
+            onStrengthenUnit={(unitId) =>
+              router.push({ pathname: '/session', params: { kind: 'unitSmart', source: unitId } })
+            }
           />
         </Section>
       </Reveal>

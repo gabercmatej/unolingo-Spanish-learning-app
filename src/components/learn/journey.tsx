@@ -37,9 +37,17 @@ interface JourneyProps {
   stages: StageProgress[];
   onOpenUnit: (unitId: string) => void;
   onStartLesson: (lesson: Lesson) => void;
+  /**
+   * Start a targeted strengthen session for a unit.
+   *
+   * The mastery figure on a finished unit was the most useful number on this
+   * screen and the only one that did nothing when pressed — a diagnosis with no
+   * treatment. This is the treatment.
+   */
+  onStrengthenUnit: (unitId: string) => void;
 }
 
-export function Journey({ stages, onOpenUnit, onStartLesson }: JourneyProps) {
+export function Journey({ stages, onOpenUnit, onStartLesson, onStrengthenUnit }: JourneyProps) {
   const currentStageId = stages.find((stage) => stage.state === 'current')?.stage.id ?? null;
   const [open, setOpen] = useState<string | null>(currentStageId ?? stages[0]?.stage.id ?? null);
 
@@ -66,6 +74,7 @@ export function Journey({ stages, onOpenUnit, onStartLesson }: JourneyProps) {
           onToggle={() => setOpen((value) => (value === stage.stage.id ? null : stage.stage.id))}
           onOpenUnit={onOpenUnit}
           onStartLesson={onStartLesson}
+          onStrengthenUnit={onStrengthenUnit}
         />
       ))}
     </View>
@@ -78,12 +87,14 @@ function StageSection({
   onToggle,
   onOpenUnit,
   onStartLesson,
+  onStrengthenUnit,
 }: {
   stage: StageProgress;
   expanded: boolean;
   onToggle: () => void;
   onOpenUnit: (unitId: string) => void;
   onStartLesson: (lesson: Lesson) => void;
+  onStrengthenUnit: (unitId: string) => void;
 }) {
   const theme = useTheme();
   const { state } = stage;
@@ -189,6 +200,7 @@ function StageSection({
               isLast={index === stage.units.length - 1}
               onOpen={() => onOpenUnit(unit.unit.id)}
               onStartLesson={onStartLesson}
+              onStrengthen={() => onStrengthenUnit(unit.unit.id)}
             />
           ))}
         </Animated.View>
@@ -223,11 +235,13 @@ function UnitRow({
   isLast,
   onOpen,
   onStartLesson,
+  onStrengthen,
 }: {
   unit: UnitProgress;
   isLast: boolean;
   onOpen: () => void;
   onStartLesson: (lesson: Lesson) => void;
+  onStrengthen: () => void;
 }) {
   const theme = useTheme();
   const { state } = unit;
@@ -342,13 +356,48 @@ function UnitRow({
           </>
         ) : null}
 
-        {state === 'complete' && unit.needsReview ? (
-          <View style={[styles.reviewFlag, { backgroundColor: theme.warningSoft }]}>
-            <Icon name="refresh-outline" size={13} tone={theme.warning} />
-            <Text variant="caption" tone={theme.warning}>
-              Review recommended — {Math.round(unit.mastery * 100)}% mastery
-            </Text>
-          </View>
+        {/*
+          A sibling of the header's PressScale, never a child of it: nesting
+          pressables emits nested <button> elements, which is invalid HTML and a
+          hydration error on web. That constraint is also the better design —
+          the strengthen action is its own affordance, not a second meaning
+          hidden inside "open the unit".
+        */}
+        {state === 'complete' ? (
+          <PressScale
+            onPress={onStrengthen}
+            scaleTo={0.98}
+            hover="lift"
+            haptic="press"
+            accessibilityLabel={`Strengthen ${unit.unit.title}, ${Math.round(unit.mastery * 100)} percent mastery`}>
+            <View
+              style={[
+                styles.reviewFlag,
+                {
+                  backgroundColor: unit.needsReview ? theme.warningSoft : theme.backgroundSunken,
+                },
+              ]}>
+              <Icon
+                name={unit.needsReview ? 'refresh-outline' : 'trending-up-outline'}
+                size={13}
+                tone={unit.needsReview ? theme.warning : theme.textSecondary}
+              />
+              <Text
+                variant="caption"
+                tone={unit.needsReview ? theme.warning : theme.textSecondary}
+                style={styles.flex}
+                numberOfLines={1}>
+                {unit.needsReview
+                  ? `Review recommended — ${Math.round(unit.mastery * 100)}% mastery`
+                  : `Strengthen — ${Math.round(unit.mastery * 100)}% mastery`}
+              </Text>
+              <Icon
+                name="chevron-forward"
+                size={13}
+                tone={unit.needsReview ? theme.warning : theme.textTertiary}
+              />
+            </View>
+          </PressScale>
         ) : null}
 
         {state === 'locked' ? (

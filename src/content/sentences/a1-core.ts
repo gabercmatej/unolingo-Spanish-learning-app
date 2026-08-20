@@ -2104,4 +2104,121 @@ export const a1CoreSentences: Sentence[] = [
     level: 'A1',
     topics: ['transport', 'plans'],
   },
+
+  // --- Reachable practice for concepts that had none ------------------------
+  //
+  // Each of these exists to close a specific gap `audit:content` reports: a
+  // concept the course teaches whose entire sentence pool needed material the
+  // learner had not met yet, so at the moment it was introduced there was not
+  // one line they could read with it in. Every sentence here is built only from
+  // vocabulary and grammar available at or before the lesson that introduces
+  // its target — that constraint is the whole point of them, so check it before
+  // editing one.
+  {
+    // `v.espanol` is taught in the second lesson of the course, so this is built
+    // from that lesson's own material and nothing else — greeting, ser, and the
+    // word itself.
+    id: 's.k243',
+    es: 'Buenas tardes, soy español.',
+    en: 'Good afternoon, I’m Spanish.',
+    concepts: ['v.espanol', 'p.buenas-tardes', 'v.ser'],
+    level: 'A1',
+    topics: ['introductions', 'people'],
+  },
+  {
+    id: 's.k255',
+    es: 'Hablo español y esloveno.',
+    en: 'I speak Spanish and Slovenian.',
+    concepts: ['v.espanol', 'v.esloveno', 'v.hablar'],
+    level: 'A1',
+    topics: ['introductions', 'people'],
+  },
+  {
+    id: 's.k244',
+    es: '¿Tú hablas español?',
+    en: 'Do you speak Spanish?',
+    concepts: ['v.tu', 'v.espanol', 'v.hablar'],
+    level: 'A1',
+    topics: ['introductions', 'people'],
+  },
+  {
+    id: 's.k245',
+    es: '¿Qué estudias tú?',
+    en: 'What do you study?',
+    concepts: ['v.que', 'v.tu', 'v.estudiar'],
+    level: 'A1',
+    topics: ['introductions', 'work'],
+  },
+  {
+    id: 's.k246',
+    es: 'Tengo dos hermanos y un perro.',
+    en: 'I have two brothers and a dog.',
+    concepts: ['v.dos', 'v.uno', 'v.hermano', 'v.perro'],
+    level: 'A1',
+    topics: ['family', 'numbers'],
+  },
+  {
+    id: 's.k247',
+    es: 'Somos tres en casa.',
+    en: 'There are three of us at home.',
+    concepts: ['v.tres', 'v.casa'],
+    level: 'A1',
+    topics: ['family', 'numbers'],
+  },
+  {
+    id: 's.k248',
+    es: 'Mi abuelo tiene ochenta y siete años.',
+    en: 'My grandfather is eighty-seven.',
+    concepts: ['v.siete', 'v.abuelo', 'v.anos'],
+    level: 'A1',
+    topics: ['family', 'numbers'],
+  },
+  {
+    id: 's.k249',
+    es: 'Somos ocho en la mesa.',
+    en: 'There are eight of us at the table.',
+    concepts: ['v.ocho', 'v.mesa'],
+    level: 'A1',
+    topics: ['numbers', 'food'],
+  },
+  {
+    id: 's.k250',
+    es: 'Trabajo con nueve personas muy majas.',
+    en: 'I work with nine very nice people.',
+    concepts: ['v.nueve', 'v.trabajar', 'v.gente', 'v.majo'],
+    level: 'A1',
+    topics: ['work', 'numbers'],
+  },
+  {
+    id: 's.k251',
+    es: 'Tengo diez euros, no es mucho.',
+    en: 'I have ten euros, it isn’t much.',
+    concepts: ['v.diez', 'v.tener', 'v.mucho'],
+    level: 'A1',
+    topics: ['numbers', 'shopping'],
+  },
+  {
+    id: 's.k252',
+    es: 'Este año quiero vivir en España.',
+    en: 'This year I want to live in Spain.',
+    concepts: ['v.ano-time', 'v.querer', 'v.vivir', 'v.espana'],
+    level: 'A1',
+    topics: ['plans', 'travel'],
+  },
+  {
+    id: 's.k253',
+    es: 'Mi familia vive muy lejos.',
+    en: 'My family lives a long way away.',
+    concepts: ['v.familia', 'v.vivir', 'v.lejos'],
+    level: 'A1',
+    topics: ['family'],
+  },
+  {
+    id: 's.k254',
+    es: 'Tengo un libro muy bueno en casa.',
+    en: 'I have a very good book at home.',
+    concepts: ['v.libro', 'v.tener', 'v.casa'],
+    level: 'A1',
+    topics: ['hobbies', 'home'],
+  },
 ];

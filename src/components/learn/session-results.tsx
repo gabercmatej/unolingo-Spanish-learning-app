@@ -15,6 +15,7 @@ import { conceptLabel, getConcept } from '@/content';
 import { useTheme } from '@/hooks/use-theme';
 import type { Achievement } from '@/learning/achievements';
 import { rankForLevel } from '@/learning/ranks';
+import type { MasteryBand } from '@/learning/srs';
 import { formatDuration } from '@/lib/date';
 import { sound } from '@/lib/sound';
 
@@ -22,7 +23,29 @@ export interface ConceptDelta {
   conceptId: string;
   before: number;
   after: number;
+  /**
+   * The mastery band on each side of the session.
+   *
+   * A percentage gain is a number; crossing from "learning" to "familiar" is an
+   * event, and it is the one worth marking. Optional so a caller that has not
+   * measured it simply gets no milestone rather than a wrong one.
+   */
+  bandBefore?: MasteryBand;
+  bandAfter?: MasteryBand;
 }
+
+/**
+ * The band crossings worth a line on the results screen, and what to call them.
+ *
+ * Deliberately not every crossing: "new → learning" happens to every concept in
+ * every lesson and marking it would make the section noise. These are the three
+ * moments a learner would actually recognise as progress.
+ */
+const BAND_MILESTONE: Partial<Record<MasteryBand, { label: string; icon: IconName }>> = {
+  familiar: { label: 'starting to stick', icon: 'trending-up' },
+  strong: { label: 'recalled without help', icon: 'flash' },
+  mastered: { label: 'mastered', icon: 'ribbon' },
+};
 
 /**
  * A course boundary this session crossed.
@@ -131,6 +154,21 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
     .sort((a, b) => b.after - b.before - (a.after - a.before))
     .slice(0, 3);
 
+  /**
+   * Concepts that moved up a band this session. The ladder is the thing the
+   * learner is actually climbing, so crossing a rung deserves naming — quietly,
+   * as a line in a card, not as a burst. `Burst` is spent on the level-up and
+   * the milestone card, and a fourth use would spend the other three.
+   */
+  const promoted = summary.improved
+    .filter(
+      (delta) =>
+        delta.bandAfter &&
+        delta.bandAfter !== delta.bandBefore &&
+        BAND_MILESTONE[delta.bandAfter],
+    )
+    .slice(0, 3);
+
   return (
     <View style={styles.stack}>
       <Reveal style={styles.hero}>
@@ -221,6 +259,31 @@ export function SessionResults({ summary, onContinue, onReviewMistakes }: Sessio
           />
         </StatGrid>
       </Reveal>
+
+      {promoted.length > 0 ? (
+        <Reveal delay={stagger(6)}>
+          <Card variant="flat">
+            <Text variant="overline" tone={theme.accentText}>
+              ✨ MOVED UP
+            </Text>
+            {promoted.map((delta) => {
+              const concept = getConcept(delta.conceptId);
+              const milestone = BAND_MILESTONE[delta.bandAfter!]!;
+              return (
+                <View key={delta.conceptId} style={styles.row}>
+                  <Icon name={milestone.icon} size={15} tone={theme.accent} />
+                  <Text variant="small" style={styles.flex} numberOfLines={1}>
+                    {concept ? conceptLabel(concept) : delta.conceptId}
+                  </Text>
+                  <Text variant="caption" color="textSecondary">
+                    {milestone.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </Card>
+        </Reveal>
+      ) : null}
 
       {topImproved.length > 0 ? (
         <Reveal delay={stagger(7)}>

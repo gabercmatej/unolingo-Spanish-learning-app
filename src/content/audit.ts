@@ -3,10 +3,14 @@ import {
   conversations,
   cultureNotes,
   curriculum,
+  getConcept,
+  getLessonIndex,
   getLessonSentences,
   getLessonThatIntroduces,
   getSentencesForConcept,
   grammarConcepts,
+  isVocabConcept,
+  levelIndex,
   sentences,
   verbFormConcepts,
   stories,
@@ -14,6 +18,7 @@ import {
   verbs,
 } from '@/content';
 import { errorDrills, naturalDrills } from '@/content/drills';
+import { sentenceEligible, type Knowledge } from '@/learning/eligibility';
 import { reportVerbCorpus } from '@/content/verb-corpus';
 import {
   CEFR_LEVELS,
@@ -293,7 +298,16 @@ export function auditCurriculum(): CurriculumAudit {
       errorDrills: errorDrills.length,
       naturalDrills: naturalDrills.length,
     },
-    gaps: [...findStructuralGaps(stages), ...findDepthGaps(stages), ...findUntaught(), ...findParadigmGaps(), ...findTemplates()],
+    gaps: [
+      ...findStructuralGaps(stages),
+      ...findDepthGaps(stages),
+      ...findUntaught(),
+      ...findScopeLeakage(),
+      ...findUnreachablePractice(),
+      ...findMistaggedSentences(),
+      ...findParadigmGaps(),
+      ...findTemplates(),
+    ],
   };
 }
 
@@ -649,6 +663,298 @@ function findParadigmGaps(): Gap[] {
  * which is exactly the texture this course is trying to avoid. Flagged per
  * level, because a shared opening is only suspicious relative to a pool size.
  */
+/**
+ * When each concept first becomes available to the learner.
+ *
+ * Not the same as "which lesson lists it under `teaches`". A lesson also draws
+ * on its own sentences, and `session.ts` generates a teaching card for any
+ * concept in those sentences that the learner has not met — so a lesson
+ * effectively introduces everything its sentences contain, whether or not the
+ * author declared it. Measuring against `teaches` alone reported forty-six
+ * lessons as leaky when what they were doing was working exactly as designed.
+ */
+function buildAvailability(): Map<string, number> {
+  const available = new Map<string, number>();
+  const note = (id: string, index: number) => {
+    const existing = available.get(id);
+    if (existing === undefined || index < existing) available.set(id, index);
+  };
+
+  for (const stage of curriculum) {
+    for (const unit of stage.units) {
+      for (const lesson of unit.lessons) {
+        const index = getLessonIndex(lesson.id);
+        for (const id of lesson.teaches) note(id, index);
+        for (const id of lesson.grammar ?? []) note(id, index);
+        for (const sentence of getLessonSentences(lesson)) {
+          for (const id of sentence.concepts) note(id, index);
+        }
+      }
+    }
+  }
+  return available;
+}
+
+const availableAt = buildAvailability();
+
+function firstAvailable(conceptId: string): number {
+  return availableAt.get(conceptId) ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * How far ahead of a lesson a concept has to be taught before its appearance
+ * counts as a leak rather than a preview.
+ *
+ * A pronouns lesson whose example uses a verb formally taught five lessons
+ * later is fine — that is a preview, and the learner meets the verb properly
+ * within the week. A greetings lesson reaching sixty lessons forward is not.
+ */
+const FORWARD_LESSONS = 25;
+
+/** …and a sentence above its lesson's own level is a leak at any distance. */
+function levelGap(lessonLevel: CefrLevel, sentenceLevel: CefrLevel): number {
+  return levelIndex(sentenceLevel) - levelIndex(lessonLevel);
+}
+
+/**
+ * Lessons drawing on sentences that belong to a much later part of the course.
+ *
+ * This is the content-side half of the untaught-production bug. The runtime
+ * gate refuses to *use* such a sentence for production, which protects the
+ * learner; it does not tell the author that a greetings lesson has quietly
+ * acquired a sentence about watching the football at the bar. Only this does.
+ */
+function findScopeLeakage(): Gap[] {
+  const above: { lesson: string; count: number; worst: string }[] = [];
+  const distant: { lesson: string; count: number; worst: string }[] = [];
+
+  for (const stage of curriculum) {
+    for (const unit of stage.units) {
+      for (const lesson of unit.lessons) {
+        if (!drawsOnOwnSentences(lesson)) continue;
+        const here = getLessonIndex(lesson.id);
+        const own = new Set([...lesson.teaches, ...(lesson.grammar ?? [])]);
+
+        let overLevel = 0;
+        let overLevelWorst = '';
+        let forward = 0;
+        let forwardWorst = '';
+
+        for (const sentence of getLessonSentences(lesson)) {
+          if (levelGap(lesson.level, sentence.level) > 1) {
+            overLevel += 1;
+            if (!overLevelWorst) {
+              overLevelWorst = `${sentence.id} is ${sentence.level} in a ${lesson.level} lesson`;
+            }
+          }
+          const later = sentence.concepts.filter(
+            (id) => !own.has(id) && firstAvailable(id) > here + FORWARD_LESSONS,
+          );
+          if (later.length > 0) {
+            forward += 1;
+            if (!forwardWorst) forwardWorst = `${sentence.id} needs ${later.slice(0, 3).join(', ')}`;
+          }
+        }
+
+        if (overLevel > 0) above.push({ lesson: lesson.id, count: overLevel, worst: overLevelWorst });
+        if (forward > 0) distant.push({ lesson: lesson.id, count: forward, worst: forwardWorst });
+      }
+    }
+  }
+
+  const gaps: Gap[] = [];
+
+  /**
+   * More than one level above the lesson is unambiguous: the sentence belongs
+   * somewhere else. This is the half worth acting on.
+   */
+  if (above.length > 0) {
+    const worst = above.sort((a, b) => b.count - a.count).slice(0, 5);
+    gaps.push({
+      severity: 'warn',
+      where: 'course',
+      message:
+        `${above.length} lesson(s) draw on sentences well above their own level: ` +
+        worst.map((entry) => `${entry.lesson} (${entry.count})`).join(', ') +
+        (worst[0]?.worst ? ` — e.g. ${worst[0].worst}` : ''),
+    });
+  }
+
+  /**
+   * A word the learner meets in lesson one and is formally taught in lesson
+   * forty is a *preview*, not a defect — "Vale, hasta luego" belongs in the
+   * greetings lesson whether or not `vale` has its own card yet, and the
+   * runtime gate keeps such a line out of production until it does. Reported as
+   * context so an author can decide whether the word deserves teaching earlier,
+   * never as something to be silenced.
+   */
+  if (distant.length > 0) {
+    const worst = distant.sort((a, b) => b.count - a.count).slice(0, 5);
+    gaps.push({
+      severity: 'info',
+      where: 'course',
+      message:
+        `${distant.length} lesson(s) preview words taught much later — candidates for ` +
+        `teaching earlier: ` +
+        worst.map((entry) => `${entry.lesson} (${entry.count})`).join(', ') +
+        (worst[0]?.worst ? ` — e.g. ${worst[0].worst}` : ''),
+    });
+  }
+
+  return gaps;
+}
+
+/**
+ * Concepts whose practice material is out of reach when they are taught.
+ *
+ * The failure this catches is specific and was invisible: a concept can have
+ * five sentences and still be unpractisable at the moment it is introduced,
+ * because every one of them needs something the learner will not meet for
+ * another sixty lessons. The count looks healthy; the usable pool is empty.
+ *
+ * It asks `learning/eligibility.ts` rather than reimplementing the rule, for
+ * the same reason `audit:content` reads the verb corpus index the generator
+ * reads: a diagnostic with its own copy of a threshold is a diagnostic that
+ * silently stops describing the thing it was written to watch. The learner it
+ * synthesises is the one standing at the moment the concept is introduced —
+ * everything available by then, and nothing after.
+ */
+function findUnreachablePractice(): Gap[] {
+  const stranded: string[] = [];
+  const thin: string[] = [];
+
+  /** Everything available at or before a given lesson index, as a knowledge set. */
+  const knowledgeAt = (() => {
+    const cache = new Map<number, Knowledge>();
+    return (index: number, level: CefrLevel): Knowledge => {
+      const cached = cache.get(index);
+      if (cached && cached.ceiling === level) return cached;
+      const known = new Set<string>();
+      for (const [id, at] of availableAt) if (at <= index) known.add(id);
+      const knowledge: Knowledge = { known, ceiling: level };
+      cache.set(index, knowledge);
+      return knowledge;
+    };
+  })();
+
+  for (const concept of [...vocabConcepts, ...grammarConcepts]) {
+    const taughtAt = firstAvailable(concept.id);
+    if (!Number.isFinite(taughtAt)) continue; // already reported by findUntaught
+
+    const pool = getSentencesForConcept(concept.id);
+    if (pool.length === 0) continue; // already reported as unpractised
+
+    const knowledge = knowledgeAt(taughtAt, concept.level);
+    /**
+     * `translateToEn` is the gentlest thing the generator can build from a
+     * sentence. If not one line in the pool clears even that bar, the concept
+     * has no sentence practice at all when it is introduced.
+     */
+    const readable = pool.filter((sentence) =>
+      sentenceEligible(sentence, 'translateToEn', knowledge, [concept.id]),
+    );
+    /** …and this is the bar for asking the learner to produce it. */
+    const producible = pool.filter((sentence) =>
+      sentenceEligible(sentence, 'translateToEs', knowledge, [concept.id]),
+    );
+
+    if (readable.length === 0) stranded.push(concept.id);
+    else if (producible.length === 0 && pool.length >= 3) thin.push(concept.id);
+  }
+
+  const gaps: Gap[] = [];
+  if (stranded.length > 0) {
+    gaps.push({
+      severity: 'warn',
+      where: 'course',
+      message:
+        `${stranded.length} concept(s) have sentences, but not one the learner could even read ` +
+        `at the point it is taught (${stranded.slice(0, 6).join(', ')}` +
+        `${stranded.length > 6 ? ', …' : ''})`,
+    });
+  }
+  if (thin.length > 0) {
+    gaps.push({
+      severity: 'info',
+      where: 'course',
+      message:
+        `${thin.length} concept(s) can be read but not produced when introduced — every ` +
+        `sentence still needs something unmet: ${thin.slice(0, 6).join(', ')}` +
+        `${thin.length > 6 ? ', …' : ''}`,
+    });
+  }
+  return gaps;
+}
+
+/**
+ * Sentences tagged with a word they do not contain.
+ *
+ * This is what let `v.amigo` reach "Mis vecinos han visto el partido en el bar
+ * de abajo." — a sentence about neighbours, tagged with the word for friend. A
+ * mis-tag is invisible to every other check: the id resolves, the sentence is
+ * well-formed, and the pool simply gains a line that teaches the wrong thing.
+ *
+ * Reported as a NOTE rather than a warning, and deliberately generous about
+ * what counts as present. Spanish derivation is everywhere in this corpus —
+ * "desayuno"/"desayunar", "fin de semana"/"finde" — and a check that flagged
+ * those would be switched off within a week, which is how a noisy diagnostic
+ * ends up protecting nothing. A shared stem counts as a match; only a tag with
+ * no lexical relationship to the sentence at all is reported.
+ */
+const LITERAL_POS = new Set(['noun', 'adjective', 'adverb', 'interjection', 'number']);
+
+/** Characters of shared prefix that count as the same lexical family. */
+const STEM_LENGTH = 5;
+
+function findMistaggedSentences(): Gap[] {
+  const mistagged: string[] = [];
+
+  for (const sentence of sentences) {
+    const words = sentence.es
+      .toLowerCase()
+      .replace(/[¿?¡!.,;:«»"—–]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+
+    for (const conceptId of sentence.concepts) {
+      const concept = getConcept(conceptId);
+      if (!concept || !isVocabConcept(concept)) continue;
+      if (!LITERAL_POS.has(concept.pos) || concept.verbId) continue;
+
+      const forms = concept.es
+        .split('/')
+        .map((part) => part.trim().toLowerCase().replace(/^(el|la|los|las|un|una)\s+/, ''))
+        .filter(Boolean);
+
+      const present = forms.some((form) => {
+        const head = form.split(' ')[0];
+        if (sentence.es.toLowerCase().includes(form)) return true;
+        return words.some(
+          (word) =>
+            word === head ||
+            (head.length >= STEM_LENGTH &&
+              word.length >= STEM_LENGTH &&
+              word.slice(0, STEM_LENGTH) === head.slice(0, STEM_LENGTH)),
+        );
+      });
+
+      if (!present) mistagged.push(`${sentence.id}→${conceptId}`);
+    }
+  }
+
+  if (mistagged.length === 0) return [];
+  return [
+    {
+      severity: 'info',
+      where: 'course',
+      message:
+        `${mistagged.length} sentence(s) carry a tag with no word of that family in them, so ` +
+        `the concept's pool may teach something else: ${mistagged.slice(0, 8).join(', ')}` +
+        `${mistagged.length > 8 ? ', …' : ''}`,
+    },
+  ];
+}
+
 function findTemplates(): Gap[] {
   const gaps: Gap[] = [];
 

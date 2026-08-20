@@ -5,6 +5,7 @@ import {
   getConcept,
   getGrammar,
   getUnitConcepts,
+  getUnitTaughtConcepts,
   getVerb,
   isGrammarConcept,
   isVocabConcept,
@@ -261,14 +262,14 @@ export function atRiskConcepts(learner: LearnerState, now = Date.now(), limit = 
 export interface VocabCounts {
   new: number;
   learning: number;
-  weak: number;
+  familiar: number;
   strong: number;
   mastered: number;
   total: number;
 }
 
 export function vocabCounts(learner: LearnerState, now = Date.now()): VocabCounts {
-  const counts: VocabCounts = { new: 0, learning: 0, weak: 0, strong: 0, mastered: 0, total: 0 };
+  const counts: VocabCounts = { new: 0, learning: 0, familiar: 0, strong: 0, mastered: 0, total: 0 };
   for (const concept of allConcepts) {
     if (!isVocabConcept(concept)) continue;
     counts.total += 1;
@@ -468,6 +469,23 @@ export function levelProgress(learner: LearnerState, now = Date.now()): { level:
   return { level, progress: total / levelConcepts.length };
 }
 
+/**
+ * Where a unit sits in its own life, which is a different question from how
+ * many of its lessons are ticked.
+ *
+ * "Complete" was doing two jobs — the lessons are finished, and there is
+ * nothing left to do here — and only the first was ever true. These name the
+ * five stages the course actually puts a unit through, so a screen can say
+ * "you have covered this, now make it stick" instead of showing a tick and an
+ * unexplained 22%.
+ *
+ *   • **learning** — new material is still arriving.
+ *   • **practising** — lessons done, but most of it has only been recognised.
+ *   • **strengthening** — met and retrieved, not yet reliable.
+ *   • **maintaining** — solid; it comes back through spaced review, not here.
+ */
+export type UnitPhase = 'learning' | 'practising' | 'strengthening' | 'maintaining';
+
 export type UnitState =
   /** Not written yet — curriculum outline only. */
   | 'planned'
@@ -491,6 +509,11 @@ export interface UnitProgress {
   mastery: number;
   /** True when the unit is complete but its concepts have decayed. */
   needsReview: boolean;
+  /**
+   * The stage of the unit's lifecycle, for screens that need to say what to do
+   * next rather than only how far through it the learner is.
+   */
+  phase: UnitPhase;
   conceptIds: string[];
   /** Lesson ids already finished — lessons need not be done in order. */
   completedLessonIds: string[];
@@ -503,6 +526,11 @@ export interface UnitProgress {
  * complete and still have decayed. `needsReview` is what surfaces that on the
  * path without forcing a repeat of the original lesson.
  */
+/** Above this a unit looks after itself through spaced review. */
+const MAINTENANCE_MASTERY = 0.8;
+/** Above this the material is known and the work is making it reliable. */
+const PRACTISED_MASTERY = 0.55;
+
 export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()): UnitProgress {
   const conceptIds = getUnitConcepts(unit);
   const states = conceptIds
@@ -533,6 +561,22 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
   else if (lessonsDone > 0) state = 'current';
   else state = 'available';
 
+  /**
+   * Phase is read off mastery, not off lesson count, which is the whole point:
+   * finishing the lessons moves a unit out of `learning` and no further.
+   */
+  let phase: UnitPhase;
+  if (state !== 'complete') phase = 'learning';
+  // A unit still holding material the learner has never been shown is not
+  // finished learning, however solid the part they have met looks. Lessons
+  // introduce at most `MAX_NEW_PER_SESSION` concepts a sitting, so a large unit
+  // legitimately has some left after its lessons are ticked.
+  else if (getUnitTaughtConcepts(unit).some((id) => !learner.concepts[id]?.introduced))
+    phase = 'learning';
+  else if (value >= MAINTENANCE_MASTERY) phase = 'maintaining';
+  else if (value >= PRACTISED_MASTERY) phase = 'strengthening';
+  else phase = 'practising';
+
   return {
     unit,
     state,
@@ -540,6 +584,7 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
     lessonCount,
     progress: lessonCount > 0 ? lessonsDone / lessonCount : 0,
     mastery: value,
+    phase,
     // Only meaningful once the unit is done and there is something to measure.
     needsReview: state === 'complete' && states.length >= 3 && value < 0.75,
     conceptIds,
@@ -547,6 +592,143 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
     nextLesson,
   };
 }
+
+/**
+ * What a unit still needs, and what practising it would cost.
+ *
+ * "Complete" and "learned" are different claims — the unit screen has said so
+ * for a while, and the mastery figure beside it was the evidence. It was also
+ * inert: a number telling the learner their unit sits at 22% and offering
+ * nothing to do about it is a diagnosis with no treatment. This is the queue
+ * behind that number, ordered the way a revision session should be.
+ *
+ * Ordering, most urgent first:
+ *
+ *   1. concepts behind an unresolved mistake — the learner already knows these
+ *      are broken;
+ *   2. concepts introduced but never actually retrieved (`timesSeen < 2`), the
+ *      ones a single lesson pass leaves stranded;
+ *   3. concepts that are due, weakest first;
+ *   4. concepts never answered in a demanding kind — recognised, never produced;
+ *   5. everything else, weakest first, so a full pass is still varied.
+ */
+export interface UnitStrengthPlan {
+  unit: Unit;
+  /** Concepts to practise, most urgent first. */
+  conceptIds: string[];
+  /** Met, but not yet retrieved with any confidence. */
+  developing: string[];
+  /** Met and decayed or failing. */
+  weak: string[];
+  /** Recognised but never produced. */
+  unproduced: string[];
+  /** Solid enough to be left alone. */
+  strong: string[];
+  /** Introduced concepts behind an unresolved mistake. */
+  mistaken: string[];
+  /** Concepts the unit covers that the learner has never met. */
+  unseen: string[];
+  /** Rough minutes for a session that works through the queue. */
+  estimatedMinutes: number;
+}
+
+/** Exercise kinds that count as having produced or retrieved a concept, not merely recognised it. */
+const PRODUCED_KINDS: readonly ExerciseKind[] = [
+  'translateToEs',
+  'dictation',
+  'conversation',
+  'buildResponse',
+  'speak',
+  'correctMistake',
+];
+
+/** Below this, a concept has decayed far enough to be worth revisiting. */
+const STRENGTHEN_THRESHOLD = 0.78;
+
+/** How long one exercise takes, in seconds — the basis of the estimate. */
+const SECONDS_PER_EXERCISE = 18;
+
+export function unitStrengthPlan(
+  unit: Unit,
+  learner: LearnerState,
+  now = Date.now(),
+): UnitStrengthPlan {
+  const conceptIds = getUnitConcepts(unit);
+  /**
+   * "Still to meet" means what the unit *teaches* and has not shown yet — not
+   * every word its sentences happen to contain. Those arrive in their own
+   * lessons later, and listing them here would make every unit look unfinished
+   * for ever.
+   */
+  const taught = new Set(getUnitTaughtConcepts(unit));
+
+  const unresolved = new Set(
+    learner.mistakes.filter((m) => !m.resolvedAt).flatMap((m) => m.conceptIds),
+  );
+
+  const mistaken: string[] = [];
+  const developing: string[] = [];
+  const weak: string[] = [];
+  const unproduced: string[] = [];
+  const strong: string[] = [];
+  const unseen: string[] = [];
+
+  for (const id of conceptIds) {
+    const state = learner.concepts[id];
+    if (!state || state.timesSeen === 0) {
+      if (taught.has(id)) unseen.push(id);
+      continue;
+    }
+    if (unresolved.has(id)) mistaken.push(id);
+
+    const value = mastery(state, now);
+    const produced = state.kinds.some((kind) => PRODUCED_KINDS.includes(kind));
+
+    if (state.timesSeen < 2) developing.push(id);
+    else if (value < 0.5 || state.dueAt <= now) weak.push(id);
+    else if (!produced) unproduced.push(id);
+    else if (value < STRENGTHEN_THRESHOLD) weak.push(id);
+    else strong.push(id);
+  }
+
+  const byWeakest = (a: string, b: string) => {
+    const stateA = learner.concepts[a];
+    const stateB = learner.concepts[b];
+    return (stateA ? mastery(stateA, now) : 0) - (stateB ? mastery(stateB, now) : 0);
+  };
+
+  const queue = [
+    ...mistaken.slice().sort(byWeakest),
+    ...developing.slice().sort(byWeakest),
+    ...weak.slice().sort(byWeakest),
+    ...unproduced.slice().sort(byWeakest),
+    ...strong.slice().sort(byWeakest),
+  ];
+  const ordered = [...new Set(queue)];
+
+  /**
+   * The estimate covers the part of the queue a session would actually reach,
+   * not the whole unit — quoting eighteen minutes for a session that runs for
+   * six is the kind of number that teaches the learner to ignore numbers.
+   */
+  const workable = Math.min(ordered.length, SESSION_CAP);
+  const estimatedMinutes = Math.max(1, Math.round((workable * SECONDS_PER_EXERCISE) / 60));
+
+  return {
+    unit,
+    conceptIds: ordered,
+    developing,
+    weak,
+    unproduced,
+    strong,
+    mistaken,
+    unseen,
+    estimatedMinutes,
+  };
+}
+
+/** The longest a strengthen session runs — it is a revisit, not a re-do. */
+export const SESSION_CAP = 16;
 
 export interface StageProgress {
   stage: Stage;

@@ -1,4 +1,5 @@
 import { checkAnswer, deaccent, levenshtein, normalize, pronounAgrees } from '@/learning/answer-check';
+import { practiceText } from '@/learning/generator';
 
 describe('normalize', () => {
   it('strips case, punctuation and Spanish question marks', () => {
@@ -270,5 +271,34 @@ describe('English meaning reversals', () => {
     wrong('Nobody came', 'Everybody came');
     wrong('I have no money', 'I have money');
     wrong('She does not work here', 'She works here');
+  });
+});
+
+/**
+ * Dialogue dashes are typography, not language.
+ *
+ * A word bank built from "¿Cómo estás? — Muy bien, gracias." handed the learner
+ * a bare "—" tile to place, and a typed translation appeared to demand it. The
+ * grader never checked it — `normalize` has always stripped it — so the app was
+ * asking for a keystroke it then ignored.
+ */
+describe('dialogue dashes', () => {
+  it('are already ignored by the grader, in both directions', () => {
+    const accepted = ['¿Cómo estás? — Muy bien, gracias.'];
+    expect(checkAnswer('¿Cómo estás? Muy bien, gracias.', accepted).grade).toBe('correct');
+    expect(checkAnswer('Cómo estás — Muy bien gracias', accepted).grade).toBe('correct');
+  });
+
+  it('are not part of what a word bank asks the learner to assemble', () => {
+    const built = practiceText('—¿Qué te pasa? —Nada, que me duele un poco la cabeza.');
+    expect(built).not.toMatch(/[—–]/);
+    expect(built.startsWith('¿Qué')).toBe(true);
+    // The words themselves survive intact — this strips punctuation, not text.
+    expect(built).toContain('Nada, que me duele un poco la cabeza.');
+  });
+
+  it('leaves a sentence with no dashes exactly as it was', () => {
+    const plain = 'Todos mis amigos viven en Barcelona.';
+    expect(practiceText(plain)).toBe(plain);
   });
 });

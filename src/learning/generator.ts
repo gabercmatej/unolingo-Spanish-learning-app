@@ -35,6 +35,11 @@ import type {
   TypedExercise,
   WordBankExercise,
 } from '@/learning/exercise';
+import {
+  eligibleSentences,
+  unknownConcepts,
+  type Knowledge,
+} from '@/learning/eligibility';
 import { mastery } from '@/learning/srs';
 import {
   KIND_DIFFICULTY,
@@ -78,6 +83,23 @@ export interface GenContext {
    * production. See `candidateKinds`.
    */
   skills?: SkillBalance;
+  /**
+   * What the learner has been introduced to, and how far they may be pushed.
+   *
+   * Undefined means "do not gate" — the placement test and the content audit
+   * both generate for a learner who has no history at all, and gating those
+   * would produce nothing. Every session built from a real learner passes it.
+   */
+  knowledge?: Knowledge;
+  /**
+   * Sentences already used in this session.
+   *
+   * Repetition is how a word sticks; repeating the *same line* is how a learner
+   * memorises one sentence and learns nothing. The generator mutates this as it
+   * goes, so a concept that comes back later in the session comes back in a
+   * different context as well as a different exercise kind.
+   */
+  usedSentences?: Set<string>;
 }
 
 // --- Randomness -------------------------------------------------------------
@@ -184,6 +206,36 @@ function bareWord(token: string): string {
 
 function tokenize(sentence: string): string[] {
   return sentence.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Dialogue dashes, as Spanish punctuates a two-speaker exchange.
+ *
+ * They are typography, not language. In a word bank they became a tile the
+ * learner had to place — "— " sitting in the bank between "hola" and "gracias",
+ * carrying no meaning and testing nothing except whether you had noticed the
+ * app wanted it. Where the dash is attached to the next word it is worse: the
+ * tile reads "—¿Qué" and the word underneath is hidden inside the punctuation.
+ *
+ * `normalize` in `answer-check.ts` has always stripped these before comparing,
+ * so removing them from what the learner has to assemble changes nothing about
+ * grading — it only stops the app asking for a keystroke it was never going to
+ * check.
+ */
+const DIALOGUE_DASH = /[—–]/g;
+
+/**
+ * The sentence as the learner has to reconstruct it: same words, no dialogue
+ * dashes. Used for word banks and typed hints, never for display or audio —
+ * the dash is right in both of those.
+ */
+export function practiceText(sentence: string): string {
+  return sentence.replace(DIALOGUE_DASH, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Tokens for a word bank: the reconstructable sentence, split. */
+function practiceTokens(sentence: string): string[] {
+  return tokenize(practiceText(sentence));
 }
 
 /** Replaces the first occurrence of `word` with a gap, preserving punctuation. */
@@ -337,31 +389,47 @@ export function candidateKinds(state: ConceptState | undefined, ctx: GenContext)
    */
   const advanced = ctx.level ? CEFR_LEVELS.indexOf(ctx.level) >= CEFR_LEVELS.indexOf('B2') : false;
 
-  if (!state || state.timesSeen === 0) {
-    if (hard) return [...RECONSTRUCTION];
-    return advanced
-      ? [...RECONSTRUCTION.slice(0, 3), 'translateToEn']
-      : [...RECOGNITION, 'translateToEn'];
-  }
+  /**
+   * A concept met moments ago, in the lesson that introduced it.
+   *
+   * This branch used to `return` outright, which skipped the freshness and
+   * recency pass at the bottom of this function — so the order was always
+   * exactly `RECOGNITION`, `multipleChoice` always came first, and it always
+   * had the material it needed. A lesson introducing eight new words produced
+   * eight teaching cards followed by eight multiple choices in a row: correct
+   * by every test in the suite, and the dullest possible way to meet a word.
+   * The tiers are still the gentle ones; only the ordering is now shared.
+   */
+  const unseen = !state || state.timesSeen === 0;
 
-  const strength = mastery(state, ctx.now);
   let tiers: ExerciseKind[];
 
-  if (strength < 0.3) tiers = [...RECOGNITION, 'translateToEn', 'wordBank'];
-  else if (strength < 0.55) tiers = [...RECONSTRUCTION, 'listenSelect'];
-  else if (strength < 0.78) tiers = [...PRODUCTION, ...RECONSTRUCTION.slice(0, 2)];
-  else tiers = [...FREE, ...PRODUCTION];
+  if (unseen) {
+    tiers = hard
+      ? [...RECONSTRUCTION]
+      : advanced
+        ? [...RECONSTRUCTION.slice(0, 3), 'translateToEn']
+        : [...RECOGNITION, 'translateToEn'];
+  } else {
+    const strength = mastery(state, ctx.now);
 
-  if (advanced && !hard) {
-    // Shift one tier up rather than removing recognition outright — a B2
-    // learner meeting a brand-new word still deserves a gentle first pass.
-    if (strength >= 0.3 && strength < 0.55) tiers = [...PRODUCTION, ...RECONSTRUCTION.slice(0, 2)];
-    else if (strength >= 0.55) tiers = [...FREE, ...PRODUCTION];
-    // Keep the discriminating kinds in play — at C1 choosing between two
-    // registers is harder than translating a sentence, not easier. Plain
-    // recognition stays on the end as a genuine fallback for concepts with
-    // nothing else to build from.
-    tiers = [...tiers, ...DISCRIMINATION, ...PLAIN_RECOGNITION];
+    if (strength < 0.3) tiers = [...RECOGNITION, 'translateToEn', 'wordBank'];
+    else if (strength < 0.55) tiers = [...RECONSTRUCTION, 'listenSelect'];
+    else if (strength < 0.78) tiers = [...PRODUCTION, ...RECONSTRUCTION.slice(0, 2)];
+    else tiers = [...FREE, ...PRODUCTION];
+
+    if (advanced && !hard) {
+      // Shift one tier up rather than removing recognition outright — a B2
+      // learner meeting a brand-new word still deserves a gentle first pass,
+      // which is why this sits inside the `unseen` else-branch.
+      if (strength >= 0.3 && strength < 0.55) tiers = [...PRODUCTION, ...RECONSTRUCTION.slice(0, 2)];
+      else if (strength >= 0.55) tiers = [...FREE, ...PRODUCTION];
+      // Keep the discriminating kinds in play — at C1 choosing between two
+      // registers is harder than translating a sentence, not easier. Plain
+      // recognition stays on the end as a genuine fallback for concepts with
+      // nothing else to build from.
+      tiers = [...tiers, ...DISCRIMINATION, ...PLAIN_RECOGNITION];
+    }
   }
 
   if (hard) {
@@ -376,7 +444,8 @@ export function candidateKinds(state: ConceptState | undefined, ctx: GenContext)
 
   // Prefer kinds this concept has not been tested with yet, then anything not
   // used in the last few exercises.
-  const fresh = tiers.filter((kind) => !state.kinds.includes(kind));
+  const attempted = state?.kinds ?? [];
+  const fresh = tiers.filter((kind) => !attempted.includes(kind));
   const notRecent = (list: ExerciseKind[]) =>
     list.filter((kind) => !(ctx.recentKinds ?? []).includes(kind));
 
@@ -396,7 +465,7 @@ export function candidateKinds(state: ConceptState | undefined, ctx: GenContext)
    * difficulty the learner can actually meet, which is the only way it stops
    * lagging.
    */
-  return rankForLearner(ordered, ctx, advanced && !hard);
+  return rankForLearner(ordered, ctx, advanced && !hard && !unseen);
 }
 
 /**
@@ -447,8 +516,18 @@ function audioFor(sentence: Sentence, hideText: boolean) {
   return { text: sentence.es, hideText };
 }
 
-export function buildTeachCard(concept: VocabConcept): Exercise {
-  const examples = getSentencesForConcept(concept.id)
+export function buildTeachCard(concept: VocabConcept, ctx?: GenContext): Exercise {
+  const pool = getSentencesForConcept(concept.id);
+  /**
+   * Examples the learner can actually read come first. A card introducing
+   * "quedar" whose only illustration is a C1 sentence has taught the word and
+   * demonstrated nothing — the example is supposed to be the moment the meaning
+   * lands. Anything eligible is preferred; the rest still show up behind them,
+   * because a card with no example at all is worse than a hard one.
+   */
+  const readable = eligibleSentences(pool, 'translateToEn', ctx?.knowledge, [concept.id]);
+  const ordered = [...readable, ...pool.filter((s) => !readable.includes(s))];
+  const examples = ordered
     .slice(0, 3)
     .map((sentence) => ({ es: sentence.es, en: sentence.en, note: sentence.note }));
 
@@ -569,10 +648,11 @@ function buildListenComprehend(
 }
 
 function buildWordBank(sentence: Sentence, ctx: GenContext, conceptIds: string[]): WordBankExercise {
-  const answerTokens = tokenize(sentence.es);
+  const answer = practiceText(sentence.es);
+  const answerTokens = practiceTokens(sentence.es);
   const distractorPool = allSentences
     .filter((other) => other.id !== sentence.id)
-    .flatMap((other) => tokenize(other.es))
+    .flatMap((other) => practiceTokens(other.es))
     .filter((token) => !answerTokens.some((t) => bareWord(t) === bareWord(token)));
 
   const extraCount = answerTokens.length > 6 ? 2 : 3;
@@ -587,7 +667,10 @@ function buildWordBank(sentence: Sentence, ctx: GenContext, conceptIds: string[]
     instruction: 'Build the Spanish sentence',
     prompt: sentence.en,
     tokens: shuffle([...answerTokens, ...distractors], ctx.rng),
-    answer: sentence.es,
+    answer,
+    // Graded against the authored sentence, dashes and all: `normalize` strips
+    // them, so the answer the learner builds and the answer the author wrote
+    // compare equal without either being rewritten to suit the other.
     accepted: [sentence.es, ...(sentence.altEs ?? [])],
     note: sentence.note,
   };
@@ -613,9 +696,10 @@ function buildTranslateToEs(
   ctx: GenContext,
   conceptIds: string[],
 ): TypedExercise {
+  const words = practiceTokens(sentence.es);
   const hints = ctx.settings.hardMode
     ? undefined
-    : sample(tokenize(sentence.es), Math.min(4, tokenize(sentence.es).length), ctx.rng);
+    : sample(words, Math.min(4, words.length), ctx.rng);
 
   return {
     ...base('translateToEs', conceptIds),
@@ -704,8 +788,14 @@ function buildGrammarChoice(
 }
 
 function buildCorrectMistake(conceptIds: string[], ctx: GenContext): TypedExercise | null {
-  const relevant = errorDrills.filter((drill) =>
-    drill.concepts.some((id) => conceptIds.includes(id)),
+  const relevant = errorDrills.filter(
+    (drill) =>
+      drill.concepts.some((id) => conceptIds.includes(id)) &&
+      // Fixing a sentence means writing it, so every concept it turns on has to
+      // be one the learner has met — the same rule the sentence pool follows,
+      // applied to the hand-authored drills, which reach the learner through a
+      // `some()` filter and would otherwise sail past the gate entirely.
+      knownConcepts(drill.concepts, conceptIds, ctx),
   );
   const drill = pick(relevant, ctx.rng);
   if (!drill) return null;
@@ -724,8 +814,12 @@ function buildCorrectMistake(conceptIds: string[], ctx: GenContext): TypedExerci
 }
 
 function buildChooseNatural(conceptIds: string[], ctx: GenContext): ChoiceExercise | null {
-  const relevant = naturalDrills.filter((drill) =>
-    drill.concepts.some((id) => conceptIds.includes(id)),
+  const relevant = naturalDrills.filter(
+    (drill) =>
+      drill.concepts.some((id) => conceptIds.includes(id)) &&
+      // Choosing between two phrasings is recognition, so one unmet concept is
+      // survivable — the options are on screen with their glosses.
+      knownConcepts(drill.concepts, conceptIds, ctx, 1),
   );
   const drill = pick(relevant, ctx.rng);
   if (!drill) return null;
@@ -751,19 +845,34 @@ function buildMatch(concept: VocabConcept, ctx: GenContext): MatchExercise | nul
       other.topics.some((topic) => concept.topics.includes(topic)) &&
       Math.abs(levelIndex(other.level) - levelIndex(concept.level)) <= 1,
   );
-  const others = sample(related, 3, ctx.rng);
+
+  /**
+   * A match grid scores every pair in it, so the words filling it out are not
+   * decoration — they are four concepts credited from one answer. Drawing them
+   * from anywhere meant a grid built around a word the lesson had just taught
+   * could quietly mark three the learner had never seen as practised, which is
+   * `mergeIds`' bug wearing a different shape. Met concepts first; anything
+   * unmet that has to fill a gap is carried as support and never scored.
+   */
+  const known = ctx.knowledge;
+  const met = known ? related.filter((other) => known.known.has(other.id)) : related;
+  const others = met.length >= 3 ? sample(met, 3, ctx.rng) : sample(related, 3, ctx.rng);
   if (others.length < 3) return null;
+
+  const unmet = known ? others.filter((other) => !known.known.has(other.id)) : [];
 
   const pairs = shuffle(
     [concept, ...others].map((c) => ({ es: c.es, en: c.en })),
     ctx.rng,
   );
 
+  const unmetIds = new Set(unmet.map((other) => other.id));
   return {
-    ...base('match', [concept.id, ...others.map((c) => c.id)]),
+    ...base('match', [concept.id, ...others.map((c) => c.id).filter((id) => !unmetIds.has(id))]),
     form: 'match',
     instruction: 'Match the pairs',
     pairs,
+    supportIds: unmet.length > 0 ? [...unmetIds] : undefined,
   };
 }
 
@@ -780,7 +889,10 @@ function buildResponse(conceptIds: string[], ctx: GenContext): TypedExercise | n
           turn.instruction &&
           turn.accepted &&
           turn.accepted.length > 0 &&
-          (turn.concepts ?? []).some((id) => conceptIds.includes(id)),
+          (turn.concepts ?? []).some((id) => conceptIds.includes(id)) &&
+          // The single most demanding kind in the app: the learner writes a
+          // reply from nothing. Everything it turns on must have been taught.
+          knownConcepts(turn.concepts ?? [], conceptIds, ctx),
       )
       .map((turn) => ({ scene, turn })),
   );
@@ -1009,7 +1121,7 @@ export function generateForConcept(
 
   if (!isVocabConcept(concept)) return null;
 
-  if (!state?.introduced) return buildTeachCard(concept);
+  if (!state?.introduced) return buildTeachCard(concept, ctx);
 
   const pool = getSentencesForConcept(concept.id);
 
@@ -1055,34 +1167,115 @@ function attemptKind(
   ctx: GenContext,
 ): Exercise | null {
   const ids = [concept.id];
-  const sentence = pick(pool, ctx.rng);
+  /**
+   * The pool is narrowed *before* the draw, per kind. Drawing at random and
+   * rejecting afterwards would fall through to the next kind on a bad draw, so
+   * a concept with one ineligible sentence in five would lose production four
+   * times in five — adaptivity indistinguishable from a bug.
+   */
+  const sentence = usesSentence(kind) ? pickSentence(pool, kind, ids, ctx) : undefined;
+  const built = buildOfKind(kind, concept, sentence, ids, ctx);
+  return sentence && built ? annotate(built, sentence, ids, ctx) : built;
+}
 
+/**
+ * Kinds actually built from a sentence.
+ *
+ * `multipleChoice`, `match` and the three drill-backed kinds ignore the pool
+ * entirely — they work from the concept or from hand-authored material. Drawing
+ * a sentence for them and attaching it anyway gave the feedback bar an
+ * unrelated line to reveal ("¡Bien!" followed by a sentence the learner never
+ * saw), and consumed the session's one use of that line into the bargain.
+ */
+const SENTENCE_KINDS = new Set<ExerciseKind>([
+  'listenSelect',
+  'listenComprehend',
+  'wordBank',
+  'translateToEn',
+  'translateToEs',
+  'dictation',
+  'fillBlank',
+  'grammarChoice',
+  'speak',
+]);
+
+function usesSentence(kind: ExerciseKind): boolean {
+  return SENTENCE_KINDS.has(kind);
+}
+
+/**
+ * Draws an eligible sentence, preferring one this session has not used yet.
+ *
+ * Falls back to a repeat rather than returning nothing: a concept with a single
+ * eligible sentence should still be practisable twice in a session, just with a
+ * different exercise wrapped around it.
+ */
+function pickSentence(
+  pool: readonly Sentence[],
+  kind: ExerciseKind,
+  ids: string[],
+  ctx: GenContext,
+): Sentence | undefined {
+  const eligible = eligibleSentences(pool, kind, ctx.knowledge, ids);
+  const used = ctx.usedSentences;
+  const unused = used ? eligible.filter((sentence) => !used.has(sentence.id)) : eligible;
+  const chosen = pick(unused.length > 0 ? unused : eligible, ctx.rng);
+  if (chosen && used) used.add(chosen.id);
+  return chosen;
+}
+
+/**
+ * Attaches the two things every sentence-derived exercise needs after the fact:
+ * the source line, so the feedback moment can teach the meaning rather than
+ * only saying "correct", and the unknown supporting concepts, so they can be
+ * flagged as new instead of silently scored.
+ */
+function annotate(
+  exercise: Exercise,
+  sentence: Sentence,
+  ids: string[],
+  ctx: GenContext,
+): Exercise {
+  return {
+    ...exercise,
+    source: { es: sentence.es, en: sentence.en },
+    supportIds: supportIds(ids, sentence, ctx),
+  };
+}
+
+function buildOfKind(
+  kind: ExerciseKind,
+  concept: VocabConcept,
+  sentence: Sentence | undefined,
+  ids: string[],
+  ctx: GenContext,
+): Exercise | null {
   switch (kind) {
     case 'multipleChoice':
       return buildMultipleChoice(concept, ctx, ctx.rng() < 0.4);
     case 'match':
       return buildMatch(concept, ctx);
     case 'listenSelect':
-      return sentence ? buildListenSelect(sentence, ctx, mergeIds(ids, sentence)) : null;
+      return sentence ? buildListenSelect(sentence, ctx, mergeIds(ids, sentence, ctx)) : null;
     case 'listenComprehend':
-      return sentence ? buildListenComprehend(sentence, ctx, mergeIds(ids, sentence)) : null;
+      return sentence ? buildListenComprehend(sentence, ctx, mergeIds(ids, sentence, ctx)) : null;
     case 'wordBank':
-      return sentence ? buildWordBank(sentence, ctx, mergeIds(ids, sentence)) : null;
+      return sentence ? buildWordBank(sentence, ctx, mergeIds(ids, sentence, ctx)) : null;
     case 'translateToEn':
-      return sentence ? buildTranslateToEn(sentence, mergeIds(ids, sentence)) : null;
+      return sentence ? buildTranslateToEn(sentence, mergeIds(ids, sentence, ctx)) : null;
     case 'translateToEs':
-      return sentence ? buildTranslateToEs(sentence, ctx, mergeIds(ids, sentence)) : null;
+      return sentence ? buildTranslateToEs(sentence, ctx, mergeIds(ids, sentence, ctx)) : null;
     case 'dictation':
-      return sentence ? buildDictation(sentence, mergeIds(ids, sentence)) : null;
+      return sentence ? buildDictation(sentence, mergeIds(ids, sentence, ctx)) : null;
     case 'fillBlank': {
       if (!sentence) return null;
       const word =
         sentence.blanks?.find((blank) => sentence.es.includes(blank)) ??
         conceptWordIn(sentence, concept);
-      return word ? buildFillBlank(sentence, word, ctx, mergeIds(ids, sentence)) : null;
+      return word ? buildFillBlank(sentence, word, ctx, mergeIds(ids, sentence, ctx)) : null;
     }
     case 'grammarChoice':
-      return sentence ? buildGrammarChoice(sentence, ctx, mergeIds(ids, sentence)) : null;
+      return sentence ? buildGrammarChoice(sentence, ctx, mergeIds(ids, sentence, ctx)) : null;
     case 'correctMistake':
       return buildCorrectMistake(ids, ctx);
     case 'chooseNatural':
@@ -1090,7 +1283,7 @@ function attemptKind(
     case 'buildResponse':
       return buildResponse(ids, ctx);
     case 'speak':
-      return sentence ? buildSpeak(sentence, mergeIds(ids, sentence)) : null;
+      return sentence ? buildSpeak(sentence, mergeIds(ids, sentence, ctx)) : null;
     default:
       return null;
   }
@@ -1109,9 +1302,56 @@ function buildSpeak(sentence: Sentence, conceptIds: string[]): Exercise | null {
   };
 }
 
-/** Keeps the concept under test plus everything else the sentence exercises. */
-function mergeIds(ids: string[], sentence: Sentence): string[] {
-  return [...new Set([...ids, ...sentence.concepts])];
+/**
+ * The concepts an exercise built from this sentence is allowed to *score*.
+ *
+ * The concept under test, plus every other concept in the sentence the learner
+ * has already met — answering "Los viernes salgo con mis amigos" really is
+ * retrieval practice for `v.salir` as well as `v.amigo`, and dropping that
+ * would throw away most of the spiral.
+ *
+ * What it deliberately excludes is anything the learner has *not* met. This is
+ * the second half of the untaught-production bug: `recordAnswer` runs `review()`
+ * over every id here and `review()` sets `introduced: true`, so merging the
+ * whole tag list meant one exercise could silently mark four unseen concepts as
+ * taught — and next session those were eligible for production themselves. The
+ * leak spread on its own. Unknown concepts go to `supportIds` instead, where
+ * they can be shown to the learner as new without ever being scored.
+ */
+function mergeIds(ids: string[], sentence: Sentence, ctx: GenContext): string[] {
+  const known = ctx.knowledge;
+  const support = known
+    ? sentence.concepts.filter((id) => known.known.has(id))
+    : sentence.concepts;
+  return [...new Set([...ids, ...support])];
+}
+
+/** Concepts the sentence needs that the learner has not met — shown, never scored. */
+/**
+ * Whether a hand-authored item's concepts are within reach.
+ *
+ * Drills and conversation turns are keyed to concepts by id and reached through
+ * a `some()` filter, which means one matching concept was enough to pull in an
+ * item that also needed four the learner had never met. They carry no sentence,
+ * so `sentenceEligible` cannot see them — this is the same rule stated for the
+ * material that has concepts but no text.
+ */
+function knownConcepts(
+  concepts: readonly string[],
+  exempt: readonly string[],
+  ctx: GenContext,
+  tolerance = 0,
+): boolean {
+  const known = ctx.knowledge;
+  if (!known) return true;
+  const unmet = concepts.filter((id) => !known.known.has(id) && !exempt.includes(id));
+  return unmet.length <= tolerance;
+}
+
+function supportIds(ids: string[], sentence: Sentence, ctx: GenContext): string[] | undefined {
+  if (!ctx.knowledge) return undefined;
+  const unknown = unknownConcepts(sentence, ctx.knowledge, ids);
+  return unknown.length > 0 ? unknown : undefined;
 }
 
 function generateGrammarPractice(
@@ -1132,27 +1372,30 @@ function generateGrammarPractice(
   const notRecent = order.filter((kind) => !(ctx.recentKinds ?? []).includes(kind));
 
   for (const kind of [...notRecent, ...order]) {
-    const sentence = pick(pool, ctx.rng);
+    // Same gate as the vocabulary path: a grammar rule is not a licence to hand
+    // the learner any sentence that happens to use it. `g.present` is taught in
+    // unit three and tagged on sentences all the way up to C1.
+    const sentence = usesSentence(kind) ? pickSentence(pool, kind, [grammarId], ctx) : undefined;
     let exercise: Exercise | null = null;
 
     switch (kind) {
       case 'grammarChoice':
-        exercise = sentence ? buildGrammarChoice(sentence, ctx, mergeIds([grammarId], sentence)) : null;
+        exercise = sentence ? buildGrammarChoice(sentence, ctx, mergeIds([grammarId], sentence, ctx)) : null;
         break;
       case 'fillBlank': {
         if (!sentence) break;
         const word = sentence.blanks?.[0];
-        exercise = word ? buildFillBlank(sentence, word, ctx, mergeIds([grammarId], sentence)) : null;
+        exercise = word ? buildFillBlank(sentence, word, ctx, mergeIds([grammarId], sentence, ctx)) : null;
         break;
       }
       case 'wordBank':
-        exercise = sentence ? buildWordBank(sentence, ctx, mergeIds([grammarId], sentence)) : null;
+        exercise = sentence ? buildWordBank(sentence, ctx, mergeIds([grammarId], sentence, ctx)) : null;
         break;
       case 'translateToEn':
-        exercise = sentence ? buildTranslateToEn(sentence, mergeIds([grammarId], sentence)) : null;
+        exercise = sentence ? buildTranslateToEn(sentence, mergeIds([grammarId], sentence, ctx)) : null;
         break;
       case 'translateToEs':
-        exercise = sentence ? buildTranslateToEs(sentence, ctx, mergeIds([grammarId], sentence)) : null;
+        exercise = sentence ? buildTranslateToEs(sentence, ctx, mergeIds([grammarId], sentence, ctx)) : null;
         break;
       case 'correctMistake':
         exercise = buildCorrectMistake([grammarId], ctx);
@@ -1167,7 +1410,7 @@ function generateGrammarPractice(
         break;
     }
 
-    if (exercise) return exercise;
+    if (exercise) return sentence ? annotate(exercise, sentence, [grammarId], ctx) : exercise;
   }
 
   return null;

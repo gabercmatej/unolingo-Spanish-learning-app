@@ -74,7 +74,7 @@ export default function LibraryScreen() {
   const orderedVerbs = useMemo(() => [...verbs].sort(byVerbTeachingOrder), []);
 
   const counts = useMemo(() => {
-    const result = { new: 0, learning: 0, weak: 0, strong: 0, mastered: 0 };
+    const result = { new: 0, learning: 0, familiar: 0, strong: 0, mastered: 0 };
     for (const concept of vocabConcepts) result[masteryBand(learner.concepts[concept.id], now)] += 1;
     return result;
   }, [learner.concepts, now]);
@@ -107,7 +107,7 @@ export default function LibraryScreen() {
             options={[
               { value: 'all', label: 'All', count: vocabConcepts.length },
               { value: 'learning', label: 'Learning', count: counts.learning },
-              { value: 'weak', label: 'Weak', count: counts.weak },
+              { value: 'familiar', label: 'Familiar', count: counts.familiar },
               { value: 'strong', label: 'Strong', count: counts.strong },
               { value: 'mastered', label: 'Mastered', count: counts.mastered },
               { value: 'new', label: 'New', count: counts.new },
@@ -276,8 +276,8 @@ function bandColor(band: MasteryBand, theme: ReturnType<typeof useTheme>): strin
       return theme.textTertiary;
     case 'learning':
       return theme.listening;
-    case 'weak':
-      return theme.danger;
+    case 'familiar':
+      return theme.warning;
     case 'strong':
       return theme.accent;
     case 'mastered':
