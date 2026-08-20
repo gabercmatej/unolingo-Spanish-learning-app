@@ -121,6 +121,32 @@ export const KIND_SKILL: Record<ExerciseKind, Skill | null> = {
 
 export type Grade = 'correct' | 'almost' | 'incorrect';
 
+export type Verdict = 'correct' | 'correctWithFeedback' | 'incorrect';
+
+export type AnswerError =
+  /** Exactly right. */
+  | 'none'
+  /** A missing or added accent on a word that has no accented twin: café. */
+  | 'accent'
+  /** An accent that distinguishes two real forms: está/esta, hablé/hable. */
+  | 'accentContrast'
+  /** Capitalisation, a missing ¿ or ¡, stray punctuation. */
+  | 'punctuation'
+  /** One slipped key inside a word. */
+  | 'spelling'
+  /** Different words, same meaning. */
+  | 'paraphrase'
+  /** Acceptable, but the course has a more precise or natural form. */
+  | 'preferred'
+  /** Right lemma, wrong inflection: person, tense, number, gender, mood. */
+  | 'form'
+  /** Wrong function word: ser~estar, por~para, article, clitic. */
+  | 'grammar'
+  /** The polarity is reversed. Never let this slide. */
+  | 'negation'
+  /** A different meaning, or content missing or added. */
+  | 'meaning';
+
 /** Per-concept memory record. This is the learner model. */
 export interface ConceptState {
   id: string;
