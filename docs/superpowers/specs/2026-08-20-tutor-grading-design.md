@@ -39,8 +39,8 @@ knowing which words are verbs.
 
 It is solvable, and without a dictionary. Deriving from **Spanish text only** —
 sentence `es` and `altEs`, vocabulary headwords, drill sentences, conversation
-turns and every conjugated form — 3,364 distinct surface words collapse into
-**64 groups** where two real forms differ only by an accent. Every one is a
+turns and every conjugated form — 3,397 distinct surface words collapse into
+**65 groups** where two real forms differ only by an accent. Every one is a
 genuine minimal pair:
 
 | family | examples |
@@ -50,6 +50,10 @@ genuine minimal pair:
 | present *yo* vs preterite *él* | `hablo/habló` · `trabajo/trabajó` · `cambio/cambió` · `llego/llegó` · `paso/pasó` · `llamo/llamó` |
 | subjunctive vs preterite *yo* | `hable/hablé` · `llegue/llegué` · `quede/quedé` · `deje/dejé` |
 | noun vs imperative + clitic | `tomate/tómate` |
+
+(The first probe of this said 64. It walked `naturalDrills` through a field name
+that does not exist — `option.text` rather than `option.es` — and so read none of
+them, missing `pase/pasé`. The implementation walks them and the number is 65.)
 
 Deriving from Spanish text only is load-bearing rather than tidy. An earlier
 pass scanned every string literal in `content/` and produced 107 groups — but
