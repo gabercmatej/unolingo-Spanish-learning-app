@@ -1,3 +1,4 @@
+import { accentCarriesMeaning } from '@/content/accent-pairs';
 import { checkAnswer, deaccent, levenshtein, normalize, pronounAgrees } from '@/learning/answer-check';
 import { practiceText } from '@/learning/generator';
 import { gradeFor, verdictFor } from '@/learning/grading';
@@ -271,9 +272,63 @@ describe('slips of the finger are still forgiven', () => {
     const correct = (given: string, accepted: string) =>
       expect(checkAnswer(given, [accepted]).grade).toBe('correct');
     correct('Quiero un cafe', 'Quiero un café');
-    correct('El nino esta en el jardin', 'El niño está en el jardín');
+    // 'El nino esta en el jardin' moved to "accents mean different things in
+    // different tasks" below: esta/está is a genuine minimal pair (this vs.
+    // is), so with the real accentCarriesMeaning predicate injected it grades
+    // "almost", not "correct". This block only injects no predicate, so it
+    // keeps the words this feature must never flag.
     correct('Cuantos anos tienes', '¿Cuántos años tienes?');
     correct('Vosotros comeis', 'Vosotros coméis');
+  });
+});
+
+describe('accents mean different things in different tasks', () => {
+  const real = { accentCarriesMeaning };
+
+  it('waves through an accent that distinguishes nothing', () => {
+    // A phone keyboard, not an error. Full credit, with the spelling taught.
+    for (const [given, expected] of [
+      ['Quiero un cafe', 'Quiero un café'],
+      ['El nino juega en el jardin', 'El niño juega en el jardín'],
+      ['Cuantos anos tienes', '¿Cuántos años tienes?'],
+      ['Vosotros comeis', 'Vosotros coméis'],
+    ]) {
+      const result = checkAnswer(given, [expected], real);
+      expect(result.error).toBe('accent');
+      expect(result.grade).toBe('correct');
+      expect(result.note).toBeTruthy();
+    }
+  });
+
+  it('flags an accent that changes which word it is, in free production', () => {
+    // esta/está and como/cómo are different words. Still retrieval — the
+    // learner produced the sentence — but not silent full credit.
+    const result = checkAnswer('El nino esta en el jardin', ['El niño está en el jardín'], real);
+    expect(result.error).toBe('accentContrast');
+    expect(result.grade).toBe('almost');
+  });
+
+  it('fails it outright when the form is the thing being tested', () => {
+    // A conjugation drill asking for the preterite. hablo is a real word and
+    // the wrong one, so this is a form error, not an orthography note.
+    const result = checkAnswer('hablo', ['habló'], { ...real, formIsTarget: true });
+    expect(result.error).toBe('form');
+    expect(result.grade).toBe('incorrect');
+  });
+
+  it('still forgives an innocent accent inside a form-testing task', () => {
+    // Getting the conjugation right and the noun's accent wrong is not a
+    // conjugation error.
+    const result = checkAnswer('Bebo cafe', ['Bebo café'], { ...real, formIsTarget: true });
+    expect(result.grade).not.toBe('incorrect');
+  });
+
+  it('stays permissive when no predicate is injected', () => {
+    // The pure function cannot know the corpus, and defaults to not
+    // distinguishing — the seam eligibility.ts uses for undefined knowledge.
+    expect(checkAnswer('El nino esta en el jardin', ['El niño está en el jardín']).grade).toBe(
+      'correct',
+    );
   });
 });
 

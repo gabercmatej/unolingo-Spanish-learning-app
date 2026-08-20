@@ -380,6 +380,18 @@ function sameEnglishMeaning(a: string, b: string): boolean {
   return longer.length <= 1;
 }
 
+/** Words that differ between two equal-length normalised forms. */
+function differingWords(a: string, b: string): [string, string][] {
+  const left = a.split(' ');
+  const right = b.split(' ');
+  if (left.length !== right.length) return [];
+  const out: [string, string][] = [];
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) out.push([left[i], right[i]]);
+  }
+  return out;
+}
+
 export function checkAnswer(
   input: string,
   accepted: string[],
@@ -399,7 +411,7 @@ export function checkAnswer(
   const givenForms = [...new Set(forms)];
   const bareForms = givenForms.map(deaccent);
 
-  let accentOnlyMatch: string | null = null;
+  let accentMatch: { display: string; differing: [string, string][] } | null = null;
   let typoMatch: string | null = null;
   let closest: { answer: string; distance: number } | null = null;
 
@@ -409,8 +421,12 @@ export function checkAnswer(
     }
 
     const candidateBare = deaccent(candidate.variant);
-    if (bareForms.includes(candidateBare)) {
-      accentOnlyMatch ??= candidate.display;
+    const matchIndex = bareForms.indexOf(candidateBare);
+    if (matchIndex !== -1) {
+      accentMatch ??= {
+        display: candidate.display,
+        differing: differingWords(givenForms[matchIndex], candidate.variant),
+      };
       continue;
     }
 
@@ -425,11 +441,36 @@ export function checkAnswer(
     }
   }
 
-  if (accentOnlyMatch !== null) {
-    const note = `Right meaning — remember the accents: ${accentOnlyMatch}`;
+  if (accentMatch !== null) {
+    const pair = accentMatch.differing.find(([, expected]) =>
+      profile.accentCarriesMeaning?.(expected) ?? false,
+    );
+
+    if (pair === undefined) {
+      // No accent in this answer distinguishes two real words: café, jardín,
+      // años — a phone keyboard, not an error. Strict accents still asks for
+      // the mark, though, or the setting would only ever fire on the minority
+      // of words that are genuinely ambiguous and would do nothing for the
+      // rest of what a learner types.
+      const note = `Remember the accents: ${accentMatch.display}`;
+      return formIsTarget
+        ? outcome('accentContrast', accentMatch.display, note)
+        : outcome('accent', accentMatch.display, note);
+    }
+
+    /**
+     * The accent is the word. `está` is a verb and `esta` is "this"; `habló`
+     * is the preterite and `hablo` is the present. Which of those two facts
+     * matters depends on what the exercise was asking: inside a conjugation
+     * drill, a dictation, or with strict accents on, it is the entire point
+     * and the answer is wrong; in ordinary free production the learner
+     * produced the whole sentence and slipped on one mark, which is "almost"
+     * rather than wrong.
+     */
+    const note = `${pair[1]} and ${pair[0]} are different words. The accent is the difference.`;
     return formIsTarget
-      ? outcome('accentContrast', accentOnlyMatch, note)
-      : outcome('accent', accentOnlyMatch, note);
+      ? outcome('form', accentMatch.display, note)
+      : outcome('accentContrast', accentMatch.display, note);
   }
 
   if (typoMatch !== null) {
