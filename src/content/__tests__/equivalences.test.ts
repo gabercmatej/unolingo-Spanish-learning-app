@@ -59,4 +59,27 @@ describe('English equivalences', () => {
     for (const group of EN_WORD_CLASSES)
       for (const word of group) expect(polarity).not.toContain(word);
   });
+
+  it('never merges "would like" into the "want" class', () => {
+    // "would like" is the polite conditional register (quisiera / me
+    // gustaría), and "want" is the direct present (quiero) — a contrast the
+    // course teaches on purpose (p.quisiera glosses "I would like…"; s.a27's
+    // note names the conditional as the polite, hypothetical form). Folding
+    // them together would let "I want" pass for a concept taught specifically
+    // as the polite form: a mood error, not a wording one.
+    const wantClass = EN_WORD_CLASSES.find((group) => group.includes('want'));
+    expect(wantClass).toBeDefined();
+    expect(wantClass).not.toContain('would like');
+  });
+
+  it('never puts "not at all" in the courtesy-phrase group', () => {
+    // Every other member of this group is idiomatically positive despite its
+    // surface negation. "not at all" is not: it also renders "para nada"
+    // answering a yes/no question ("¿Te gusta?" -> "Not at all"), a literal
+    // negative-degree answer rather than courtesy. Grouping it with "my
+    // pleasure" would let a meaning-opposite phrase pass as equivalent.
+    const courtesyGroup = EN_PHRASE_GROUPS.find((group) => group.includes('you are welcome'));
+    expect(courtesyGroup).toBeDefined();
+    expect(courtesyGroup).not.toContain('not at all');
+  });
 });

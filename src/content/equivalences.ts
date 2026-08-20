@@ -37,7 +37,15 @@ export const EN_WORD_CLASSES: string[][] = [
   ['friend', 'mate', 'buddy', 'pal'],
   ['man', 'guy', 'bloke'],
   ['child', 'kid', 'kids', 'children'],
-  ['want', 'wanna', 'would like'],
+  // 'would like' stays out on purpose. It is the polite conditional register
+  // (quisiera / me gustaría / querría), not the direct present 'want' teaches
+  // (quiero) — the course draws that contrast deliberately (p.quisiera glosses
+  // exactly "I would like…", and s.a27's note calls out "the conditional is the
+  // polite, hypothetical 'would like'"). Merging them would let "I want" pass
+  // for a concept taught specifically as the polite form: a mood error, not a
+  // wording one. It also could not have matched here regardless — it is a
+  // two-word string sitting in a class the word map looks up per token.
+  ['want', 'wanna'],
   ['car', 'automobile'],
   ['metro', 'underground', 'subway', 'tube'],
   ['check', 'bill'],
@@ -79,7 +87,16 @@ export const EN_PHRASE_GROUPS: string[][] = [
   ],
   ['how are you', 'how are things', 'how is it going', 'how goes it', 'hows everything'],
   ['see you later', 'see you soon', 'see you', 'catch you later'],
-  ['you are welcome', 'not at all', 'no problem', 'my pleasure', 'dont mention it'],
+  // 'not at all' stays out of this group. The other members are idiomatically
+  // positive despite their surface negation, consistently — but "not at all"
+  // is also the plain English rendering of "para nada" answering a yes/no
+  // question ("¿Te gusta?" -> "Not at all"), a literal negative-degree answer,
+  // not courtesy (see conversations.ts's "Qué va" note, and the five "para
+  // nada" sentences in the corpus). Phrase groups match as whole strings, so
+  // keeping it here would let "my pleasure" pass for an answer that means the
+  // opposite. No sentence's canonical English is exactly "not at all" today —
+  // this is latent, not live — but the invariant is meaning over convenience.
+  ['you are welcome', 'no problem', 'my pleasure', 'dont mention it'],
   ['excuse me', 'pardon me', 'sorry to bother you'],
   ['i am sorry', 'sorry', 'my apologies'],
   ['of course', 'sure', 'certainly', 'absolutely'],
