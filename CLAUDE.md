@@ -85,7 +85,8 @@ ids, missing sentences and broken lesson prerequisites.
 **`src/learning/` — pure logic, no React.**
 `srs.ts` (spaced repetition), `mastery.ts` (aggregation, weak areas, unit/stage progress,
 CEFR estimate), `answer-check.ts`, `generator.ts` (concept + learner state → exercise),
-`session.ts` (session assembly and ordering), `placement.ts`, `xp.ts`, `ranks.ts`,
+`eligibility.ts` (what the learner may be *asked to produce*), `teaching.ts` (what to say
+after an answer), `session.ts` (session assembly and ordering), `placement.ts`, `xp.ts`, `ranks.ts`,
 `check.ts` (grading), `achievements.ts`, `backup.ts` (what a backup is, what a restore
 must refuse, when a snapshot is due), `migrate.ts` (opening a record written by another
 build), `defaults.ts` + `schema.ts` (the blank learner and `STATE_VERSION`, kept out of the
@@ -152,7 +153,12 @@ have real content — there are no `planned` (outline-only) stages left.
 - **Checkpoints** (`kind: 'checkpoint'` + `checkpointFor: <stageId>`) ignore `teaches` and
   draw from every concept in the stage.
 - **Completion ≠ mastery.** `unitProgress()` returns lesson completion *and* a separately
-  decaying `mastery`, plus `needsReview`.
+  decaying `mastery`, plus `needsReview` and a `phase`. The phase is read off mastery, not
+  off lesson count — finishing the lessons moves a unit out of `learning` and no further,
+  through `practising` → `strengthening` → `maintaining`. That figure used to be the most
+  useful number on the Learn page and the only one that did nothing when pressed; it now
+  starts `unitStrengthPlan`, which orders unresolved mistakes → met-once → faded →
+  recognised-but-never-produced → the rest, and never replays the original lesson.
 - CEFR placement of a unit is a **deliberate pedagogical decision**, not an accident of file
   order. The course was restructured bottom-up specifically because A1 competencies were
   sitting in the A1→A2 stage. If placement looks wrong, moving it is legitimate.
@@ -182,6 +188,57 @@ is exactly what these tests exist to catch.
 
 ## Key invariants
 
+- **Nothing is asked for before it is taught.** `learning/eligibility.ts` gates every
+  sentence, drill and conversation turn on what the learner has actually been introduced
+  to. This closed a bug where a learner who had just met `v.amigo` in the Family unit was
+  asked to translate "Mis vecinos han visto el partido en el bar de abajo." into Spanish.
+  Three defects compounded, and each is worth knowing separately:
+  1. **A mis-tag.** That sentence was tagged `v.amigo` and contains no "amigo" at all.
+     `audit:content` now reports a tag whose word family appears nowhere in the sentence.
+  2. **No filter on the pool.** `getSentencesForConcept(id)` returns every sentence tagged
+     with a concept at any level, and `attemptKind` picked one at random. So any practice
+     touching an A1 word could hand over an A2 present-perfect line. Now the pool is
+     narrowed *before* the draw, per exercise kind — filtering after the draw would fall
+     through to the next kind on a bad draw, so a concept with one bad sentence in five
+     would lose production four times in five for no visible reason.
+  3. **Exposure recorded as teaching.** `mergeIds` put every sentence concept into
+     `exercise.conceptIds`, `recordAnswer` ran `review()` over all of them, and `review()`
+     sets `introduced: true`. One exercise silently marked four unseen concepts as taught,
+     and next session *those* were eligible for production. The leak spread on its own.
+     Unknown supporting concepts now go to `exercise.supportIds`, which is shown to the
+     learner as new and never scored.
+  - The rule is **directional, not restrictive**: past concepts spiral forward for ever, and
+    only unseen material is kept out of required output. `KIND_DEMAND` splits exercise kinds
+    into `output` (the learner writes or says Spanish — zero unknown concepts), `guided` (the
+    sentence is on screen with a gap — one), and `input` (reading or hearing — one, plus a
+    level of headroom). A sentence may stretch the learner **on its level or on its
+    vocabulary, and not on both at once**: without that clause the two tolerances multiply,
+    which is precisely how the offending sentence qualified.
+  - The ceiling comes from what has been *introduced*, not from `estimateProficiency` —
+    the question is "has the course shown them this?", not "how good are they?". A placement
+    result sets the floor.
+  - `audit:content` measures the same rule by calling `sentenceEligible`, for the reason the
+    verb corpus index is shared with `buildVerbForm`: a diagnostic with its own copy of a
+    threshold silently stops describing the thing it watches.
+- **Introduced → learning → familiar → strong → mastered.** `masteryBand` is a ladder, and
+  nothing jumps it. `mastered` needs demanding retrieval (`depth >= 3`), six encounters, *and*
+  `lastReviewed - firstSeen` of about a day — ten correct answers inside one sitting reach
+  `strong` and stop. That last clause reads two fields that already existed and nothing was
+  using, so it costs no `STATE_VERSION` bump.
+- **A freshly met concept cannot be scheduled away.** `srs.ts` caps stability at ~1.4 days
+  while a concept is under four encounters or below 0.5 strength. Not a blanket "everything
+  returns tomorrow": the cap releases the moment the concept is neither young nor shaky. What
+  it prevents is one good answer on a difficulty-4 exercise buying a week's absence on day one.
+- **The feedback moment teaches.** `learning/teaching.ts` decides what to add after an
+  answer — the source line, its meaning, one compact note, and any concept that was new here.
+  Meaning is **level-sensitive**: always through A2, at B1 only where answering revealed
+  nothing about meaning (dictation, "what did you hear?"), and from B2 only on a wrong answer.
+  A correct `listenSelect` used to say "¡Bien!" and nothing else, which tests the ear and
+  leaves the meaning exactly where it found it. Policy lives in `learning/`; `FeedbackBar`
+  renders a decision rather than making one.
+- **Dialogue dashes are typography, not language.** `practiceText` strips `—`/`–` from word
+  bank tokens and typed hints. `normalize` in `answer-check.ts` has always stripped them
+  before comparing, so the app was asking for a keystroke it then ignored.
 - **Lessons never contain exercises.** A lesson declares `teaches`, `grammar` and
   `sentences`; `session.ts` builds the exercises. That is what lets the same lesson be
   easier on a first pass and harder on a later one.
@@ -262,6 +319,32 @@ is exactly what these tests exist to catch.
   declaring more than that is a promise the session silently breaks. `audit:content` warns
   on it. Raising `estMinutes` is the honest fix when the lesson genuinely needs the time;
   past 20 exercises the lesson has to split.
+- **Teaching cards are not exercises, and are not budgeted as ones.** They used to be pushed
+  into the same array the practice target was measured against, which forced a hard
+  `slice(0, 8)` on new concepts per lesson. Fifty of the 159 lessons teach more than eight
+  things and one teaches twenty, so most of what the course introduced reached the learner
+  with **no introduction at all** — no card, no meaning, no example, just a multiple choice
+  about a word they had never been shown. The target now counts answerable work only;
+  cards are additive.
+  - **Card, then immediate use, per word.** Eight cards followed by eight questions is a
+    glossary and then a quiz. Card → use → card → use retrieves the word while the
+    introduction is still on the previous screen, and it is why `recentKinds` carries across
+    that loop instead of resetting per word — resetting made every one of those first checks
+    a `multipleChoice`, because the freshness pass had nothing to steer by.
+  - `MAX_NEW_PER_SESSION` (12) caps how much one sitting introduces. Anything beyond it is
+    left **genuinely untouched** — not introduced, not practised, not scored — and picked up
+    on the next pass. The alternative is what used to happen: the surplus arrived through the
+    practice pool, marked as met and tested, and never once displayed.
+- **`candidateKinds` used to `return` early for a never-seen concept**, which skipped the
+  freshness and recency pass at the bottom of the function. The order was therefore always
+  exactly `RECOGNITION`, `multipleChoice` always came first, and it always had the material
+  it needed — so the first practice of every new word in the course was a multiple choice.
+  The tiers for an unseen concept are still the gentle ones; only the *ordering* is now
+  shared with every other branch.
+- **A match grid scores every pair in it.** `buildMatch` fills three slots besides the
+  target, and drawing them from anywhere meant one answer could credit three concepts the
+  learner had never seen — `mergeIds`' bug in a different shape. Met concepts fill the grid
+  first; anything unmet that has to fill a gap goes to `supportIds` and is never scored.
 - **`stability` is days-until-review-threshold**, and `retrievability()` is a continuous
   decay curve. That curve — not a fixed interval ladder — ranks Smart Review.
 - **One grading path.** Everything answerable goes through `checkExercise()`. Do not grade
@@ -609,6 +692,10 @@ those tests cross-check content against logic.
 | `backup.test.ts` | what a backup is, what a restore refuses, when a snapshot is due, and that a reinstall restores the memory model and not merely the totals |
 | `migrate.test.ts` | what a saved record must prove before it is opened, and that a refusal never returns a blank learner for the debounced save to commit |
 | `explain.test.ts` | that the developer diagnostics report the scheduler's own signals, and carry nothing personal |
+| `eligibility.test.ts` | the introduction-before-production rule itself, per exercise kind |
+| `introduction-order.test.ts` | the same rule end to end — a real learner walking real lessons, plus spiral reuse and the drill/conversation gate |
+| `teaching.test.ts` | what an answer is worth saying, and the level policy on showing meaning |
+| `unit-cycle.test.ts` | the strength plan, the actionable mastery figure, and listening rotation |
 | `verb-corpus.test.ts` | the ambiguity guards — cross-verb syncretism, homographs, person syncretism, multi-word forms |
 | `verb-flow.test.ts` | the whole conjugation pathway, end to end, including the subjunctive and imperative moods |
 | `tense-coverage.test.ts` | that every declared `TenseId` is carried, and that an unbuildable tense throws instead of fabricating forms |
@@ -628,13 +715,20 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   are finished at two or three exposures; do not read it as a quota. The spine — ser (43),
   estar (39), ir (32), tener (27), quedar, llevar, hacer, ya, todavía, aunque — is where density
   was actually spent.
-- **`vosotros` (79) and `tú` (106) remain the thinnest persons against `él` (532).** Partly
+- **`vosotros` (109) and `tú` (154) remain the thinnest persons against `él` (580).** Partly
   legitimate: third-person narration dominates any corpus. The target is not parity — it is that
   group dialogue keeps appearing, since that is where those forms live.
 - **`future` (47), `imperative` (60) and `presentPerfect` (67) are the thinnest tenses.**
   `presentSubjunctive` arrived at 217 — second only to the present — because the mood was
   added to sixteen verbs with a corpus behind it rather than to one with a table.
   `conditional` went from 16 to 104 when the future/conditional stems were paired.
+- **The audit's new NOTEs are a standing authoring queue, not defects.** "Lessons preview
+  words taught much later" names sentences whose incidental vocabulary arrives later in the
+  course — "Vale, hasta luego" in lesson one, with `vale` formally taught much later. That is
+  a *preview*, and the eligibility gate keeps it out of production until the word is taught;
+  the note exists so an author can decide the word deserves teaching earlier. "Concepts that
+  can be read but not produced when introduced" and "tags with no word of that family" are
+  the same shape: judgement queues that will never reach zero and are not supposed to.
 - **Nine paradigms cover only one person each**, which the audit reports without warning on. That
   is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
@@ -649,6 +743,14 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   queue reason, skill standing, spiral source — because when a review feels wrong the useful
   question is which layer is wrong, not whether it is. Nothing there computes its own numbers:
   a diagnostic that invents them can agree with itself while the system disagrees with both.
+- **The eligibility gate reads tags, and tags under-count.** "Mis vecinos han visto el
+  partido en el bar de abajo." declares three concepts and contains "vecinos", "partido",
+  "bar" and "abajo", none of which is tagged. So the concept check is generous by
+  construction, and the level ceiling is the backstop that catches what the tags miss. That
+  is why the two gates are both there and why they are not allowed to stretch at once. A
+  future improvement would derive unknown *words* rather than unknown concepts, the way
+  `verb-corpus.ts` derives conjugated forms from sentence text — the machinery for that
+  already exists and has not been pointed at vocabulary.
 - **Composition is the surface that breaks silently.** The conjugation subsystem stayed dead
   through 119 passing tests because every link was tested individually and the chain was not.
   `verb-flow.test.ts` walks verb → tense → paradigm → exercise → grade → mastery → Library, and

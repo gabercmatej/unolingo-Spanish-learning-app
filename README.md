@@ -277,10 +277,13 @@ Six stages, A0 → C2, all with real content:
 | Advanced Spanish | B2 → C1 | 7 | 18 |
 | Mastery | C1 → C2 | 6 | 19 |
 
-**63 units · 158 lessons** (67 of them optional enrichment that never blocks the path) ·
-420 words · 232 phrases · 44 grammar concepts · 43 verbs across 134 conjugation paradigms ·
-1,522 sentences · 25 conversation scenes · 25 stories · 12 culture notes · 110 drills ·
+**63 units · 159 lessons** (67 of them optional enrichment that never blocks the path) ·
+420 words · 232 phrases · 44 grammar concepts · 43 verbs across 162 conjugation paradigms ·
+1,680 sentences · 25 conversation scenes · 25 stories · 12 culture notes · 110 drills ·
 67 placement questions.
+
+Every figure here drifts with each content commit. Read them from `npm run audit:content`
+rather than trusting this file.
 
 Enough to use for real, and structured so it can grow to ten times that without the codebase
 noticing.
