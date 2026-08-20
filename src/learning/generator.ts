@@ -3,6 +3,7 @@ import {
   getConcept,
   getCultureNote,
   getGrammar,
+  getSentence,
   getSentencesForConcept,
   getVerb,
   isGrammarConcept,
@@ -1175,7 +1176,37 @@ function attemptKind(
    */
   const sentence = usesSentence(kind) ? pickSentence(pool, kind, ids, ctx) : undefined;
   const built = buildOfKind(kind, concept, sentence, ids, ctx);
-  return sentence && built ? annotate(built, sentence, ids, ctx) : built;
+  if (!built) return null;
+  const withTarget = { ...built, targetId: concept.id };
+  return sentence ? annotate(withTarget, sentence, ids, ctx) : withTarget;
+}
+
+/**
+ * Rebuild one specific exercise: this kind, this sentence, this concept.
+ *
+ * The seam mistake review needs. Everything else in this module *chooses* — a
+ * sentence from a pool, a kind from the learner's history — which is right for
+ * assembling a session and precisely wrong for handing somebody back the thing
+ * they just got wrong. Here the caller has already decided, and the eligibility
+ * gate is deliberately not consulted: the learner has demonstrably already been
+ * shown this exact item, so refusing to show it again would be the gate
+ * answering a question nobody asked.
+ */
+export function buildExact(
+  sentenceId: string,
+  kind: ExerciseKind,
+  conceptId: string,
+  ctx: GenContext,
+): Exercise | null {
+  const concept = getConcept(conceptId);
+  if (!concept || !isVocabConcept(concept)) return null;
+  const sentence = getSentence(sentenceId);
+  if (!sentence) return null;
+  const ids = [concept.id];
+  const built = buildOfKind(kind, concept, sentence, ids, ctx);
+  if (!built) return null;
+  ctx.usedSentences?.add(sentence.id);
+  return annotate({ ...built, targetId: concept.id }, sentence, ids, ctx);
 }
 
 /**
@@ -1239,6 +1270,7 @@ function annotate(
   return {
     ...exercise,
     source: { es: sentence.es, en: sentence.en },
+    sourceId: sentence.id,
     supportIds: supportIds(ids, sentence, ctx),
   };
 }

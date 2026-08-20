@@ -25,6 +25,7 @@ import type { Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { unitProgress, unitStrengthPlan, type UnitPhase } from '@/learning/mastery';
+import type { ArcStep } from '@/learning/unit-arc';
 import { mastery, masteryBand } from '@/learning/srs';
 import { goBack } from '@/lib/navigation';
 
@@ -95,11 +96,19 @@ export default function UnitScreen() {
 
   const started = progress.lessonsDone > 0;
 
-  const practice = (kind: string, ids: string[] = progress.conceptIds) =>
-    router.push({
-      pathname: '/session',
-      params: { kind, source: unit.id, concepts: ids.join(',') },
-    });
+  /**
+   * Every practice route from this screen carries `unit`, which is what makes
+   * it a review *of this unit* rather than a global one that happens to have
+   * been started here. The scope is passed structurally rather than as a
+   * concept list, so the selection policy in `learning/scope.ts` decides what
+   * the unit owns — a concept list assembled here would be a second, weaker
+   * copy of that rule.
+   */
+  const practice = (kind: string) =>
+    router.push({ pathname: '/session', params: { kind, source: unit.id, unit: unit.id } });
+
+  const openArcStep = (stepId: string) =>
+    router.push({ pathname: '/session', params: { kind: 'unitArc', source: stepId, unit: unit.id } });
 
   const openLesson = (lesson: Lesson) => {
     const kind =
@@ -167,14 +176,30 @@ export default function UnitScreen() {
           {/* Progress vs mastery — deliberately two separate numbers */}
           <Card variant="flat">
             <View style={styles.metricRow}>
+              {/*
+                Sessions, not lessons. A unit is a guided arc — its lessons plus
+                the practice phases that turn an introduction into something
+                retrievable — and counting only the lessons was what made a
+                one-lesson unit report itself finished after twelve questions.
+                See `learning/unit-arc.ts`.
+              */}
               <View style={styles.flex}>
                 <Text variant="caption" color="textTertiary">
-                  Lessons
+                  Sessions
                 </Text>
-                <Text variant="heading" rounded>
-                  {progress.lessonsDone}/{progress.lessonCount}
+                <Text variant="heading" rounded numeric>
+                  {progress.arc.stepsDone}/{progress.arc.stepCount}
                 </Text>
-                <ProgressBar value={progress.progress} height={5} tone={tone} delay={stagger(1)} />
+                <ProgressBar
+                  value={
+                    progress.arc.stepCount > 0
+                      ? progress.arc.stepsDone / progress.arc.stepCount
+                      : 0
+                  }
+                  height={5}
+                  tone={tone}
+                  delay={stagger(1)}
+                />
               </View>
               <View style={styles.divider} />
               <View style={styles.flex}>
@@ -209,6 +234,37 @@ export default function UnitScreen() {
               icon="play"
               onPress={() => openLesson(progress.nextLesson!)}
             />
+          ) : progress.arc.next ? (
+            /*
+              The lessons are done and the arc is not. This is the single most
+              important button on the screen: it is the answer to "I finished
+              the lessons and this says 22%, now what?", and before the arc
+              existed there was no answer except tapping the same lesson again.
+            */
+            <Button
+              title={`Continue — ${progress.arc.next.title}`}
+              size="lg"
+              tone={tone}
+              icon="play"
+              onPress={() => openArcStep(progress.arc.next!.id)}
+            />
+          ) : null}
+
+          {/* The guided arc, once the lessons are behind us */}
+          {!progress.nextLesson && progress.arc.steps.length > 0 ? (
+            <Section title="Guided practice">
+              <View style={styles.practiceList}>
+                {progress.arc.steps.map((step, index) => (
+                  <Reveal key={step.id} delay={stagger(index)}>
+                    <ArcRow
+                      step={step}
+                      tone={tone}
+                      onPress={() => openArcStep(step.id)}
+                    />
+                  </Reveal>
+                ))}
+              </View>
+            </Section>
           ) : null}
 
           {/*
@@ -261,7 +317,7 @@ export default function UnitScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/session',
-                    params: { kind: 'unitSmart', source: unit.id },
+                    params: { kind: 'unitSmart', source: unit.id, unit: unit.id },
                   })
                 }
               />
@@ -285,7 +341,7 @@ export default function UnitScreen() {
                   onPress={() =>
                     router.push({
                       pathname: '/session',
-                      params: { kind: 'unitSmart', source: unit.id },
+                      params: { kind: 'unitSmart', source: unit.id, unit: unit.id },
                     })
                   }
                 />
@@ -302,7 +358,7 @@ export default function UnitScreen() {
                     title="Vocabulary"
                     caption={`${vocab.length} words and expressions`}
                     tone={theme.vocab}
-                    onPress={() => practice('vocabulary', vocab.map((c) => c.id))}
+                    onPress={() => practice('vocabulary')}
                   />
                 ) : null}
                 {grammar.length > 0 ? (
@@ -311,7 +367,7 @@ export default function UnitScreen() {
                     title="Grammar"
                     caption={grammar.map((g) => (isGrammarConcept(g) ? g.title : '')).join(' · ')}
                     tone={theme.grammar}
-                    onPress={() => practice('grammar', grammar.map((c) => c.id))}
+                    onPress={() => practice('grammar')}
                   />
                 ) : null}
               </View>
@@ -431,6 +487,73 @@ export default function UnitScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/**
+ * One phase of the unit's guided arc.
+ *
+ * Three states, and the third is the one worth having. A step is `done` because
+ * it was played, or because the learner's record already demonstrates what it
+ * would have taught — a unit whose concepts are all retrieved under pressure
+ * has nothing to gain from an "Active recall" session, and making somebody sit
+ * through one to earn a tick is the app inventing work. That case says so,
+ * rather than quietly showing a tick it cannot explain.
+ */
+function ArcRow({
+  step,
+  tone,
+  onPress,
+}: {
+  step: ArcStep;
+  tone: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const locked = !step.unlocked && !step.done;
+
+  return (
+    <PressScale
+      onPress={onPress}
+      scaleTo={0.99}
+      hover="lift"
+      haptic="press"
+      disabled={locked}
+      accessibilityLabel={step.title}>
+      <View
+        style={[
+          styles.practiceRow,
+          {
+            backgroundColor: step.done ? 'transparent' : theme.backgroundElement,
+            borderColor: step.done ? theme.border : tone,
+            borderWidth: step.done ? 1 : 1.5,
+            opacity: locked ? 0.5 : 1,
+          },
+        ]}>
+        <View
+          style={[
+            styles.practiceIcon,
+            { backgroundColor: step.done ? theme.successSoft : theme.backgroundSunken },
+          ]}>
+          <Icon
+            name={step.done ? 'checkmark' : locked ? 'lock-closed' : 'play'}
+            size={16}
+            tone={step.done ? theme.success : tone}
+          />
+        </View>
+        <View style={styles.flex}>
+          <Text variant="bodyBold">{step.title}</Text>
+          <Text variant="caption" color="textSecondary" numberOfLines={1}>
+            {step.satisfied ? 'Already covered by your practice' : step.subtitle}
+          </Text>
+        </View>
+        {step.done ? null : (
+          <Text variant="caption" color="textTertiary" numeric>
+            ~{step.estMinutes} min
+          </Text>
+        )}
+      </View>
+    </PressScale>
   );
 }
 

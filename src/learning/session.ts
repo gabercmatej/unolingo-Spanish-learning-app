@@ -1,15 +1,13 @@
 import {
   allLessons,
   conversations,
-  getConcept,
   getGrammar,
   getLesson,
   getLessonSentences,
   getStageConcepts,
   getUnit,
+  getUnitTaughtConcepts,
   getStory,
-  isGrammarConcept,
-  isVocabConcept,
   levelIndex,
   stories,
 } from '@/content';
@@ -18,6 +16,7 @@ import type { ChoiceExercise, Exercise } from '@/learning/exercise';
 import {
   buildConversationTurn,
   buildCultureCard,
+  buildExact,
   buildGrammarCard,
   buildReading,
   generateForConcept,
@@ -27,13 +26,25 @@ import {
   type GenContext,
 } from '@/learning/generator';
 import { knowledgeOf } from '@/learning/eligibility';
+import { mistakeQueue, scaffoldKindFor } from '@/learning/mistakes';
 import {
-  atRiskConcepts,
+  describeScope,
+  selectTargets,
+  type ReviewScope,
+  type SelectionIntent,
+} from '@/learning/scope';
+import {
+  arcPhaseOf,
+  arcStepId,
+  unitIdForArcStep,
+  type ArcPhase,
+} from '@/learning/unit-arc';
+import {
   dueConcepts,
   estimateLevel,
+  hasEncountered,
   skillBalance,
   unitStrengthPlan,
-  weakAreas,
   SESSION_CAP,
   type UnitStrengthPlan,
 } from '@/learning/mastery';
@@ -65,7 +76,9 @@ export type SessionKind =
   | 'random'
   | 'concept'
   /** Weak and overdue concepts from one unit — the recommended unit revisit. */
-  | 'unitSmart';
+  | 'unitSmart'
+  /** One phase of a unit's guided teaching arc — see `learning/unit-arc.ts`. */
+  | 'unitArc';
 
 export interface SessionPlan {
   id: string;
@@ -88,6 +101,15 @@ interface BuildOptions {
   /** The unit or lesson the session was started from, where the kind needs it. */
   source?: string;
   targetLength?: number;
+  /**
+   * Where this review may draw its *targets* from.
+   *
+   * Passed explicitly by the screen that started it, so "Smart Review" on the
+   * home page and "Smart Review" inside a unit are different sessions by
+   * construction rather than by each call site remembering to send a concept
+   * list. See `learning/scope.ts`. Omitted means global.
+   */
+  scope?: ReviewScope;
 }
 
 function makeContext(options: BuildOptions): GenContext {
@@ -549,18 +571,16 @@ export function buildSmartReview(options: BuildOptions): SessionPlan {
   const { learner } = options;
   const target = options.targetLength ?? 14;
 
-  const due = dueConcepts(learner, ctx.now).map((s) => s.id);
-  const mistakeIds = learner.mistakes
-    .filter((m) => !m.resolvedAt)
-    .slice(-20)
-    .flatMap((m) => m.conceptIds);
-  const weak = weakAreas(learner, ctx.now, 4).flatMap((area) => area.conceptIds.slice(0, 3));
-  const atRisk = atRiskConcepts(learner, ctx.now, 10).map((s) => s.id);
-  const fresh = Object.values(learner.concepts)
-    .filter((s) => s.timesSeen > 0 && s.timesSeen < 3)
-    .map((s) => s.id);
-
-  const ordered = dedupe([...mistakeIds, ...due, ...weak, ...atRisk, ...fresh]);
+  /**
+   * Scope-aware, and global unless told otherwise.
+   *
+   * The home page's Smart Review is the global one — everything the learner has
+   * encountered, ranked by the scheduler. A unit screen passes a unit scope and
+   * gets the same ranking confined to that unit, which is what stops a review
+   * started from "In the café" asking about the weather.
+   */
+  const scope = options.scope ?? { type: 'global' };
+  const ordered = selectTargets(scope, 'smart', learner, ctx.now);
   const exercises = interleave(generate(ordered, learner, ctx, target));
 
   return {
@@ -568,7 +588,272 @@ export function buildSmartReview(options: BuildOptions): SessionPlan {
     kind: 'smartReview',
     source: 'smart-review',
     title: 'Smart Review',
-    subtitle: 'Built from what you are closest to forgetting',
+    subtitle:
+      scope.type === 'global'
+        ? 'Built from what you are closest to forgetting'
+        : `${describeScope(scope)} — what most needs attention`,
+    exercises,
+  };
+}
+
+/**
+ * One phase of a unit's guided arc.
+ *
+ * The three phases draw from the same pool — everything the unit teaches — and
+ * differ in how much support the exercises are allowed to give. That is the
+ * whole mechanism, and it is why this adds no content: a lesson declares
+ * material, `session.ts` decides what to do with it, so the fourth pass over a
+ * unit can be a different session from the first without a single new sentence
+ * being written.
+ *
+ * Scaffolding is stepped down by *demoting* the gentle kinds rather than
+ * banning them, using the same `recentKinds` seam the listening rotation uses.
+ * Banning them would strand any concept that can only support recognition —
+ * and a phase that silently drops a third of the unit is worse than one that
+ * occasionally offers an easy question.
+ */
+const PHASE_KINDS: Record<ArcPhase, ExerciseKind[] | null> = {
+  /**
+   * Null means "let the learner's own history choose", which is what mixed
+   * practice should be: the ordinary adaptive mix, interleaved with earlier
+   * material. Only the two purely-recognition kinds are nudged back, through
+   * `recentKinds`.
+   */
+  mixed: null,
+  /**
+   * Retrieval means retrieving. Every kind here makes the learner produce the
+   * answer rather than pick it out of a list, ordered gently-first so a phase
+   * opens on comprehension and works up to production.
+   */
+  recall: [
+    'fillBlank',
+    'translateToEs',
+    'translateToEn',
+    'dictation',
+    'grammarChoice',
+    'listenComprehend',
+  ],
+  /**
+   * Breadth across the four skills rather than maximum difficulty — the
+   * question a consolidation asks is "can you use this?", not "can you survive
+   * an exam?". Production and listening lead because they are the two the rest
+   * of a unit's practice under-serves.
+   */
+  consolidate: [
+    'translateToEs',
+    'listenComprehend',
+    'fillBlank',
+    'chooseNatural',
+    'translateToEn',
+    'dictation',
+    'wordBank',
+  ],
+};
+
+/** Nudged down where the phase has no explicit kind list to impose. */
+const PHASE_DEMOTE: Record<ArcPhase, ExerciseKind[]> = {
+  mixed: ['multipleChoice', 'match'],
+  recall: ['multipleChoice', 'match', 'wordBank', 'listenSelect'],
+  consolidate: ['multipleChoice', 'match'],
+};
+
+export function buildArcSession(
+  unitId: string,
+  phase: ArcPhase,
+  options: BuildOptions,
+): SessionPlan | null {
+  const unit = getUnit(unitId);
+  if (!unit) return null;
+
+  const ctx = makeContext(options);
+  const { learner } = options;
+  const target = options.targetLength ?? 10;
+
+  const taught = getUnitTaughtConcepts(unit).filter((id) =>
+    hasEncountered(learner.concepts[id]),
+  );
+  if (taught.length === 0) return null;
+
+  const weakestFirst = [...taught].sort(byWeakness(learner, ctx.now));
+
+  /**
+   * `mixed` earns its name by actually mixing: a third of it is earlier
+   * material, interleaved. The other two phases stay inside the unit, because
+   * "can I use what this unit taught me?" is a question about this unit.
+   */
+  const outside =
+    phase === 'mixed'
+      ? dueConcepts(learner, ctx.now)
+          .map((state) => state.id)
+          .filter((id) => !taught.includes(id))
+          .slice(0, 3)
+      : [];
+
+  const pool = phase === 'consolidate' ? weakestFirst : dedupe([...weakestFirst, ...taught]);
+
+  const phaseCtx: GenContext = {
+    ...ctx,
+    recentKinds: [...PHASE_DEMOTE[phase], ...(ctx.recentKinds ?? [])],
+  };
+
+  /**
+   * The phase's own kinds first, the ordinary generator as the fallback.
+   *
+   * `generateOfKind` is the existing escape hatch a checkpoint uses to *test* a
+   * skill the learner's history would not have offered, and this is the same
+   * need: a fourth pass over a unit is only worth doing if it asks differently
+   * from the first three. It returns null for a concept that cannot support any
+   * of the wanted kinds — a grammar concept, or a word with no eligible
+   * sentence — and those fall through rather than being dropped, because a
+   * phase that silently omits a third of the unit is worse than one that
+   * occasionally offers an easy question.
+   */
+  const wanted = PHASE_KINDS[phase];
+  const exercises: Exercise[] = [];
+  for (const conceptId of pool) {
+    if (exercises.length >= target) break;
+    const state = learner.concepts[conceptId];
+    /**
+     * Rotated, not ranked.
+     *
+     * `generateOfKind` takes the first kind that works, so handing it the same
+     * ordered list every time produces a session of one exercise type repeated
+     * — six `translateToEn` in a row, measured. That is the Duolingo failure
+     * this arc exists to avoid, arrived at from the opposite direction. So the
+     * list is rotated by position: every exercise still comes from the phase's
+     * register, and successive ones prefer different members of it. The same
+     * device as `LISTENING_ROTATION`, for the same reason.
+     */
+    const order = wanted
+      ? wanted.map((_, i) => wanted[(i + exercises.length) % wanted.length])
+      : null;
+    const exercise =
+      (order ? generateOfKind(conceptId, state, phaseCtx, order) : null) ??
+      generateForConcept(conceptId, state, phaseCtx);
+    if (!exercise || exercise.form === 'presentation') continue;
+    exercises.push(exercise);
+    phaseCtx.recentKinds = [exercise.kind, ...(phaseCtx.recentKinds ?? [])].slice(0, 4);
+  }
+
+  const interleaved = sprinkle(
+    interleave(exercises),
+    generate(outside, learner, phaseCtx, outside.length),
+  );
+
+  const copy = {
+    mixed: { title: 'Mixed practice', subtitle: 'This unit alongside what you already knew' },
+    recall: { title: 'Active recall', subtitle: 'Without the word banks this time' },
+    consolidate: { title: 'Consolidate', subtitle: 'The whole unit — can you use it?' },
+  }[phase];
+
+  return {
+    id: `${arcStepId(unit.id, phase)}:${ctx.now}`,
+    kind: 'unitArc',
+    /**
+     * The arc step id, not the unit id. `completeSession` writes `source` into
+     * `completedLessons` for lesson-shaped sessions, which is how an arc step
+     * records that it was played without needing a new persisted field.
+     */
+    source: arcStepId(unit.id, phase),
+    title: `${unit.title} — ${copy.title}`,
+    subtitle: copy.subtitle,
+    exercises: interleaved,
+  };
+}
+
+/**
+ * The second pass at something the learner just got wrong, within the session.
+ *
+ * A wrong answer already re-queues the exercise once, later in the same
+ * session. It used to re-queue it *unchanged*, which for a free-production item
+ * is asking the same impossible question a second time — and the learner has
+ * just demonstrated they cannot answer it. That is not spaced practice, it is
+ * the app having nothing to offer.
+ *
+ * So the retry steps down one rung of support while keeping the concept and the
+ * sentence: "translate this" becomes "assemble this from these words". Same
+ * target, same line, less to supply from nothing — which is what tutoring looks
+ * like. The ladder is shared with mistake review rather than copied, and if
+ * nothing can be rebuilt the original comes back, because a second look at a
+ * hard question still beats no second look.
+ */
+export function buildRetry(exercise: Exercise, options: BuildOptions): Exercise {
+  const gentler = scaffoldKindFor(exercise.kind);
+  const target = exercise.targetId ?? exercise.conceptIds[0];
+  if (!gentler || !exercise.sourceId || !target) return exercise;
+
+  const ctx = makeContext(options);
+  const rebuilt = buildExact(exercise.sourceId, gentler, target, ctx);
+  return rebuilt ? { ...rebuilt, targetId: target } : exercise;
+}
+
+/**
+ * Review Mistakes: the mistakes, and nothing else.
+ *
+ * Built from `mistakeQueue` rather than from the concept pool, which is the
+ * whole correction. The old path took the unresolved mistakes, kept only their
+ * `conceptIds`, and handed them to the ordinary generator — so a failed
+ * "Translate: I am tired" came back as a multiple choice about `v.cansado`,
+ * the other three concepts tagged on that sentence each produced their own
+ * unrelated exercise, and their sentence pools filled the rest of the session
+ * with lines the learner had never seen, let alone got wrong.
+ *
+ * Three rules hold here and nowhere else:
+ *
+ *   • **One exercise per mistake.** Not one per concept the mistake touched.
+ *   • **The same item, where it can be rebuilt.** `buildExact` re-creates the
+ *     original sentence and kind; only a record too old to name its sentence
+ *     falls back to generating for the concept.
+ *   • **Nothing is added.** No due concepts, no weak areas, no reading break.
+ *     An empty queue produces an empty session, and the screen says so.
+ */
+export function buildMistakeSession(options: BuildOptions): SessionPlan {
+  const ctx = makeContext(options);
+  const { learner } = options;
+  const queue = mistakeQueue(learner, options.targetLength ?? 12);
+
+  const exercises: Exercise[] = [];
+  for (const retry of queue) {
+    const state = learner.concepts[retry.conceptId];
+
+    /**
+     * The scaffolded kind comes first when the original was demanding — see
+     * `retryKinds`. Re-asking somebody the free-production question they just
+     * failed, unchanged, teaches them that the app has nothing to offer but the
+     * same wall.
+     */
+    let exercise: Exercise | null = null;
+    if (retry.sentenceId) {
+      for (const kind of retry.kinds) {
+        exercise = buildExact(retry.sentenceId, kind, retry.conceptId, ctx);
+        if (exercise) break;
+      }
+    }
+    // No sentence on the record, or none of the kinds could be rebuilt from it.
+    exercise ??= generateOfKind(retry.conceptId, state, ctx, retry.kinds);
+    exercise ??= generateForConcept(retry.conceptId, state, ctx);
+
+    if (!exercise || exercise.form === 'presentation') continue;
+    /**
+     * Pinned to the mistake's own target so the store can tell a genuine
+     * correction from a correct answer that merely brushed past the concept.
+     * Resolution policy lives in `learning/mistakes.ts`.
+     */
+    exercises.push({ ...exercise, targetId: retry.conceptId });
+    ctx.recentKinds = [exercise.kind, ...(ctx.recentKinds ?? [])].slice(0, 3);
+  }
+
+  return {
+    id: `mistakes:${ctx.now}`,
+    kind: 'mistakes',
+    source: 'mistakes',
+    title: 'Review mistakes',
+    subtitle:
+      exercises.length > 0
+        ? `${exercises.length} to put right`
+        : 'Nothing to review — you have fixed them all',
+    // Not interleaved: the queue order is the point, and shuffling it would
+    // undo the "oldest unresolved first" the learner can watch shorten.
     exercises,
   };
 }
@@ -578,11 +863,22 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
   const { learner } = options;
   const now = ctx.now;
 
-  const seenIds = Object.values(learner.concepts)
-    .filter((state) => state.timesSeen > 0)
-    .map((state) => state.id);
+  /**
+   * The scope this session may draw its targets from.
+   *
+   * Explicit when the screen passed one; otherwise global, except for the two
+   * kinds that are inherently about a single unit. This is what makes "Smart
+   * Review" mean different things on the home page and inside a unit without
+   * either button having to remember to filter anything.
+   */
+  const scope: ReviewScope =
+    options.scope ??
+    (options.conceptIds && options.conceptIds.length > 0
+      ? { type: 'concepts', conceptIds: options.conceptIds }
+      : { type: 'global' });
 
-  const byKind = (predicate: (id: string) => boolean) => seenIds.filter(predicate);
+  const scoped = (intent: SelectionIntent) => selectTargets(scope, intent, learner, now);
+  const local = scope.type !== 'global';
 
   let ids: string[] = [];
   let title = 'Practice';
@@ -594,53 +890,46 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
       target = options.targetLength ?? 6;
       title = 'Quick Practice';
       subtitle = 'About three minutes';
-      ids = dedupe([
-        ...dueConcepts(learner, now).slice(0, 6).map((s) => s.id),
-        ...shuffle(seenIds, ctx.rng),
-      ]);
+      ids = scoped('quick');
       break;
 
     case 'vocabulary':
       title = 'Vocabulary review';
-      subtitle = 'Words you have met, ranked by how shaky they are';
-      ids = byKind((id) => {
-        const concept = getConcept(id);
-        return !!concept && isVocabConcept(concept);
-      }).sort(byWeakness(learner, now));
+      subtitle = local
+        ? `Words from ${describeScope(scope)}`
+        : 'Words you have met, ranked by how shaky they are';
+      ids = scoped('vocabulary');
       break;
 
     case 'grammar':
       title = 'Grammar review';
-      subtitle = 'The rules you are least sure of';
-      ids = byKind((id) => {
-        const concept = getConcept(id);
-        return !!concept && (isGrammarConcept(concept) || concept.kind === 'verbform');
-      }).sort(byWeakness(learner, now));
+      subtitle = local
+        ? `Grammar from ${describeScope(scope)}`
+        : 'The rules you are least sure of';
+      ids = scoped('grammar');
       break;
 
     case 'listening':
       title = 'Listening practice';
-      subtitle = 'Spain Spanish, spoken';
-      ids = shuffle(seenIds, ctx.rng);
+      subtitle = local ? `${describeScope(scope)}, spoken` : 'Spain Spanish, spoken';
+      ids = scoped('listening');
       break;
-
-    case 'mistakes': {
-      title = 'Your mistakes';
-      subtitle = 'The ones you have not fixed yet';
-      ids = dedupe(learner.mistakes.filter((m) => !m.resolvedAt).flatMap((m) => m.conceptIds));
-      break;
-    }
 
     case 'hardMode':
       title = 'Hard mode';
       subtitle = 'No word banks, no hints — produce it yourself';
-      ids = seenIds.sort(byWeakness(learner, now));
+      ids = scoped('hard');
       break;
 
     case 'concept':
-      title = 'Focused practice';
-      subtitle = 'Drilling one area';
-      ids = (options.conceptIds ?? []).slice().sort(byWeakness(learner, now));
+      /**
+       * "Full review" from a unit screen arrives here. Breadth, not urgency:
+       * everything in scope appears, weakest first, including what is already
+       * solid — which is the difference between a full review and a smart one.
+       */
+      title = local ? `Full review — ${describeScope(scope)}` : 'Focused practice';
+      subtitle = local ? 'Everything this unit covered' : 'Drilling one area';
+      ids = scoped('full');
       break;
 
     case 'unitSmart': {
@@ -653,7 +942,8 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
        * original lesson would hand back the same exercises in the same order,
        * which is the one thing a revisit must not do.
        */
-      const unit = options.source ? getUnit(options.source) : undefined;
+      const unitId = scope.type === 'unit' ? scope.unitId : options.source;
+      const unit = unitId ? getUnit(unitId) : undefined;
       const plan = unit ? unitStrengthPlan(unit, learner, now) : null;
 
       title = plan && plan.unseen.length > 0 ? 'Finish this unit' : 'Strengthen this unit';
@@ -672,17 +962,9 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
          */
         ids = [...plan.unseen, ...plan.conceptIds];
       } else {
-        const pool = options.conceptIds ?? [];
-        const shaky = pool.filter((id) => {
-          const state = learner.concepts[id];
-          if (!state || state.timesSeen === 0) return false;
-          return state.dueAt <= now || mastery(state, now) < 0.78;
-        });
-        // If nothing is actually shaky, fall back to the whole unit rather than
-        // handing back an empty session.
-        ids = (shaky.length > 0 ? shaky : pool.filter((id) => learner.concepts[id])).sort(
-          byWeakness(learner, now),
-        );
+        // No plan (no unit resolved): fall back to the scope's own smart order,
+        // which for a unit scope is still that unit and nothing else.
+        ids = scoped('smart');
       }
       break;
     }
@@ -691,15 +973,20 @@ export function buildPracticeSession(kind: SessionKind, options: BuildOptions): 
     default:
       title = 'Random challenge';
       subtitle = 'Anything you have learned, in any form';
-      ids = shuffle(seenIds, ctx.rng);
+      ids = shuffle(scoped('random'), ctx.rng);
       break;
   }
 
-  // `unitSmart` derives its own pool from the unit, and intersecting it with
-  // the caller's list would drop exactly the concepts the plan added.
-  if (options.conceptIds && kind !== 'concept' && kind !== 'unitSmart') {
-    ids = options.conceptIds.filter((id) => ids.includes(id));
-  }
+  /**
+   * No post-hoc intersection any more.
+   *
+   * `ids` came out of `selectTargets`, which already applied the scope — so
+   * filtering again here would be the second, weaker copy of a rule that now
+   * has one home. It also used to be wrong in a way nothing caught: it ran for
+   * every kind except two, so a caller passing both a concept list and a kind
+   * whose pool was built differently silently got the intersection of two
+   * unrelated policies.
+   */
 
   let exercises: Exercise[];
 
@@ -824,6 +1111,20 @@ export function buildSession(
       return buildConversationSession(source, options);
     case 'story':
       return buildStorySession(source, options);
+    /**
+     * Its own builder, deliberately not routed through `buildPracticeSession`.
+     * Mistake review is a queue to replay, not a pool to rank, and the one line
+     * that used to send it through the shared path is what filled it with
+     * unrelated practice.
+     */
+    case 'mistakes':
+      return buildMistakeSession(options);
+    case 'unitArc': {
+      // `source` is the arc step id: "arc:<unitId>:<phase>".
+      const unitId = unitIdForArcStep(source);
+      const phase = arcPhaseOf(source);
+      return unitId && phase ? buildArcSession(unitId, phase, options) : null;
+    }
     case 'hardMode':
       return buildPracticeSession('hardMode', { ...options, forceHardMode: true });
     default:

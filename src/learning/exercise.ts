@@ -47,6 +47,21 @@ interface ExerciseBase {
    */
   source?: { es: string; en: string };
   /**
+   * The id of that sentence.
+   *
+   * Carried alongside the text so a wrong answer can be *rebuilt* later rather
+   * than merely described. Without it a mistake review can only ask the
+   * generator for something about the same concepts, which is how "review my
+   * mistakes" turned into "review something vaguely adjacent to my mistakes".
+   */
+  sourceId?: string;
+  /**
+   * The concept this exercise was built to practise, as opposed to the ones its
+   * sentence happens to carry. `conceptIds` is the scoring list; this is the
+   * reason the exercise exists.
+   */
+  targetId?: string;
+  /**
    * Concepts the exercise needs that the learner has not been introduced to.
    *
    * Kept out of `conceptIds` on purpose. `conceptIds` is what gets scored and

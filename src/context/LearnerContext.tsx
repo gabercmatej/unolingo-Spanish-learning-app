@@ -17,6 +17,7 @@ import { migrateState } from '@/learning/migrate';
 import { STATE_VERSION } from '@/learning/schema';
 import type { Exercise } from '@/learning/exercise';
 import { applyPlacement, type PlacementAnswer, type PlacementScore } from '@/learning/placement';
+import { applyAnswerToMistakes } from '@/learning/mistakes';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
 import {
   PRESENTATION_KINDS,
@@ -316,14 +317,35 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
           given,
           expected,
           explanation: exercise.note,
+          /**
+           * Enough to rebuild the exercise, not merely to describe it. Without
+           * these two, "review my mistakes" can only ask the generator for
+           * something about the same concepts — which is how a failed
+           * translation came back as an unrelated multiple choice.
+           */
+          sentenceId: exercise.sourceId,
+          targetId: exercise.targetId ?? touched[0],
         };
         mistakes = [...prev.mistakes, record].slice(-MAX_MISTAKES);
-      } else if (grade === 'correct') {
-        // Answering correctly resolves any open mistake on the same concepts.
-        mistakes = prev.mistakes.map((mistake) =>
-          !mistake.resolvedAt && mistake.conceptIds.some((id) => touched.includes(id))
-            ? { ...mistake, resolvedAt: now }
-            : mistake,
+      } else {
+        /**
+         * Resolution is now evidence-based, and much narrower than it was.
+         *
+         * The old rule closed *any* open mistake sharing *any* concept with any
+         * correct answer. Since `conceptIds` is the whole exercise's scoring
+         * list, a mistake made on a four-concept sentence was cleared by
+         * getting a multiple choice right about one of the other three — so the
+         * queue emptied itself without a single mistake being confronted, which
+         * is half of why "Review mistakes" had so little in it that made sense.
+         *
+         * `resolves` requires a *correct* answer (an `almost` lengthens the
+         * interval and would hide the mistake for longer than getting it right)
+         * aimed at the mistake's own target concept.
+         */
+        mistakes = applyAnswerToMistakes(
+          prev.mistakes,
+          { conceptIds: touched, targetId: exercise.targetId, grade },
+          now,
         );
       }
 

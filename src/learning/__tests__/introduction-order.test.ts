@@ -5,7 +5,7 @@ import type { Exercise } from '@/learning/exercise';
 import { errorDrills } from '@/content/drills';
 import { generateForConcept, mulberry32, type GenContext } from '@/learning/generator';
 import { buildLessonSession, buildPracticeSession, buildSmartReview } from '@/learning/session';
-import { createConceptState, review } from '@/learning/srs';
+import { createConceptState, introduce, review } from '@/learning/srs';
 import type { LearnerState } from '@/learning/types';
 
 /**
@@ -32,9 +32,18 @@ function play(learner: LearnerState, exercises: Exercise[], now = NOW): LearnerS
   const concepts = { ...learner.concepts };
   for (const exercise of exercises) {
     if (exercise.form === 'presentation') {
+      /**
+       * The real `introduce`, not a hand-written stand-in.
+       *
+       * This used to bump `timesSeen` itself, which happened to mirror what
+       * `introduce` did at the time — so when that turned out to be the cause
+       * of "opening a review lowers my mastery" and was fixed, the double kept
+       * the old behaviour and this suite went on testing a system that no
+       * longer existed. Calling the production function is the only version of
+       * this that cannot drift.
+       */
       for (const id of exercise.conceptIds) {
-        const existing = concepts[id] ?? createConceptState(id, now);
-        concepts[id] = { ...existing, introduced: true, timesSeen: existing.timesSeen + 1 };
+        concepts[id] = introduce(concepts[id] ?? createConceptState(id, now), now);
       }
       continue;
     }
@@ -378,8 +387,19 @@ describe('controlled exposure', () => {
         // Unknown material is only ever allowed where the learner is reading or
         // hearing, never where they are producing…
         expect(KIND_DEMAND[exercise.kind]).not.toBe('output');
-        // …and the sentence it came in is carried, so the answer can explain it.
-        expect(exercise.source).toBeDefined();
+        /**
+         * …and its meaning is on screen, so the exposure teaches rather than
+         * merely happening.
+         *
+         * Two shapes satisfy that. A sentence-derived exercise carries its
+         * source line, which the feedback bar reveals. A `match` grid *is* the
+         * meaning — the Spanish and its English are both present as tiles, and
+         * pairing them is the exercise — so it needs no source and never had
+         * one. Asserting `source` alone quietly required the first shape, and
+         * passed only because a card used to inflate `timesSeen` and steer the
+         * generator away from match on freshly introduced concepts.
+         */
+        expect(exercise.source !== undefined || exercise.kind === 'match').toBe(true);
         for (const id of unknown) expect(getConcept(id)).toBeDefined();
       }
     }

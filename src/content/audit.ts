@@ -4,6 +4,7 @@ import {
   cultureNotes,
   curriculum,
   getConcept,
+  getLesson,
   getLessonIndex,
   getLessonSentences,
   getLessonThatIntroduces,
@@ -18,7 +19,8 @@ import {
   verbs,
 } from '@/content';
 import { errorDrills, naturalDrills } from '@/content/drills';
-import { sentenceEligible, type Knowledge } from '@/learning/eligibility';
+import { sentenceLexis } from '@/content/lexicon';
+import { ceilingFromKnown, sentenceEligible, type Knowledge } from '@/learning/eligibility';
 import { reportVerbCorpus } from '@/content/verb-corpus';
 import {
   CEFR_LEVELS,
@@ -305,6 +307,7 @@ export function auditCurriculum(): CurriculumAudit {
       ...findScopeLeakage(),
       ...findUnreachablePractice(),
       ...findMistaggedSentences(),
+      ...findUntrackedVocabulary(),
       ...findParadigmGaps(),
       ...findTemplates(),
     ],
@@ -673,32 +676,59 @@ function findParadigmGaps(): Gap[] {
  * author declared it. Measuring against `teaches` alone reported forty-six
  * lessons as leaky when what they were doing was working exactly as designed.
  */
-function buildAvailability(): Map<string, number> {
+function buildAvailability(): {
+  available: Map<string, number>;
+  level: Map<string, CefrLevel>;
+} {
   const available = new Map<string, number>();
-  const note = (id: string, index: number) => {
+  /**
+   * The level of the lesson that first makes a concept available.
+   *
+   * Needed because the *lesson's* level is what the runtime measures a sentence
+   * against, not the concept's. `buildLessonSession` raises the production
+   * ceiling to `higherLevel(ceiling, lesson.level)` on the stated grounds that
+   * where a lesson is placed is a deliberate pedagogical decision by the author
+   * and, inside that lesson, outranks any estimate. An audit that measured the
+   * same sentences against the concept's own level would be a second, quieter
+   * copy of a rule that already has a home — and it would disagree: an A0
+   * greeting taught in an A1 lesson has a pool of A1 sentences, entirely by
+   * design, and reading them as out of reach says more about the model than
+   * about the course.
+   */
+  const level = new Map<string, CefrLevel>();
+
+  const note = (id: string, index: number, lessonLevel: CefrLevel) => {
     const existing = available.get(id);
-    if (existing === undefined || index < existing) available.set(id, index);
+    if (existing === undefined || index < existing) {
+      available.set(id, index);
+      level.set(id, lessonLevel);
+    }
   };
 
   for (const stage of curriculum) {
     for (const unit of stage.units) {
       for (const lesson of unit.lessons) {
         const index = getLessonIndex(lesson.id);
-        for (const id of lesson.teaches) note(id, index);
-        for (const id of lesson.grammar ?? []) note(id, index);
+        for (const id of lesson.teaches) note(id, index, lesson.level);
+        for (const id of lesson.grammar ?? []) note(id, index, lesson.level);
         for (const sentence of getLessonSentences(lesson)) {
-          for (const id of sentence.concepts) note(id, index);
+          for (const id of sentence.concepts) note(id, index, lesson.level);
         }
       }
     }
   }
-  return available;
+  return { available, level };
 }
 
-const availableAt = buildAvailability();
+const { available: availableAt, level: taughtAtLevel } = buildAvailability();
 
 function firstAvailable(conceptId: string): number {
   return availableAt.get(conceptId) ?? Number.POSITIVE_INFINITY;
+}
+
+/** The higher of two CEFR levels — the runtime's rule, shared rather than copied. */
+function higherLevel(a: CefrLevel, b: CefrLevel): CefrLevel {
+  return levelIndex(a) >= levelIndex(b) ? a : b;
 }
 
 /**
@@ -831,27 +861,68 @@ function findUnreachablePractice(): Gap[] {
       if (cached && cached.ceiling === level) return cached;
       const known = new Set<string>();
       for (const [id, at] of availableAt) if (at <= index) known.add(id);
-      const knowledge: Knowledge = { known, ceiling: level };
+      /**
+       * The ceiling the *runtime* would compute from this knowledge set, never
+       * below the level of the lesson doing the teaching. Both halves matter:
+       * `ceilingFromKnown` is the rule `productionCeiling` uses, and the lesson
+       * floor is the rule `buildLessonSession` applies on top of it.
+       */
+      const knowledge: Knowledge = {
+        known,
+        ceiling: higherLevel(ceilingFromKnown(known), level),
+      };
       cache.set(index, knowledge);
       return knowledge;
     };
   })();
 
   for (const concept of [...vocabConcepts, ...grammarConcepts]) {
-    const taughtAt = firstAvailable(concept.id);
+    /**
+     * Anchored to the lesson that *teaches* the concept, not to the first
+     * lesson whose sentences happen to mention it.
+     *
+     * Those are different points and the check had been conflating them, which
+     * made its own message untrue. `v.casa` is taught at lesson 29 and appears
+     * as incidental vocabulary in a sentence around lesson 5; measuring it at
+     * lesson 5 asks "could a learner five lessons in have read this?", and the
+     * answer is no because they have not been taught it yet — which is the
+     * premise, not a finding. A concept becomes a *practice target* when a
+     * lesson teaches it, and that is the moment its pool has to be usable.
+     *
+     * The knowledge set is still everything available at or before that point,
+     * incidental sentence vocabulary included, because that part of the model
+     * was right: the runtime does introduce those.
+     */
+    const introducedBy = getLessonThatIntroduces(concept.id);
+    const taughtAt = introducedBy ? getLessonIndex(introducedBy) : firstAvailable(concept.id);
     if (!Number.isFinite(taughtAt)) continue; // already reported by findUntaught
 
     const pool = getSentencesForConcept(concept.id);
     if (pool.length === 0) continue; // already reported as unpractised
 
-    const knowledge = knowledgeAt(taughtAt, concept.level);
     /**
-     * `translateToEn` is the gentlest thing the generator can build from a
-     * sentence. If not one line in the pool clears even that bar, the concept
-     * has no sentence practice at all when it is introduced.
+     * Measured at the level of the *lesson* that introduces it, which is what
+     * the runtime does — see `buildAvailability`. Using the concept's own level
+     * reported sixty-two A0 greetings as unreachable purely because the course
+     * teaches them inside A1 lessons, which is where they belong.
+     */
+    const knowledge = knowledgeAt(
+      taughtAt,
+      higherLevel(
+        concept.level,
+        (introducedBy ? getLesson(introducedBy)?.level : undefined) ??
+          taughtAtLevel.get(concept.id) ??
+          concept.level,
+      ),
+    );
+    /**
+     * `listenComprehend` is the gentlest thing the generator can build from a
+     * sentence: the meaning is chosen from options, so an unread word in the
+     * line is survivable. If not one sentence in the pool clears even that bar,
+     * the concept has no sentence practice at all when it is introduced.
      */
     const readable = pool.filter((sentence) =>
-      sentenceEligible(sentence, 'translateToEn', knowledge, [concept.id]),
+      sentenceEligible(sentence, 'listenComprehend', knowledge, [concept.id]),
     );
     /** …and this is the bar for asking the learner to produce it. */
     const producible = pool.filter((sentence) =>
@@ -905,6 +976,50 @@ const LITERAL_POS = new Set(['noun', 'adjective', 'adverb', 'interjection', 'num
 
 /** Characters of shared prefix that count as the same lexical family. */
 const STEM_LENGTH = 5;
+
+/**
+ * Content words the course uses but never teaches.
+ *
+ * Derived by `content/lexicon.ts`, which is also what the eligibility gate reads
+ * — so this reports the exact blind spot that gate has to tolerate. A word no
+ * concept covers cannot be judged known or unknown, so eligibility ignores it;
+ * that is the right call at runtime (refusing every sentence containing an
+ * untracked word would reject most of the corpus and make the gate a measure of
+ * vocabulary-file completeness) and it means the only place the gap can surface
+ * is here.
+ *
+ * A NOTE, not a warning. Most of these are legitimately incidental — a place
+ * name, a one-off noun carrying a sentence that is really about its grammar.
+ * The ones worth acting on are the *frequent* ones, so they are reported by
+ * frequency: a word the corpus leans on dozens of times and never teaches is a
+ * word the learner meets constantly and is never told the meaning of.
+ */
+function findUntrackedVocabulary(): Gap[] {
+  const frequency = new Map<string, number>();
+  for (const sentence of sentences) {
+    for (const word of sentenceLexis(sentence).untracked) {
+      frequency.set(word, (frequency.get(word) ?? 0) + 1);
+    }
+  }
+
+  /** Below this a word is genuinely incidental and not worth an author's time. */
+  const OFTEN = 8;
+  const common = [...frequency.entries()]
+    .filter(([, count]) => count >= OFTEN)
+    .sort((a, b) => b[1] - a[1]);
+  if (common.length === 0) return [];
+
+  const named = common.slice(0, 10).map(([word, count]) => `${word}(${count})`).join(' ');
+  return [
+    {
+      severity: 'info',
+      where: 'course',
+      message:
+        `${common.length} content word(s) appear ${OFTEN}+ times but no concept teaches them, ` +
+        `so the eligibility gate cannot judge them: ${named}`,
+    },
+  ];
+}
 
 function findMistaggedSentences(): Gap[] {
   const mistagged: string[] = [];

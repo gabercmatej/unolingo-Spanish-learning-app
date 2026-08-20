@@ -23,6 +23,7 @@ import {
   type Unit,
 } from '@/content/types';
 import { isLessonUnlocked } from '@/learning/session';
+import { unitArc, type UnitArc } from '@/learning/unit-arc';
 import { mastery, masteryBand, retrievability, urgency } from '@/learning/srs';
 import type { ConceptState, ExerciseKind, LearnerState, Skill } from '@/learning/types';
 
@@ -244,10 +245,38 @@ export function hasMetVerbTense(
   return !!learner.concepts[verbFormConceptId(verbId, tense)];
 }
 
-/** Concepts due for review right now, most urgent first. */
+/**
+ * Has the course shown this concept to the learner at all?
+ *
+ * The distinction this draws is the one that keeps mastery honest. A concept
+ * that has had its teaching card has been *encountered* — it belongs in review
+ * queues, in the global practice pool, in "words met". It has not been
+ * *retrieved*, so it carries no evidence and must stay out of every average
+ * that claims to measure how well something is known. `introduce` used to blur
+ * the two by incrementing `timesSeen`, which is why reading a card could move a
+ * mastery percentage.
+ */
+export function hasEncountered(state: ConceptState | undefined): boolean {
+  return !!state && (state.introduced || state.timesSeen > 0);
+}
+
+/** Every concept the course has shown this learner, in no particular order. */
+export function encounteredIds(learner: LearnerState): string[] {
+  return conceptStates(learner)
+    .filter(hasEncountered)
+    .map((state) => state.id);
+}
+
+/**
+ * Concepts due for review right now, most urgent first.
+ *
+ * Gated on having been encountered rather than practised, so a word introduced
+ * by a card and never reached again is exactly what Smart Review offers next —
+ * which is the case most in need of it.
+ */
 export function dueConcepts(learner: LearnerState, now = Date.now()): ConceptState[] {
   return conceptStates(learner)
-    .filter((state) => state.timesSeen > 0 && state.dueAt <= now)
+    .filter((state) => hasEncountered(state) && state.dueAt <= now)
     .sort((a, b) => urgency(b, now) - urgency(a, now));
 }
 
@@ -278,11 +307,11 @@ export function vocabCounts(learner: LearnerState, now = Date.now()): VocabCount
   return counts;
 }
 
-/** Words the learner has actually met (any exposure). */
+/** Words the learner has actually met (any exposure, including a teaching card). */
 export function wordsLearned(learner: LearnerState): number {
   return Object.values(learner.concepts).filter((state) => {
     const concept = getConcept(state.id);
-    return concept ? isVocabConcept(concept) && state.timesSeen > 0 : false;
+    return concept ? isVocabConcept(concept) && hasEncountered(state) : false;
   }).length;
 }
 
@@ -519,6 +548,16 @@ export interface UnitProgress {
   completedLessonIds: string[];
   /** The lesson to open when the learner taps Continue / Start. */
   nextLesson: Lesson | null;
+  /**
+   * The unit's guided teaching arc: its lessons plus the practice phases that
+   * follow them. See `learning/unit-arc.ts`.
+   *
+   * `state === 'complete'` still means "every required lesson is finished",
+   * which is what the path and the stage counters have always measured and
+   * what an existing learner's record already reflects. Whether the *teaching*
+   * is finished is a different and longer question, and it is this.
+   */
+  arc: UnitArc;
 }
 
 /**
@@ -565,6 +604,8 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
    * Phase is read off mastery, not off lesson count, which is the whole point:
    * finishing the lessons moves a unit out of `learning` and no further.
    */
+  const arc = unitArc(unit, learner, now);
+
   let phase: UnitPhase;
   if (state !== 'complete') phase = 'learning';
   // A unit still holding material the learner has never been shown is not
@@ -573,6 +614,10 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
   // legitimately has some left after its lessons are ticked.
   else if (getUnitTaughtConcepts(unit).some((id) => !learner.concepts[id]?.introduced))
     phase = 'learning';
+  // Nor is a unit whose guided arc still has sessions to run: the lessons
+  // introduced the material, and the phases after them are what turn an
+  // introduction into something retrievable.
+  else if (!arc.complete) phase = 'practising';
   else if (value >= MAINTENANCE_MASTERY) phase = 'maintaining';
   else if (value >= PRACTISED_MASTERY) phase = 'strengthening';
   else phase = 'practising';
@@ -590,6 +635,7 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
     conceptIds,
     completedLessonIds,
     nextLesson,
+    arc,
   };
 }
 
@@ -675,16 +721,25 @@ export function unitStrengthPlan(
 
   for (const id of conceptIds) {
     const state = learner.concepts[id];
-    if (!state || state.timesSeen === 0) {
+    /**
+     * "Still to meet" means never shown — not merely never answered.
+     *
+     * Before `introduce` stopped touching `timesSeen`, a concept whose card had
+     * been displayed looked practised here and left this bucket. Now the two
+     * are distinguishable, and an introduced-but-never-retrieved concept is the
+     * most urgent kind of *developing*: the learner has been shown it and has
+     * never once had to remember it.
+     */
+    if (!hasEncountered(state)) {
       if (taught.has(id)) unseen.push(id);
       continue;
     }
     if (unresolved.has(id)) mistaken.push(id);
 
-    const value = mastery(state, now);
-    const produced = state.kinds.some((kind) => PRODUCED_KINDS.includes(kind));
+    const value = state ? mastery(state, now) : 0;
+    const produced = !!state?.kinds.some((kind) => PRODUCED_KINDS.includes(kind));
 
-    if (state.timesSeen < 2) developing.push(id);
+    if (!state || state.timesSeen < 2) developing.push(id);
     else if (value < 0.5 || state.dueAt <= now) weak.push(id);
     else if (!produced) unproduced.push(id);
     else if (value < STRENGTHEN_THRESHOLD) weak.push(id);

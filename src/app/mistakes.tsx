@@ -15,6 +15,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { mistakePatterns } from '@/learning/mastery';
+import { mistakeQueue } from '@/learning/mistakes';
 import { KIND_LABELS } from '@/learning/types';
 import { relativeDay, toISODate } from '@/lib/date';
 import { goBack } from '@/lib/navigation';
@@ -38,6 +39,8 @@ export default function MistakesScreen() {
   );
 
   const openCount = learner.mistakes.filter((mistake) => !mistake.resolvedAt).length;
+  /** How many the next session would actually cover — see the button below. */
+  const queued = useMemo(() => mistakeQueue(learner).length, [learner]);
   const fixedCount = learner.mistakes.length - openCount;
 
   return (
@@ -96,9 +99,16 @@ export default function MistakesScreen() {
         onChange={setFilter}
       />
 
-      {openCount > 0 && filter === 'open' ? (
+      {queued > 0 && filter === 'open' ? (
+        /*
+          Counted from the queue, not from the record list. Three failures on
+          the same word are one thing to fix, and a session caps at twelve — so
+          promising "practise all 20" and serving eight would be the button
+          lying about what it does. The other records stay open and come back
+          another day if the retry does not stick.
+        */
         <Button
-          title={`Practise all ${openCount} mistakes`}
+          title={queued === openCount ? `Fix all ${queued} mistakes` : `Fix ${queued} now`}
           icon="barbell-outline"
           onPress={() =>
             router.push({ pathname: '/session', params: { kind: 'mistakes', source: 'mistakes' } })

@@ -44,9 +44,11 @@ a results screen assembled from refs during render).
 deliberately excluded from `npm test` (see `testPathIgnorePatterns` in package.json) because
 its assertions encode "this stage is finished", not "the code works".
 
-It was written expecting to fail, and for a long time it did. **It now passes 9/9 with zero
+It was written expecting to fail, and for a long time it did. **It now passes 11/11 with zero
 warnings, so a failure is a regression rather than the normal state** — read its gap list and
-fix the content; never make it pass by weakening an assertion. Passing is still not the same
+fix the content; never make it pass by weakening an assertion. Note the third possibility,
+which has happened: the audit's *model* of the runtime can be wrong. When a check disagrees
+with the app, find out which of them is lying before changing either. Passing is still not the same
 as finished: the NOTES are a standing priority queue and are supposed to keep printing.
 
 It measures **distribution and depth, not presence**. The presence version of this file
@@ -85,7 +87,10 @@ ids, missing sentences and broken lesson prerequisites.
 **`src/learning/` — pure logic, no React.**
 `srs.ts` (spaced repetition), `mastery.ts` (aggregation, weak areas, unit/stage progress,
 CEFR estimate), `answer-check.ts`, `generator.ts` (concept + learner state → exercise),
-`eligibility.ts` (what the learner may be *asked to produce*), `teaching.ts` (what to say
+`eligibility.ts` (what the learner may be *asked to produce*), `scope.ts` (where a review may
+draw its targets from, and what it is trying to achieve), `mistakes.ts` (the retry queue and
+what closes a mistake), `unit-arc.ts` (a unit's guided teaching sequence),
+`teaching.ts` (what to say
 after an answer), `session.ts` (session assembly and ordering), `placement.ts`, `xp.ts`, `ranks.ts`,
 `check.ts` (grading), `achievements.ts`, `backup.ts` (what a backup is, what a restore
 must refuse, when a snapshot is due), `migrate.ts` (opening a record written by another
@@ -188,6 +193,77 @@ is exactly what these tests exist to catch.
 
 ## Key invariants
 
+- **Only evidence may move mastery.** Generating a session is a pure read; answering is the
+  only thing that writes. This was broken in one line: `introduce` incremented `timesSeen`,
+  and `averageMastery` counts every concept with `timesSeen > 0` — so *displaying* a teaching
+  card moved a concept into the denominator carrying a mastery of zero. Opening a unit
+  revisit, which opens with cards for everything the lessons had not reached, halved the
+  unit's percentage before the learner answered anything. Measured on the regression fixture:
+  0.72 → 0.20.
+  - The distinction that fixes it is **encountered** vs **retrieved**. Encountered (`introduced
+    || timesSeen > 0`, via `hasEncountered`) means the course has shown it: it belongs in review
+    queues, in the global practice pool, in "words met". Retrieved (`timesSeen > 0`) means it
+    was produced from memory: it is the only thing that counts as evidence, and the only thing
+    any average may see. `introduce` may set `introduced` and schedule `dueAt`; it may not
+    touch `timesSeen`, `strength`, `depth` or `lastReviewed` — that last one because
+    `masteryBand` gates `mastered` on `lastReviewed - firstSeen`, so a card would let a concept
+    age towards mastery by being looked at on two different days.
+  - `transactional.test.ts` holds it, including that unanswered exercises have zero effect.
+- **A review's targets come from its scope.** `learning/scope.ts` makes this structural:
+  `ReviewScope` (`global` | `unit` | `concepts` | `mistakes`) and `SelectionIntent` (`smart`,
+  `full`, `vocabulary`, `grammar`, `listening`, `weak`, `quick`, `random`, `hard`) are separate
+  types, and `selectTargets` is the one place either is interpreted. Inside a unit, review means
+  "help me with this unit"; from Home or Practice it means "help me with everything I have met".
+  - Supporting language from anywhere already met may still appear *inside the sentences* —
+    that is the spiral — but the concept being practised must belong to the scope. A café
+    sentence must not become a vehicle for an unrelated B1 grammar point.
+  - Unit **targets** come from `getUnitTaughtConcepts`, not `getUnitConcepts`: the latter sweeps
+    in every concept the unit's sentences mention, which is right for measuring what a unit
+    exercises and wrong for deciding what it owns.
+  - It was *mostly* right before, by convention — each screen passed a concept list and
+    `buildPracticeSession` intersected it. "Mostly, by convention, at each call site" is the
+    kind of correctness that decays the first time somebody adds a button, which is why the
+    screens now pass a `unit` param and nothing assembles a filter by hand.
+- **Review Mistakes reviews the mistakes.** `buildMistakeSession` is a separate builder and
+  deliberately does not route through `buildPracticeSession`. The old path kept only
+  `conceptIds` and asked the generator for anything about them, so a failed "Translate: I am
+  tired" came back as a multiple choice about `v.cansado`, the other three concepts tagged on
+  that sentence each spawned their own exercise, and their sentence pools filled the rest of
+  the session with lines the learner had never seen. One exercise per mistake; the same item
+  rebuilt via `buildExact` where the record names its sentence; nothing added, so an empty
+  queue produces an empty session and the screen says so.
+  - `MistakeRecord` gained `sentenceId`, `targetId`, `attempts`, `lastAttemptAt` — all
+    optional, so **no `STATE_VERSION` bump**, and an older record falls back to the concept.
+  - **Resolution is narrow.** The old rule closed any open mistake sharing any concept with any
+    correct answer, so the queue emptied itself without a mistake being confronted. `resolves`
+    needs a *correct* answer (not `almost`, which lengthens the interval and would hide the
+    mistake for longer than getting it right) aimed at the mistake's own `targetId`.
+  - **Failure lowers scaffolding, not the target.** `scaffoldKindFor` is one shared ladder —
+    `translateToEs → wordBank`, `dictation → listenSelect`, `correctMistake → grammarChoice`.
+    Both the in-session retry (`buildRetry`) and the mistake queue step down it, so they cannot
+    drift. Only `output` kinds are scaffolded: getting a multiple choice wrong is not evidence
+    that multiple choice was too hard.
+- **A unit is a guided arc, not one lesson with a tick on it.** Measured: **36 of 63 units have
+  exactly one required lesson**, median 13 minutes. So finishing a unit meant meeting nine
+  words, answering twelve questions, and landing on ~22% mastery with nothing to do but replay
+  the lesson. `learning/unit-arc.ts` adds `mixed → recall → consolidate` after the lessons —
+  three to five sittings, twenty to thirty minutes — and adds **no content**: the phases are
+  generated from what the unit already declares, which is exactly what "lessons never contain
+  exercises" buys.
+  - **A phase is complete when it has been done *or* when its goal is already met.** A learner
+    who already retrieves every concept under pressure gains nothing from a recall session, and
+    making them sit through one to earn a tick is the app inventing work. It also means a unit
+    finished before the arc existed does not reopen if the learner genuinely knows it.
+  - Phases are **rotated, not ranked**: `generateOfKind` takes the first kind that works, so a
+    fixed preference list produced six `translateToEn` in a row — the Duolingo failure this was
+    meant to avoid, reached from the other direction. The list rotates by position, the same
+    device as `LISTENING_ROTATION`.
+  - Progress is stored in `completedLessons` under `arc:<unitId>:<phase>`. That map is keyed by
+    string and nothing requires the keys to name lessons, so this needs **no `STATE_VERSION`
+    bump**; a stale key orphans an entry rather than breaking a screen.
+  - `unitProgress().state` still means "every required lesson is finished" — unchanged, so an
+    existing record's stage counters do not move. Whether the *teaching* is finished is
+    `progress.arc.complete`, and the two are allowed to disagree.
 - **Nothing is asked for before it is taught.** `learning/eligibility.ts` gates every
   sentence, drill and conversation turn on what the learner has actually been introduced
   to. This closed a bug where a learner who had just met `v.amigo` in the Family unit was
@@ -209,17 +285,45 @@ is exactly what these tests exist to catch.
      learner as new and never scored.
   - The rule is **directional, not restrictive**: past concepts spiral forward for ever, and
     only unseen material is kept out of required output. `KIND_DEMAND` splits exercise kinds
-    into `output` (the learner writes or says Spanish — zero unknown concepts), `guided` (the
-    sentence is on screen with a gap — one), and `input` (reading or hearing — one, plus a
-    level of headroom). A sentence may stretch the learner **on its level or on its
-    vocabulary, and not on both at once**: without that clause the two tolerances multiply,
-    which is precisely how the offending sentence qualified.
+    into `output` (the learner writes or says Spanish — zero unknown), `comprehension`
+    (`translateToEn`: free typing that needs every word understood, so vocabulary room but no
+    level headroom), `guided` (the sentence is on screen with a gap), and `input` (choosing
+    from options — the most room, plus a level of headroom). A sentence may stretch the learner
+    **on its level or on its vocabulary, and not on both at once**: without that clause the two
+    tolerances multiply, which is precisely how the offending sentence qualified.
+  - **The tag list under-counts, so eligibility also counts *words*.** This was the documented
+    residual and it was still reachable: "Estaban viendo el partido abajo en el bar." declares
+    the imperfect, passes a concept check with room to spare, and asks a beginner for four
+    words nobody has shown them. Authors tag what a sentence is *for* — two or three ideas —
+    not the eleven words it contains, and tagging harder is not the fix. `content/lexicon.ts`
+    *derives* the words from the text, the way `verb-corpus.ts` derives conjugations, and
+    `UNKNOWN_WORDS` is the budget over them.
+    - Three kinds of token come out of a sentence. **Function words** (`el`, `en`, `que`) never
+      count — structural, and present in lesson one. **Covered** words are ones some concept
+      accounts for, and are the ones worth counting. **Untracked** words — content words no
+      concept covers, 28% of the corpus — are deliberately *not* counted as unknown: refusing
+      every sentence containing one would reject most of the corpus and make eligibility a
+      measure of vocabulary-file completeness. `audit:content` reports the frequent ones
+      instead (`nadie` appears 63 times and is never taught).
+    - Verb forms register against the **paradigm as well as the verb**, because either is
+      enough to read the word: "han visto" is legible to somebody who knows *ver*, and equally
+      to somebody studying the present perfect.
+    - `output` tolerates **zero** unknown words. That is affordable because it was measured: for
+      a learner who has genuinely reached a level, 77% (A1) to 93% (B2) of the sentences at or
+      below it contain no unknown word at all.
   - The ceiling comes from what has been *introduced*, not from `estimateProficiency` —
     the question is "has the course shown them this?", not "how good are they?". A placement
     result sets the floor.
   - `audit:content` measures the same rule by calling `sentenceEligible`, for the reason the
     verb corpus index is shared with `buildVerbForm`: a diagnostic with its own copy of a
-    threshold silently stops describing the thing it watches.
+    threshold silently stops describing the thing it watches. It had **two** such copies, and
+    both were wrong once the gate tightened. It anchored "at the point it is taught" to the
+    first lesson whose *sentences* mention a concept rather than the lesson that teaches it —
+    `v.casa` is taught at lesson 29 and appears incidentally around lesson 5 — and it took the
+    concept's declared level as the production ceiling, when the runtime derives the ceiling
+    from the introduced set (`ceilingFromKnown`, now shared) and raises it to the lesson's own
+    level. Between them those two approximations reported 62 concepts as having no readable
+    sentence. Anchoring and ceiling fixed, the true figure is zero.
 - **Introduced → learning → familiar → strong → mastered.** `masteryBand` is a ladder, and
   nothing jumps it. `mastered` needs demanding retrieval (`depth >= 3`), six encounters, *and*
   `lastReviewed - firstSeen` of about a day — ten correct answers inside one sitting reach
@@ -696,6 +800,10 @@ those tests cross-check content against logic.
 | `introduction-order.test.ts` | the same rule end to end — a real learner walking real lessons, plus spiral reuse and the drill/conversation gate |
 | `teaching.test.ts` | what an answer is worth saying, and the level policy on showing meaning |
 | `unit-cycle.test.ts` | the strength plan, the actionable mastery figure, and listening rotation |
+| `transactional.test.ts` | that only evidence moves mastery — a card is exposure, generation is a pure read, and an abandoned session commits only what was answered |
+| `mistake-review.test.ts` | that Review Mistakes contains the mistakes and nothing else, what closes one, and the scaffolded retry |
+| `review-scope.test.ts` | global vs unit scope: where each review may draw its targets from |
+| `unit-arc.test.ts` | the guided arc — its shape per unit, its sequence, the already-met escape hatch, and that the phases differ |
 | `verb-corpus.test.ts` | the ambiguity guards — cross-verb syncretism, homographs, person syncretism, multi-word forms |
 | `verb-flow.test.ts` | the whole conjugation pathway, end to end, including the subjunctive and imperative moods |
 | `tense-coverage.test.ts` | that every declared `TenseId` is carried, and that an unbuildable tense throws instead of fabricating forms |
@@ -743,14 +851,12 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   queue reason, skill standing, spiral source — because when a review feels wrong the useful
   question is which layer is wrong, not whether it is. Nothing there computes its own numbers:
   a diagnostic that invents them can agree with itself while the system disagrees with both.
-- **The eligibility gate reads tags, and tags under-count.** "Mis vecinos han visto el
-  partido en el bar de abajo." declares three concepts and contains "vecinos", "partido",
-  "bar" and "abajo", none of which is tagged. So the concept check is generous by
-  construction, and the level ceiling is the backstop that catches what the tags miss. That
-  is why the two gates are both there and why they are not allowed to stretch at once. A
-  future improvement would derive unknown *words* rather than unknown concepts, the way
-  `verb-corpus.ts` derives conjugated forms from sentence text — the machinery for that
-  already exists and has not been pointed at vocabulary.
+- **Untracked vocabulary is the remaining hole in the eligibility gate.** The word gate closed
+  the tag shortfall, but 28% of the corpus's content words belong to no concept at all, and
+  those are invisible to it by design — see the `content/lexicon.ts` note above for why
+  counting them would be worse. `audit:content` reports the ones appearing eight or more times
+  (27 of them, led by `nadie` at 63) as a standing authoring queue. Teaching those words is the
+  cheapest way to make the gate sharper, and it is content work rather than a code change.
 - **Composition is the surface that breaks silently.** The conjugation subsystem stayed dead
   through 119 passing tests because every link was tested individually and the chain was not.
   `verb-flow.test.ts` walks verb → tense → paradigm → exercise → grade → mastery → Library, and

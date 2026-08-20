@@ -44,7 +44,8 @@ interface JourneyProps {
    * screen and the only one that did nothing when pressed — a diagnosis with no
    * treatment. This is the treatment.
    */
-  onStrengthenUnit: (unitId: string) => void;
+  /** `arcStep` is the next guided phase, when the unit still has one. */
+  onStrengthenUnit: (unitId: string, arcStep?: string) => void;
 }
 
 export function Journey({ stages, onOpenUnit, onStartLesson, onStrengthenUnit }: JourneyProps) {
@@ -94,7 +95,8 @@ function StageSection({
   onToggle: () => void;
   onOpenUnit: (unitId: string) => void;
   onStartLesson: (lesson: Lesson) => void;
-  onStrengthenUnit: (unitId: string) => void;
+  /** `arcStep` is the next guided phase, when the unit still has one. */
+  onStrengthenUnit: (unitId: string, arcStep?: string) => void;
 }) {
   const theme = useTheme();
   const { state } = stage;
@@ -200,7 +202,7 @@ function StageSection({
               isLast={index === stage.units.length - 1}
               onOpen={() => onOpenUnit(unit.unit.id)}
               onStartLesson={onStartLesson}
-              onStrengthen={() => onStrengthenUnit(unit.unit.id)}
+              onStrengthen={() => onStrengthenUnit(unit.unit.id, unit.arc.next?.id)}
             />
           ))}
         </Animated.View>
@@ -382,14 +384,23 @@ function UnitRow({
                 size={13}
                 tone={unit.needsReview ? theme.warning : theme.textSecondary}
               />
+              {/*
+                The lessons being finished does not mean the teaching is. While
+                the unit's guided arc still has sessions to run, this row names
+                the next one rather than offering a percentage and leaving the
+                learner to work out what to do with it — which is what it used
+                to do, and the reason a unit could sit at 22% indefinitely.
+              */}
               <Text
                 variant="caption"
                 tone={unit.needsReview ? theme.warning : theme.textSecondary}
                 style={styles.flex}
                 numberOfLines={1}>
-                {unit.needsReview
-                  ? `Review recommended — ${Math.round(unit.mastery * 100)}% mastery`
-                  : `Strengthen — ${Math.round(unit.mastery * 100)}% mastery`}
+                {unit.arc.next
+                  ? `Next: ${unit.arc.next.title} — ${unit.arc.stepsDone}/${unit.arc.stepCount} sessions`
+                  : unit.needsReview
+                    ? `Review recommended — ${Math.round(unit.mastery * 100)}% mastery`
+                    : `Strengthen — ${Math.round(unit.mastery * 100)}% mastery`}
               </Text>
               <Icon
                 name="chevron-forward"

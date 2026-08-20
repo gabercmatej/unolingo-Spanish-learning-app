@@ -183,9 +183,27 @@ export function introduce(state: ConceptState, now: number = Date.now()): Concep
   return {
     ...state,
     introduced: true,
-    lastReviewed: now,
-    timesSeen: state.timesSeen + 1,
-    // Comes back inside the same session, then tomorrow.
+    /**
+     * Exposure is scheduled, never scored.
+     *
+     * This used to increment `timesSeen`, and that single line was the whole of
+     * the "opening a review lowers my mastery" bug. `averageMastery` counts
+     * every concept with `timesSeen > 0`, so displaying a teaching card moved a
+     * concept into the denominator carrying a mastery of zero — no strength, no
+     * depth, nothing retrieved. A unit sitting at 64% over five practised
+     * concepts dropped to 32% the moment a revisit showed five cards for the
+     * ones it had not reached yet, and dropped whether or not the learner
+     * answered a single question. Reading a word is not evidence of
+     * remembering it, and the number that claims to measure memory may only
+     * move on evidence.
+     *
+     * `lastReviewed` is left alone for the same reason: `masteryBand` gates
+     * `mastered` on `lastReviewed - firstSeen`, so touching it here would let a
+     * concept age towards mastery by being looked at on two different days.
+     *
+     * What introduction *may* do is schedule: the concept is now known to the
+     * course, so it belongs in the queue. That is progression, not mastery.
+     */
     stability: Math.max(state.stability, 0.02),
     dueAt: now + 0.02 * DAY_MS,
   };
@@ -233,7 +251,17 @@ const MASTERY_REPS = 6;
 const MASTERY_SPAN_MS = 0.9 * DAY_MS;
 
 export function masteryBand(state: ConceptState | undefined, now: number = Date.now()): MasteryBand {
-  if (!state || state.timesSeen === 0) return 'new';
+  if (!state) return 'new';
+  /**
+   * Introduced but never retrieved is the first rung, not the absent one.
+   *
+   * `new` means the course has not shown this yet; a concept that has had its
+   * card has been *taught* and is waiting for its first retrieval. Since
+   * `introduce` stopped inflating `timesSeen`, that state is now visible here
+   * rather than being disguised as a practice, and the Library says "learning"
+   * where it used to claim a retrieval that never happened.
+   */
+  if (state.timesSeen === 0) return state.introduced ? 'learning' : 'new';
   const value = mastery(state, now);
   if (state.timesSeen < 3) return 'learning';
   if (value < 0.5) return 'familiar';

@@ -32,7 +32,7 @@ import { WhyPanel } from '@/components/session/why-panel';
 import { getStageForUnit, getUnitForLesson } from '@/content';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
-import { buildSession, type SessionKind } from '@/learning/session';
+import { buildRetry, buildSession, type SessionKind } from '@/learning/session';
 import { estimateLevel, stageProgress, unitProgress } from '@/learning/mastery';
 import { teachingFor, type Teaching } from '@/learning/teaching';
 import { mastery, masteryBand } from '@/learning/srs';
@@ -57,8 +57,22 @@ import { speakSpanish, stopSpeaking } from '@/lib/speech';
  * repeating it until you get it right teaches the answer, not the language; the
  * spaced-repetition schedule handles the rest across days.
  */
-/** Session kinds that count as completing a lesson on the path. */
-const LESSON_KINDS: SessionKind[] = ['lesson', 'conversation', 'story', 'checkpoint'];
+/**
+ * Session kinds that count as completing a lesson on the path.
+ *
+ * `unitArc` is one of them, which is how a guided phase records that it was
+ * played: `completeSession` writes `source` into `completedLessons`, and an arc
+ * step's source is its own id ("arc:unit.meals:recall"). That map is keyed by
+ * string and nothing requires the keys to name lessons in the curriculum, so
+ * the arc needs no new persisted field and no `STATE_VERSION` bump.
+ */
+const LESSON_KINDS: SessionKind[] = [
+  'lesson',
+  'conversation',
+  'story',
+  'checkpoint',
+  'unitArc',
+];
 
 /** The session as it stood when it ended — see `ending` below for why. */
 interface SessionEnding {
@@ -89,6 +103,8 @@ export default function SessionScreen() {
     source?: string;
     concepts?: string;
     title?: string;
+    /** Set when the session was started from inside a unit — see `plan` below. */
+    unit?: string;
   }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -104,9 +120,16 @@ export default function SessionScreen() {
       buildSession(kind, source, {
         learner,
         conceptIds: params.concepts ? params.concepts.split(',') : undefined,
+        /**
+         * Passed by the screen that started the session, so a review knows what
+         * it is a review *of*. A `unit` param means the session was opened from
+         * inside that unit and may only target its concepts; without one the
+         * session is global. See `learning/scope.ts`.
+         */
+        scope: params.unit ? { type: 'unit', unitId: params.unit } : undefined,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [kind, source, params.concepts],
+    [kind, source, params.concepts, params.unit],
   );
 
   const [queue, setQueue] = useState<Exercise[]>(() => plan?.exercises ?? []);
@@ -337,10 +360,20 @@ export default function SessionScreen() {
       sound.incorrect();
       setWrongAt(Date.now());
       exercise.conceptIds.forEach((id) => needsReview.current.add(id));
-      // One second pass later in this session, then it belongs to the scheduler.
+      /**
+       * One second pass later in this session, then it belongs to the
+       * scheduler — and the second pass is *easier* than the first.
+       *
+       * Re-queueing the identical exercise meant a learner who could not
+       * produce a sentence from nothing was asked to produce it from nothing
+       * again, twenty questions later. `buildRetry` steps the support down one
+       * rung while keeping the concept and the sentence, so the retry is a way
+       * through rather than the same wall.
+       */
       if (!retried.current.has(exercise.id)) {
         retried.current.add(exercise.id);
-        setQueue((prev) => [...prev, exercise]);
+        const retry = buildRetry(exercise, { learner });
+        setQueue((prev) => [...prev, retry]);
       }
     } else {
       setCorrect((value) => value + 1);
@@ -373,14 +406,26 @@ export default function SessionScreen() {
   // --- Empty and finished states -------------------------------------------
 
   if (!plan || plan.exercises.length === 0) {
+    /**
+     * An empty mistake queue is a *result*, not a failure to build a session.
+     *
+     * "Finish a lesson first" is actively wrong for somebody who has finished
+     * plenty and simply has nothing outstanding — and the alternative the old
+     * generator took, padding the session with unrelated practice so it was
+     * never empty, is the behaviour this pass exists to remove. Nothing to fix
+     * is the good outcome, so it gets said plainly.
+     */
+    const noMistakes = kind === 'mistakes';
     return (
       <View style={[styles.flex, styles.center, { backgroundColor: theme.background }]}>
         <View style={styles.emptyBox}>
           <Text variant="heading" center>
-            Nothing to practise yet
+            {noMistakes ? 'No mistakes to review' : 'Nothing to practise yet'}
           </Text>
           <Text variant="small" color="textSecondary" center>
-            Finish a lesson first — practice sessions are built from what you have already met.
+            {noMistakes
+              ? 'You have put right everything you got wrong. Smart Review is the place to keep it that way.'
+              : 'Finish a lesson first — practice sessions are built from what you have already met.'}
           </Text>
           <Button title="Back" onPress={() => goBack()} />
         </View>

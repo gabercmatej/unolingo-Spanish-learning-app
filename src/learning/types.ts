@@ -148,6 +148,18 @@ export interface ConceptState {
   introduced: boolean;
 }
 
+/**
+ * A wrong answer, recorded with enough about it to be *reproduced*.
+ *
+ * The fields below the divider are all optional, so adding them needs no
+ * `STATE_VERSION` bump — a record written by an earlier build simply comes back
+ * without them, and the retry falls back to the concept. That fallback is the
+ * old behaviour, which is worth stating plainly: "Review mistakes" used to keep
+ * only `conceptIds`, throw the rest away, and ask the generator for whatever it
+ * felt like building for those concepts. A mistake on one sentence became four
+ * unrelated exercises on its four tagged concepts, which is exactly the "random
+ * questions" the feature was reported for.
+ */
 export interface MistakeRecord {
   id: string;
   at: number;
@@ -159,6 +171,21 @@ export interface MistakeRecord {
   explanation?: string;
   /** Set once the learner answers this mistake correctly again. */
   resolvedAt?: number;
+
+  // --- Reproduction (all optional: no schema version bump) ------------------
+  /** The sentence the exercise was built from, so the exact item can be rebuilt. */
+  sentenceId?: string;
+  /**
+   * The concept the exercise was actually practising, as opposed to the ones
+   * that merely appeared in its sentence. This is what a retry must target;
+   * scoring the whole list is what let a mistake be "resolved" by answering a
+   * multiple choice about an unrelated word in the same line.
+   */
+  targetId?: string;
+  /** Retries attempted since the mistake was made, to escalate the scaffolding. */
+  attempts?: number;
+  /** When it was last retried, whatever the outcome. */
+  lastAttemptAt?: number;
 }
 
 export interface SessionRecord {

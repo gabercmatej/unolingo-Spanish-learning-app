@@ -1,4 +1,5 @@
 import { getSentence, getSentencesForConcept, vocabConcepts } from '@/content';
+import { conceptsCovering, sentenceLexis, unknownWords } from '@/content/lexicon';
 import type { Sentence } from '@/content/types';
 import { makeLearner } from '@/learning/__tests__/helpers';
 import {
@@ -37,10 +38,21 @@ function at(ceiling: Knowledge['ceiling'], ids: string[]): Knowledge {
   return { known: new Set(ids), ceiling };
 }
 
+/**
+ * Text made of words no concept in the course covers, so the *word* gate stays
+ * neutral and these cases test the concept rule on its own.
+ *
+ * This matters more than it looks. The fixture used to read "Hola.", which the
+ * lexicon covers via `v.hola` — a concept none of these fictional learners
+ * knows — so every one of these assertions would have been decided by an
+ * unknown word rather than by the rule it names. Two gates in one function need
+ * fixtures that isolate each of them; the word gate has its own describe block
+ * below, with real sentences.
+ */
 const sentence = (over: Partial<Sentence> = {}): Sentence => ({
   id: 's.test',
-  es: 'Hola.',
-  en: 'Hello.',
+  es: 'Qqq wwwx zzzk.',
+  en: 'Placeholder.',
   concepts: ['v.hola'],
   level: 'A1',
   topics: ['greetings'],
@@ -138,16 +150,16 @@ describe('sentenceEligible', () => {
   });
 
   it('will stretch the level or the vocabulary, but never both at once', () => {
-    // At the ceiling, one unknown word is comprehensible input.
+    // At the ceiling, one unknown concept is comprehensible input.
     expect(
-      sentenceEligible(sentence({ concepts: ['v.a', 'v.x'], level: 'A1' }), 'translateToEn', known, ['v.a']),
+      sentenceEligible(sentence({ concepts: ['v.a', 'v.x'], level: 'A1' }), 'listenComprehend', known, ['v.a']),
     ).toBe(true);
     // A level above, only a sentence made entirely of known material qualifies.
     expect(
-      sentenceEligible(sentence({ concepts: ['v.a', 'v.b'], level: 'A2' }), 'translateToEn', known, ['v.a']),
+      sentenceEligible(sentence({ concepts: ['v.a', 'v.b'], level: 'A2' }), 'listenComprehend', known, ['v.a']),
     ).toBe(true);
     expect(
-      sentenceEligible(sentence({ concepts: ['v.a', 'v.x'], level: 'A2' }), 'translateToEn', known, ['v.a']),
+      sentenceEligible(sentence({ concepts: ['v.a', 'v.x'], level: 'A2' }), 'listenComprehend', known, ['v.a']),
     ).toBe(false);
   });
 
@@ -155,8 +167,25 @@ describe('sentenceEligible', () => {
     const s = sentence({ concepts: ['v.a'], level: 'B1' });
     expect(sentenceEligible(s, 'translateToEs', known, ['v.a'])).toBe(false);
     // One level of headroom for input, and no more.
-    expect(sentenceEligible(sentence({ concepts: ['v.a'], level: 'A2' }), 'translateToEn', known, ['v.a'])).toBe(true);
-    expect(sentenceEligible(s, 'translateToEn', known, ['v.a'])).toBe(false);
+    expect(sentenceEligible(sentence({ concepts: ['v.a'], level: 'A2' }), 'listenComprehend', known, ['v.a'])).toBe(true);
+    expect(sentenceEligible(s, 'listenComprehend', known, ['v.a'])).toBe(false);
+  });
+
+  /**
+   * Typing the English is a comprehension exercise, and comprehension is not
+   * the easy direction — the learner has to have understood every word to
+   * render the line at all. So it gets the vocabulary room of a guided exercise
+   * and none of the level headroom that multiple-choice input enjoys, where the
+   * options themselves carry an unread word.
+   */
+  it('gives free English translation no level headroom, unlike scaffolded input', () => {
+    const above = sentence({ concepts: ['v.a'], level: 'A2' });
+    expect(sentenceEligible(above, 'listenComprehend', known, ['v.a'])).toBe(true);
+    expect(sentenceEligible(above, 'translateToEn', known, ['v.a'])).toBe(false);
+    // At the ceiling it is available again — the restriction is the stretch,
+    // not the kind.
+    const at = sentence({ concepts: ['v.a'], level: 'A1' });
+    expect(sentenceEligible(at, 'translateToEn', known, ['v.a'])).toBe(true);
   });
 
   it('preserves spiral reuse — an old concept is eligible forever', () => {
@@ -165,6 +194,78 @@ describe('sentenceEligible', () => {
     const s = sentence({ concepts: ['v.a', 'v.b', 'v.c', 'v.d'], level: 'A1' });
     expect(sentenceEligible(s, 'translateToEs', known)).toBe(true);
     expect(sentenceEligible(s, 'buildResponse', known)).toBe(true);
+  });
+});
+
+/**
+ * The gate the tag list cannot provide.
+ *
+ * Every case here uses a *real* sentence, because the whole point is that the
+ * declared concepts under-report what the sentence asks for. A synthetic
+ * fixture would have to state the gap it is meant to detect, which is the one
+ * thing the real corpus does for free.
+ */
+describe('unknown words, not merely unknown tags', () => {
+  const OFFENDER = 's.m105';
+
+  it('counts the words a sentence contains, not the ones it declares', () => {
+    const found = getSentence(OFFENDER)!;
+    // Three tags, six content words: the shortfall is the bug.
+    expect(found.concepts).toHaveLength(2);
+    const lexis = sentenceLexis(found);
+    expect(lexis.words).toEqual(
+      expect.arrayContaining(['vecinos', 'visto', 'partido', 'bar', 'abajo']),
+    );
+  });
+
+  it('refuses free production of a sentence whose untagged words are unknown', () => {
+    /**
+     * A learner given every concept the sentence *declares* — so the tag gate
+     * is fully satisfied and reports nothing — plus a B2 ceiling, so the level
+     * gate is satisfied too. Both of the old gates pass. The sentence is still
+     * unaskable, because `partido` is a word nobody has taught them.
+     */
+    const declared: Knowledge = { known: new Set(['v.ver', 'g.present-perfect']), ceiling: 'B2' };
+    const found = getSentence(OFFENDER)!;
+
+    expect(unknownConcepts(found, declared)).toHaveLength(0);
+    expect(unknownWords(found, declared.known)).toContain('partido');
+
+    for (const kind of ['translateToEs', 'wordBank', 'dictation', 'speak'] as ExerciseKind[]) {
+      expect(sentenceEligible(found, kind, declared)).toBe(false);
+    }
+  });
+
+  it('accepts the same sentence once those words have been taught', () => {
+    const found = getSentence(OFFENDER)!;
+    const missing = unknownWords(found, new Set(['v.ver', 'g.present-perfect']));
+    const covering = missing.flatMap(conceptsCovering);
+    const full: Knowledge = {
+      known: new Set(['v.ver', 'g.present-perfect', ...covering]),
+      ceiling: 'B2',
+    };
+    expect(unknownWords(found, full.known)).toHaveLength(0);
+    expect(sentenceEligible(found, 'translateToEs', full)).toBe(true);
+  });
+
+  it('never counts function words or words the course does not track', () => {
+    const found = getSentence(OFFENDER)!;
+    const lexis = sentenceLexis(found);
+    // Structural words are learned by exposure and arrive in lesson one.
+    expect(lexis.words).not.toContain('el');
+    expect(lexis.words).not.toContain('en');
+    // "vecinos" has no concept anywhere in this course, so refusing every
+    // sentence containing it would measure the vocabulary files, not the
+    // learner. It is reported to the audit instead.
+    expect(lexis.untracked).toContain('vecinos');
+    expect(unknownWords(found, new Set())).not.toContain('vecinos');
+  });
+
+  it('reads an inflected form through its headword', () => {
+    // Knowing `ver` is enough to read "visto" — the paradigm is a separate
+    // question, asked separately.
+    expect(conceptsCovering('visto')).toContain('v.ver');
+    expect(conceptsCovering('viendo')).toContain('v.ver');
   });
 });
 
@@ -209,9 +310,12 @@ describe('unknownConcepts', () => {
 });
 
 describe('KIND_DEMAND', () => {
-  it('classifies typing English as input and assembling Spanish as output', () => {
-    expect(KIND_DEMAND.translateToEn).toBe('input');
+  it('classifies typing English as comprehension and assembling Spanish as output', () => {
+    expect(KIND_DEMAND.translateToEn).toBe('comprehension');
     expect(KIND_DEMAND.wordBank).toBe('output');
     expect(KIND_DEMAND.translateToEs).toBe('output');
+    // Choosing from options is the scaffolded end — that is what earns the
+    // extra room, not the language the answer happens to be in.
+    expect(KIND_DEMAND.listenComprehend).toBe('input');
   });
 });

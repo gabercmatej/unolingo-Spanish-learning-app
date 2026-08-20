@@ -233,8 +233,19 @@ export default function LearnScreen() {
             stages={stages}
             onOpenUnit={(unitId) => router.push({ pathname: '/unit/[id]', params: { id: unitId } })}
             onStartLesson={startLesson}
-            onStrengthenUnit={(unitId) =>
-              router.push({ pathname: '/session', params: { kind: 'unitSmart', source: unitId } })
+            onStrengthenUnit={(unitId, arcStep) =>
+              /*
+                The guided arc first, strengthening second. While a unit still
+                has teaching sessions left, "what should I do here?" has a
+                better answer than a targeted drill — and both are local to the
+                unit, which is what the `unit` param carries.
+              */
+              router.push({
+                pathname: '/session',
+                params: arcStep
+                  ? { kind: 'unitArc', source: arcStep, unit: unitId }
+                  : { kind: 'unitSmart', source: unitId, unit: unitId },
+              })
             }
           />
         </Section>

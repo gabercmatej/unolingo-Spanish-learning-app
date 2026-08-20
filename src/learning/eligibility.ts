@@ -1,4 +1,5 @@
 import { getConcept, levelIndex } from '@/content';
+import { unknownWords } from '@/content/lexicon';
 import { CEFR_LEVELS, type CefrLevel, type Sentence } from '@/content/types';
 import type { ExerciseKind, LearnerState } from '@/learning/types';
 
@@ -35,7 +36,7 @@ import type { ExerciseKind, LearnerState } from '@/learning/types';
  *     reveal after answering is what turns that exposure into teaching.
  */
 
-export type Demand = 'output' | 'guided' | 'input';
+export type Demand = 'output' | 'comprehension' | 'guided' | 'input';
 
 /**
  * Which demand each exercise kind places on the learner.
@@ -54,7 +55,17 @@ export const KIND_DEMAND: Record<ExerciseKind, Demand> = {
   listenSelect: 'input',
   listenComprehend: 'input',
   match: 'input',
-  translateToEn: 'input',
+  /**
+   * Typing English is not the easy direction.
+   *
+   * `translateToEn` used to sit in `input` beside the multiple choices, on the
+   * reasoning that the learner is producing their own language. But the options
+   * are what make a multiple choice survivable with an unknown word in the
+   * line — remove them and the learner has to have understood *every* word to
+   * render the sentence at all. So it gets its own demand: as much room as a
+   * guided exercise on vocabulary, and none of the level headroom.
+   */
+  translateToEn: 'comprehension',
   reading: 'input',
   chooseNatural: 'input',
   fillBlank: 'guided',
@@ -69,10 +80,45 @@ export const KIND_DEMAND: Record<ExerciseKind, Demand> = {
 };
 
 /** Unknown *declared* concepts a sentence may carry, per demand. */
-const UNKNOWN_TOLERANCE: Record<Demand, number> = { output: 0, guided: 1, input: 1 };
+const UNKNOWN_TOLERANCE: Record<Demand, number> = {
+  output: 0,
+  comprehension: 1,
+  guided: 1,
+  input: 1,
+};
+
+/**
+ * Unknown *words* a sentence may carry, per demand — the tag list's blind spot.
+ *
+ * The concept budget above counts what a sentence declares. Authors declare
+ * what a sentence is *for*, which is two or three ideas, not the eleven words
+ * it contains — so "Estaban viendo el partido abajo en el bar." declares the
+ * imperfect, passes a concept check with room to spare, and asks a beginner for
+ * four words nobody has shown them. `content/lexicon.ts` derives the words from
+ * the text, the way `verb-corpus.ts` derives conjugations, and this is the
+ * budget over them.
+ *
+ * Measured against the corpus: for a learner who has genuinely reached a level,
+ * between 77% (A1) and 93% (B2) of the sentences at or below it contain *zero*
+ * unknown words, so a strict production gate leaves the generator plenty to
+ * draw on. That measurement is the reason `output` can afford to be zero.
+ */
+const UNKNOWN_WORDS: Record<Demand, number> = {
+  output: 0,
+  comprehension: 1,
+  // The whole sentence is on screen and only a gap is missing, so an unread
+  // word elsewhere in the line is context rather than an obstacle.
+  guided: 2,
+  input: 2,
+};
 
 /** How far above the production ceiling a sentence may sit, per demand. */
-const LEVEL_HEADROOM: Record<Demand, number> = { output: 0, guided: 0, input: 1 };
+const LEVEL_HEADROOM: Record<Demand, number> = {
+  output: 0,
+  comprehension: 0,
+  guided: 0,
+  input: 1,
+};
 
 /**
  * What the learner has been shown, and how far they may be pushed.
@@ -107,10 +153,34 @@ const CEILING_MIN_CONCEPTS = 6;
  * agreed to start them there.
  */
 export function productionCeiling(learner: LearnerState): CefrLevel {
-  const counts = new Map<CefrLevel, number>();
+  const known = new Set<string>();
   for (const state of Object.values(learner.concepts)) {
-    if (!state.introduced) continue;
-    const concept = getConcept(state.id);
+    if (state.introduced) known.add(state.id);
+  }
+  const floor = learner.placement ? levelIndex(learner.placement.level) : 0;
+  return ceilingFromKnown(known, floor);
+}
+
+/**
+ * The same rule, over a bare set of concept ids.
+ *
+ * Extracted so `audit:content` can ask the question the runtime asks instead of
+ * approximating it. The audit used to take a concept's declared level as the
+ * ceiling at the point it is taught, which is a different and much lower number:
+ * by lesson twelve a learner has met dozens of A1 concepts and their ceiling is
+ * A1, whatever level the individual word carries. Modelling it as A0 made every
+ * A1 sentence "above the ceiling", which triggers the deliberately strict
+ * stretch-on-one-axis-only clause, and three number words were reported as
+ * having no usable sentence when the runtime would have offered them one.
+ *
+ * That is the failure mode this codebase already names for the verb corpus: a
+ * diagnostic carrying its own copy of a threshold stops describing the thing it
+ * watches.
+ */
+export function ceilingFromKnown(known: ReadonlySet<string>, floor = 0): CefrLevel {
+  const counts = new Map<CefrLevel, number>();
+  for (const id of known) {
+    const concept = getConcept(id);
     if (!concept) continue;
     counts.set(concept.level, (counts.get(concept.level) ?? 0) + 1);
   }
@@ -120,7 +190,6 @@ export function productionCeiling(learner: LearnerState): CefrLevel {
     if ((counts.get(CEFR_LEVELS[i]) ?? 0) >= CEILING_MIN_CONCEPTS) reached = i;
   }
 
-  const floor = learner.placement ? levelIndex(learner.placement.level) : 0;
   return CEFR_LEVELS[Math.max(reached, floor)];
 }
 
@@ -168,6 +237,8 @@ export function sentenceEligible(
   if (level > ceiling + LEVEL_HEADROOM[demand]) return false;
 
   const unknown = unknownConcepts(sentence, knowledge, exempt).length;
+  const unreadable = unknownWords(sentence, knowledge.known, exempt).length;
+  if (unreadable > UNKNOWN_WORDS[demand]) return false;
 
   /**
    * A sentence may stretch the learner on its level or on its vocabulary, and
@@ -181,8 +252,29 @@ export function sentenceEligible(
    * "vecinos", "partido", "bar" and "abajo" are not tagged at all, so treating
    * two unknown tags as mild is generous before the level gap is even counted.
    */
-  if (level > ceiling) return unknown === 0;
+  if (level > ceiling) return unknown === 0 && unreadable === 0;
   return unknown <= UNKNOWN_TOLERANCE[demand];
+}
+
+/**
+ * Why a sentence was refused, for the audit and the developer panel.
+ *
+ * A diagnostic that recomputes the rule is a diagnostic that can agree with
+ * itself while disagreeing with the system, so this reports the same three
+ * quantities `sentenceEligible` decides on rather than forming its own opinion.
+ */
+export function eligibilityReport(
+  sentence: Sentence,
+  kind: ExerciseKind,
+  knowledge: Knowledge,
+  exempt: readonly string[] = [],
+): { eligible: boolean; demand: Demand; unknownConcepts: string[]; unknownWords: string[] } {
+  return {
+    eligible: sentenceEligible(sentence, kind, knowledge, exempt),
+    demand: KIND_DEMAND[kind],
+    unknownConcepts: unknownConcepts(sentence, knowledge, exempt),
+    unknownWords: unknownWords(sentence, knowledge.known, exempt),
+  };
 }
 
 /**
