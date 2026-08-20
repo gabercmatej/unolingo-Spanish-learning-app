@@ -1,7 +1,9 @@
+import { accentCarriesMeaning } from '@/content/accent-pairs';
+import { EN_EQUIVALENCES } from '@/content/equivalences';
 import { checkAnswer } from '@/learning/answer-check';
 import type { Exercise } from '@/learning/exercise';
-import { gradeFor, verdictFor, type AnswerError, type Verdict } from '@/learning/grading';
-import type { Grade, Settings } from '@/learning/types';
+import { gradeFor, verdictFor, type AnswerError, type GradingProfile, type Verdict } from '@/learning/grading';
+import type { ExerciseKind, Grade, Settings } from '@/learning/types';
 
 export interface ExerciseResult {
   verdict: Verdict;
@@ -18,6 +20,58 @@ export interface ExerciseResult {
 /** Builds a result from its classification, so grade and verdict cannot drift. */
 function fromError(error: AnswerError, expected: string, given: string, note?: string): ExerciseResult {
   return { verdict: verdictFor(error), error, grade: gradeFor(error), expected, note, given };
+}
+
+/** Kinds where the exact written form is what is being examined. */
+const FORM_IS_TARGET = new Set<ExerciseKind>(['dictation']);
+
+/** Kinds whose answer is a whole free utterance rather than a rendering of one. */
+const FREE_PRODUCTION = new Set<ExerciseKind>(['conversation', 'buildResponse']);
+
+/** Kinds where a single word is the answer and there is nothing to paraphrase. */
+const NO_PARAPHRASE = new Set<ExerciseKind>(['fillBlank', 'dictation']);
+
+/**
+ * What this exercise is actually asking for.
+ *
+ * Assembled here because `check.ts` is the one place that sees the exercise and
+ * the settings together, and because a tolerance composed at the call site is
+ * the kind of correctness that decays the first time somebody adds a button.
+ */
+export function profileFor(exercise: Exercise, settings: Settings): GradingProfile {
+  /**
+   * `kind`, not the `TypedExercise`-only `language` field: every exercise form
+   * carries a `kind`, so this needs no narrowing, and `translateToEn` is the
+   * only kind the generator ever builds with an English answer — the field
+   * and the kind already agree everywhere they coexist, so deriving from the
+   * one that is always present is strictly safer, not a different rule.
+   */
+  const language: 'es' | 'en' = exercise.kind === 'translateToEn' ? 'en' : 'es';
+
+  /**
+   * A verb-paradigm target means the exercise exists to test that exact form,
+   * whatever kind it was rendered as. `f.hablar.preterite` asking for `habló`
+   * cannot accept `hablo`, because `hablo` is the thing it is distinguishing
+   * from. Derived from the id rather than declared, the way the rest of the
+   * paradigm machinery works.
+   */
+  const testsAParadigm = exercise.targetId?.startsWith('f.') ?? false;
+
+  const paraphrase: GradingProfile['paraphrase'] = NO_PARAPHRASE.has(exercise.kind)
+    ? 'none'
+    : language === 'en'
+      ? 'english'
+      : FREE_PRODUCTION.has(exercise.kind)
+        ? 'spanishFree'
+        : 'spanish';
+
+  return {
+    language,
+    formIsTarget: FORM_IS_TARGET.has(exercise.kind) || testsAParadigm || settings.strictAccents,
+    paraphrase,
+    accentCarriesMeaning,
+    equivalences: EN_EQUIVALENCES,
+  };
 }
 
 /**
@@ -42,10 +96,7 @@ export function checkExercise(
     }
 
     case 'wordBank': {
-      const { verdict, error, grade, note } = checkAnswer(answer, exercise.accepted, {
-        formIsTarget: settings.strictAccents,
-        language: 'es',
-      });
+      const { verdict, error, grade, note } = checkAnswer(answer, exercise.accepted, profileFor(exercise, settings));
       return {
         verdict,
         error,
@@ -57,10 +108,7 @@ export function checkExercise(
     }
 
     case 'typed': {
-      const { verdict, error, grade, note, best } = checkAnswer(answer, exercise.accepted, {
-        formIsTarget: settings.strictAccents,
-        language: exercise.language,
-      });
+      const { verdict, error, grade, note, best } = checkAnswer(answer, exercise.accepted, profileFor(exercise, settings));
       return {
         verdict,
         error,
@@ -81,10 +129,7 @@ export function checkExercise(
           ? fromError('none', model, chosen?.text ?? '', chosen?.note ?? exercise.note)
           : fromError('meaning', model, chosen?.text ?? '', chosen?.note ?? exercise.note);
       }
-      const { verdict, error, grade, note, best } = checkAnswer(answer, exercise.accepted, {
-        formIsTarget: settings.strictAccents,
-        language: 'es',
-      });
+      const { verdict, error, grade, note, best } = checkAnswer(answer, exercise.accepted, profileFor(exercise, settings));
       return {
         verdict,
         error,
