@@ -2,7 +2,7 @@ import { ERROR_POLICY, gradeFor, verdictFor, type AnswerError } from '@/learning
 
 describe('ERROR_POLICY', () => {
   const ALL: AnswerError[] = [
-    'none', 'accent', 'accentContrast', 'punctuation', 'spelling',
+    'none', 'accent', 'accentContrast', 'punctuation', 'spelling', 'partial',
     'paraphrase', 'preferred', 'form', 'grammar', 'negation', 'meaning',
   ];
 
@@ -20,7 +20,7 @@ describe('ERROR_POLICY', () => {
   });
 
   it('charges a small price for a slipped key or a meaning-bearing accent', () => {
-    for (const error of ['spelling', 'accentContrast'] as AnswerError[]) {
+    for (const error of ['spelling', 'accentContrast', 'partial'] as AnswerError[]) {
       expect(verdictFor(error)).toBe('correctWithFeedback');
       expect(gradeFor(error)).toBe('almost');
     }

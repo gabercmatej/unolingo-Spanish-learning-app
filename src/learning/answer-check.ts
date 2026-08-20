@@ -1,3 +1,4 @@
+import { gradeFor, verdictFor, type AnswerError, type GradingProfile, type Verdict } from '@/learning/grading';
 import type { Grade } from '@/learning/types';
 
 /**
@@ -19,18 +20,22 @@ import type { Grade } from '@/learning/types';
  * thing, which is worse than rejecting it.
  */
 
-export interface CheckOptions {
-  /** Marks accent slips wrong rather than accepting them with a note. */
-  strictAccents?: boolean;
-  language?: 'es' | 'en';
-}
-
 export interface CheckResult {
+  /** What the learner is told. */
+  verdict: Verdict;
+  /** What was wrong, if anything. The one thing this module decides. */
+  error: AnswerError;
+  /** What the scheduler is told. Always `gradeFor(error)` — never set by hand. */
   grade: Grade;
-  /** Shown under the feedback banner when the answer was not perfect. */
+  /** Shown under the feedback banner when the answer was not exactly right. */
   note?: string;
   /** The accepted answer closest to what was typed — shown as the model answer. */
   best: string;
+}
+
+/** Builds a result from its classification, so grade and verdict cannot drift. */
+function outcome(error: AnswerError, best: string, note?: string): CheckResult {
+  return { verdict: verdictFor(error), error, grade: gradeFor(error), note, best };
 }
 
 type PronounKey = 'yo' | 'tu' | 'el' | 'nosotros' | 'vosotros' | 'ellos';
@@ -378,14 +383,15 @@ function sameEnglishMeaning(a: string, b: string): boolean {
 export function checkAnswer(
   input: string,
   accepted: string[],
-  options: CheckOptions = {},
+  profile: Partial<GradingProfile> = {},
 ): CheckResult {
-  const language = options.language ?? 'es';
+  const language = profile.language ?? 'es';
+  const formIsTarget = profile.formIsTarget ?? false;
   const candidates = buildCandidates(accepted, language);
   const fallback = accepted[0] ?? '';
 
   const raw = normalize(input, language);
-  if (raw.length === 0) return { grade: 'incorrect', best: fallback };
+  if (raw.length === 0) return outcome('meaning', fallback);
 
   // Compare both as typed and with a leading pronoun removed, so an added
   // "yo" is fine but a mismatched "tú" is not.
@@ -399,7 +405,7 @@ export function checkAnswer(
 
   for (const candidate of candidates) {
     if (givenForms.includes(candidate.variant)) {
-      return { grade: 'correct', best: candidate.display };
+      return outcome('none', candidate.display);
     }
 
     const candidateBare = deaccent(candidate.variant);
@@ -421,17 +427,13 @@ export function checkAnswer(
 
   if (accentOnlyMatch !== null) {
     const note = `Right meaning — remember the accents: ${accentOnlyMatch}`;
-    return options.strictAccents
-      ? { grade: 'almost', note, best: accentOnlyMatch }
-      : { grade: 'correct', note, best: accentOnlyMatch };
+    return formIsTarget
+      ? outcome('accentContrast', accentOnlyMatch, note)
+      : outcome('accent', accentOnlyMatch, note);
   }
 
   if (typoMatch !== null) {
-    return {
-      grade: 'almost',
-      note: `Almost — check the spelling: ${typoMatch}`,
-      best: typoMatch,
-    };
+    return outcome('spelling', typoMatch, `Almost — check the spelling: ${typoMatch}`);
   }
 
   // Translating *into English* is a comprehension check, so accept any phrasing
@@ -440,12 +442,12 @@ export function checkAnswer(
   if (language === 'en') {
     for (const candidate of candidates) {
       if (sameEnglishMeaning(raw, candidate.variant)) {
-        return { grade: 'correct', best: candidate.display };
+        return outcome('paraphrase', candidate.display);
       }
     }
   }
 
-  return { grade: 'incorrect', best: closest?.answer ?? fallback };
+  return outcome('meaning', closest?.answer ?? fallback);
 }
 
 /**

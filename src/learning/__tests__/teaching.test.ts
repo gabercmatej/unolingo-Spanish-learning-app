@@ -20,7 +20,11 @@ function choice(kind: ExerciseKind, over: Partial<Exercise> = {}): Exercise {
   } as Exercise;
 }
 
+// verdict/error are unused by teachingFor — it only reads grade and note —
+// so these are filler that satisfies the now-wider ExerciseResult shape.
 const graded = (grade: ExerciseResult['grade'], over: Partial<ExerciseResult> = {}): ExerciseResult => ({
+  verdict: 'correct',
+  error: 'none',
   grade,
   expected: 'a',
   given: 'a',

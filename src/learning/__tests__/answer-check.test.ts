@@ -1,5 +1,6 @@
 import { checkAnswer, deaccent, levenshtein, normalize, pronounAgrees } from '@/learning/answer-check';
 import { practiceText } from '@/learning/generator';
+import { gradeFor, verdictFor } from '@/learning/grading';
 
 describe('normalize', () => {
   it('strips case, punctuation and Spanish question marks', () => {
@@ -45,7 +46,7 @@ describe('checkAnswer', () => {
   });
 
   it('downgrades missing accents to "almost" under strict checking', () => {
-    const result = checkAnswer('como estas', ['¿Cómo estás?'], { strictAccents: true });
+    const result = checkAnswer('como estas', ['¿Cómo estás?'], { formIsTarget: true });
     expect(result.grade).toBe('almost');
   });
 
@@ -86,6 +87,23 @@ describe('checkAnswer', () => {
   it('checks English answers with contraction tolerance', () => {
     const result = checkAnswer("I'm tired", ['I am tired'], { language: 'en' });
     expect(result.grade).toBe('correct');
+  });
+
+  it('reports a classification alongside the grade', () => {
+    const exact = checkAnswer('Tengo un perro.', ['Tengo un perro.']);
+    expect(exact.error).toBe('none');
+    expect(exact.verdict).toBe('correct');
+
+    const wrong = checkAnswer('Tengo un gato', ['Tengo un perro']);
+    expect(wrong.verdict).toBe('incorrect');
+    expect(wrong.grade).toBe('incorrect');
+  });
+
+  it('derives the grade from the error rather than deciding it twice', () => {
+    const result = checkAnswer('Tengo un pero', ['Tengo un perro']);
+    expect(result.error).toBe('spelling');
+    expect(result.grade).toBe(gradeFor(result.error));
+    expect(result.verdict).toBe(verdictFor(result.error));
   });
 });
 

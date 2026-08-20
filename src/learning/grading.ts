@@ -37,6 +37,7 @@ export const ERROR_POLICY: Record<AnswerError, { verdict: Verdict; grade: Grade 
 
   accentContrast: { verdict: 'correctWithFeedback', grade: 'almost' },
   spelling: { verdict: 'correctWithFeedback', grade: 'almost' },
+  partial: { verdict: 'correctWithFeedback', grade: 'almost' },
 
   form: { verdict: 'incorrect', grade: 'incorrect' },
   grammar: { verdict: 'incorrect', grade: 'incorrect' },

@@ -145,7 +145,16 @@ export type AnswerError =
   /** The polarity is reversed. Never let this slide. */
   | 'negation'
   /** A different meaning, or content missing or added. */
-  | 'meaning';
+  | 'meaning'
+  /**
+   * The learner got there, but not cleanly, and no finer classification
+   * applies — a match grid finished with a wrong pairing along the way, a
+   * speaking prompt skipped rather than attempted. Naming it `spelling` or
+   * `meaning` would be a semantic lie once this field starts reaching the
+   * feedback bar and `MistakeRecord`, so it gets its own name instead of
+   * borrowing one that means something more specific.
+   */
+  | 'partial';
 
 /** Per-concept memory record. This is the learner model. */
 export interface ConceptState {
