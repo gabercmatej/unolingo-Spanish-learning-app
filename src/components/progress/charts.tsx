@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
 
@@ -19,9 +19,13 @@ import { addDays, toISODate } from '@/lib/date';
  * compare each week against.
  */
 
-const WEEKS = 17; // ~4 months, which fits a phone width at 12px cells
-const CELL = 13;
+const WEEKS = 17; // ~4 months
 const GAP = 3;
+/** Width of the M/W/F/S gutter down the left. */
+const WEEKDAY_COL = 22;
+/** Cell size is derived from the available width; these bound it. */
+const MIN_CELL = 8;
+const MAX_CELL = 16;
 
 interface CalendarProps {
   daily: DailyRecord[];
@@ -30,14 +34,31 @@ interface CalendarProps {
 export function ActivityCalendar({ daily }: CalendarProps) {
   const theme = useTheme();
 
-  const { weeks, monthLabels, activeDays, best } = useMemo(() => {
+  /**
+   * Measured rather than assumed.
+   *
+   * The grid used to be 17 columns of a fixed 13px, which is a hard 269px plus
+   * the gutter — a number that happened to fit the phone it was written on and
+   * had no reason to fit any other. Deriving the cell from the width the card
+   * actually gives it means the calendar fills its card on a large phone and
+   * stays inside it on a small one, instead of being right by coincidence.
+   */
+  const [width, setWidth] = useState(0);
+
+  const cell = useMemo(() => {
+    if (width <= 0) return 13;
+    const available = width - WEEKDAY_COL - GAP - (WEEKS - 1) * GAP;
+    return Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(available / WEEKS)));
+  }, [width]);
+
+  const { weeks, monthLabels, activeDays, best, today } = useMemo(() => {
     const lookup = new Map(daily.map((entry) => [entry.date, entry.xp]));
-    const today = toISODate();
+    const now = toISODate();
 
     // Start on the Monday of the earliest week so columns are true weeks.
-    const todayDate = new Date(today);
+    const todayDate = new Date(now);
     const isoWeekday = (todayDate.getDay() + 6) % 7; // 0 = Monday
-    const lastMonday = addDays(today, -isoWeekday);
+    const lastMonday = addDays(now, -isoWeekday);
 
     const columns: { date: string; xp: number }[][] = [];
     const labels: { index: number; label: string }[] = [];
@@ -48,7 +69,7 @@ export function ActivityCalendar({ daily }: CalendarProps) {
       const column: { date: string; xp: number }[] = [];
       for (let day = 0; day < 7; day += 1) {
         const date = addDays(monday, day);
-        column.push({ date, xp: date <= today ? (lookup.get(date) ?? 0) : -1 });
+        column.push({ date, xp: date <= now ? (lookup.get(date) ?? 0) : -1 });
       }
       const month = monday.slice(0, 7);
       if (month !== seenMonth) {
@@ -68,6 +89,7 @@ export function ActivityCalendar({ daily }: CalendarProps) {
       monthLabels: labels,
       activeDays: values.filter((xp) => xp > 0).length,
       best: Math.max(1, ...values),
+      today: now,
     };
   }, [daily]);
 
@@ -82,24 +104,36 @@ export function ActivityCalendar({ daily }: CalendarProps) {
     return mix(theme.tint, theme.backgroundSunken, 0.25);
   };
 
+  const step = cell + GAP;
+  /**
+   * A month label sitting over the last column or two would run off the right
+   * edge, so the ones that cannot fit their own text are dropped rather than
+   * clipped. Three characters at caption size is about 22px.
+   */
+  const visibleMonths = monthLabels.filter(
+    (entry) => width === 0 || WEEKDAY_COL + GAP + entry.index * step + 24 <= width,
+  );
+
   return (
-    <View style={styles.calendarBlock}>
+    <View
+      style={styles.calendarBlock}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <View style={styles.monthRow}>
-        {monthLabels.map((entry) => (
+        {visibleMonths.map((entry) => (
           <Text
             key={`${entry.label}-${entry.index}`}
             variant="caption"
             color="textTertiary"
-            style={[styles.monthLabel, { left: 26 + entry.index * (CELL + GAP) }]}>
+            style={[styles.monthLabel, { left: WEEKDAY_COL + GAP + entry.index * step }]}>
             {entry.label}
           </Text>
         ))}
       </View>
 
       <View style={styles.calendarRow}>
-        <View style={styles.weekdayColumn}>
+        <View style={[styles.weekdayColumn, { width: WEEKDAY_COL }]}>
           {['M', '', 'W', '', 'F', '', 'S'].map((label, index) => (
-            <View key={index} style={styles.weekdayCell}>
+            <View key={index} style={[styles.weekdayCell, { height: cell }]}>
               <Text variant="caption" color="textTertiary">
                 {label}
               </Text>
@@ -114,7 +148,21 @@ export function ActivityCalendar({ daily }: CalendarProps) {
                 <View
                   key={day.date}
                   accessibilityLabel={day.xp > 0 ? `${day.date}: ${day.xp} XP` : undefined}
-                  style={[styles.cell, { backgroundColor: cellColor(day.xp) }]}
+                  style={[
+                    styles.cell,
+                    { width: cell, height: cell, backgroundColor: cellColor(day.xp) },
+                    /**
+                     * Today gets a ring. Without it the grid is four months of
+                     * undifferentiated squares and the eye has nowhere to
+                     * start — the most useful cell on the chart is the one
+                     * saying whether you have studied yet, and it looked
+                     * exactly like the other 118.
+                     */
+                    day.date === today && {
+                      borderWidth: 1.5,
+                      borderColor: day.xp > 0 ? theme.tintText : theme.borderStrong,
+                    },
+                  ]}
                 />
               ))}
             </View>
@@ -163,11 +211,11 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
   return (
     <View style={styles.chartBlock}>
       <View style={styles.chartHead}>
-        <Text variant="caption" color="textTertiary">
+        <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.shrink}>
           Peak {max} XP
         </Text>
         {average > 0 ? (
-          <Text variant="caption" color="textTertiary">
+          <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.shrink}>
             Average {Math.round(average)} XP / active week
           </Text>
         ) : null}
@@ -209,6 +257,7 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
           <View key={bar.label} style={styles.barColumn}>
             <Text
               variant="caption"
+              numberOfLines={1}
               tone={index === data.length - 1 ? theme.tint : theme.textTertiary}>
               {bar.label}
             </Text>
@@ -255,7 +304,13 @@ function Bar({
   return (
     <View style={styles.barColumn}>
       {xp > 0 ? (
-        <Text variant="caption" color="textTertiary" style={styles.barValue}>
+        <Text
+          variant="caption"
+          color="textTertiary"
+          style={styles.barValue}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}>
           {xp}
         </Text>
       ) : null}
@@ -305,11 +360,11 @@ const styles = StyleSheet.create({
   monthRow: { height: 14 },
   monthLabel: { position: 'absolute', top: 0 },
   calendarRow: { flexDirection: 'row', gap: GAP },
-  weekdayColumn: { gap: GAP, width: 22 },
-  weekdayCell: { height: CELL, justifyContent: 'center' },
-  grid: { flexDirection: 'row', gap: GAP, flex: 1 },
+  weekdayColumn: { gap: GAP },
+  weekdayCell: { justifyContent: 'center' },
+  grid: { flexDirection: 'row', gap: GAP, flex: 1, minWidth: 0 },
   weekColumn: { gap: GAP },
-  cell: { width: CELL, height: CELL, borderRadius: 3 },
+  cell: { borderRadius: 3 },
 
   chartBlock: { gap: Spacing.two },
   chartHead: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.three },
@@ -322,7 +377,17 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, height: '100%' },
-  barColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  /**
+   * `minWidth: 0` is what keeps a big weekly total inside the card.
+   *
+   * A flex child in React Native still sizes to its content unless told not to,
+   * so a four-figure XP number widened its own column past its flex share and
+   * pushed the whole row off the right edge of the screen. Everywhere else in
+   * this app that lays text beside a flexible element already carries this; the
+   * chart columns were the one place that did not.
+   */
+  barColumn: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
   barValue: { fontSize: 9 },
+  shrink: { flexShrink: 1 },
   bar: { width: '100%', borderRadius: Radius.xs, maxWidth: 34 },
 });

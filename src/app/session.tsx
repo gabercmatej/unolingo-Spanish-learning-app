@@ -153,9 +153,28 @@ export default function SessionScreen() {
   const needsReview = useRef(new Set<string>());
   const newConcepts = useRef(new Set<string>());
   const committed = useRef(false);
+  /**
+   * The running tallies, mirrored into a ref for the unmount commit below.
+   *
+   * The cleanup runs once, on unmount, so it closes over the state as it was on
+   * first render — zero of everything. A ref is the only thing it can read that
+   * is current.
+   */
+  const tally = useRef({ xp: 0, correct: 0, answered: 0 });
 
   const exercise = queue[index];
   const total = queue.length;
+
+  /**
+   * Everything the unmount commit needs, in one ref.
+   *
+   * Initialised once and never written during render — a ref assigned while
+   * rendering can be read by a render that never commits, which is why the
+   * React Compiler rejects it. `kind`, `source` and the plan's title are all
+   * fixed for the life of this screen, so the initial value is the only one
+   * there will ever be.
+   */
+  const identity = useRef({ source, kind, title: plan?.title ?? 'Practice' });
 
   /**
    * The running XP total pops each time it grows. It is the only number on the
@@ -165,6 +184,55 @@ export default function SessionScreen() {
   const xpPop = usePop(xpEarned, { scale: 1.22 });
 
   useEffect(() => () => stopSpeaking(), []);
+
+  useEffect(() => {
+    tally.current = { xp: xpEarned, correct, answered };
+  }, [xpEarned, correct, answered]);
+
+  /**
+   * Bank the session if the screen goes away without finishing it.
+   *
+   * Every individual answer is already saved — `recordAnswer` commits to the
+   * learner record as it happens — but the *session* is not: the XP, the
+   * session record and the lesson completion are all written by
+   * `completeSession`, which only runs from `finish()`. So a learner who left
+   * mid-lesson by any route other than the close button kept the memory
+   * updates and lost the reward, which reads as having lost everything.
+   *
+   * Empty deps deliberately, with everything read from refs. Listing the
+   * callbacks instead would run this cleanup on every dependency change rather
+   * than on unmount, committing the session out from under a learner who is
+   * still in it.
+   */
+  useEffect(() => {
+    /**
+     * Captured at setup, read at teardown. The lint rule warns that a ref's
+     * `.current` may have moved by the time a cleanup runs — which is exactly
+     * what is wanted here, so the refs are bound to locals to say so
+     * deliberately rather than silenced.
+     */
+    const totals = tally;
+    const met = newConcepts;
+    const done = committed;
+    const { source: from, kind: how, title } = identity.current;
+
+    return () => {
+      if (done.current) return;
+      if (totals.current.answered === 0) return;
+      done.current = true;
+      completeSession({
+        source: from,
+        label: title,
+        xp: totals.current.xp,
+        correct: totals.current.correct,
+        total: totals.current.answered,
+        seconds: Math.round((Date.now() - startedAt) / 1000),
+        newConcepts: met.current.size,
+        lessonId: LESSON_KINDS.includes(how) ? from : undefined,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Decode the cues now rather than on the first correct answer. A session is

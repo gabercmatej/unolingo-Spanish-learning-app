@@ -77,7 +77,21 @@ function RootNavigator() {
         */}
         <Stack.Protected guard={learner.onboarded}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="session" options={{ animation: 'slide_from_bottom' }} />
+          {/*
+            The back gesture is off here, and only here.
+            
+            A session is the one screen with unsaved work in it, and the iOS
+            edge swipe pops it with no confirmation — a stray thumb halfway
+            through a lesson banked nothing: no XP, no session record, no lesson
+            completion. Leaving has to go through the close button, which asks.
+            `session.tsx` still commits on unmount as a second line of defence,
+            because "the only way out asks first" is a claim about navigation
+            and not a guarantee about process lifetime.
+          */}
+          <Stack.Screen
+            name="session"
+            options={{ animation: 'slide_from_bottom', gestureEnabled: false }}
+          />
           <Stack.Screen name="unit/[id]" />
           <Stack.Screen name="word/[id]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="verb/[id]" options={{ presentation: 'modal' }} />

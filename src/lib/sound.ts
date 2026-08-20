@@ -101,16 +101,47 @@ export function primeSounds(): void {
   (Object.keys(SOURCES) as SoundCue[]).forEach(playerFor);
 }
 
+/**
+ * Close enough to the start that no rewind is needed. A freshly primed player
+ * reports exactly 0; one that has been seeked back can sit a hair above it.
+ */
+const AT_START = 0.05;
+
 export function playCue(cue: SoundCue): void {
   if (!enabled) return;
   ensureMode();
   const player = playerFor(cue);
   if (!player) return;
   try {
+    /**
+     * The rewind has to *complete* before playback starts.
+     *
+     * `seekTo` returns a promise — Expo's own example fires it and calls
+     * `play()` on the next line anyway, which is where this bug came from. Once
+     * a cue has finished, its playhead is parked at the end; an un-awaited
+     * `play()` therefore runs against a player that is still at the end and
+     * does nothing, and the seek only lands in time for the *following* press.
+     * That is the "works every other time" the sound had: the first answer
+     * chimed, the second was silent, the third chimed.
+     *
+     * The fast path matters as much as the fix. Awaiting on every cue would put
+     * a bridge round-trip between the haptic and the sound, and two feedback
+     * channels that arrive apart read as two events rather than one — so a
+     * player already at the start plays synchronously, which is the case that
+     * `primeSounds` sets up and the one the first answer of a session takes.
+     */
+    if (!player.playing && player.currentTime <= AT_START) {
+      player.play();
+      return;
+    }
     // Rewind rather than overlap: a learner answering quickly should hear the
     // cue restart, not two of them beating against each other.
-    player.seekTo(0);
-    player.play();
+    player
+      .seekTo(0)
+      .then(() => player.play())
+      .catch(() => {
+        /* Best-effort; a cue that will not rewind is not worth a crash. */
+      });
   } catch {
     /* Best-effort, exactly like haptics: audio must never interrupt a lesson. */
   }
