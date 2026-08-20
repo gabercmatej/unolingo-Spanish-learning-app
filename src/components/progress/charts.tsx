@@ -27,6 +27,19 @@ const WEEKDAY_COL = 22;
 const MIN_CELL = 8;
 const MAX_CELL = 16;
 
+/**
+ * The XP value sitting above each bar, and the space the plot gives up for it.
+ *
+ * Stated here as one number because two places have to agree: the style that
+ * draws the label and the arithmetic that decides how tall a bar may be. When
+ * they disagreed — the bars scaled to the whole chart box, the label stacked on
+ * top of them — the peak week's number was pushed clean out of the chart and
+ * onto the caption above it.
+ */
+const VALUE_TEXT = 12;
+const VALUE_GAP = 2;
+const VALUE_ROW = VALUE_TEXT + VALUE_GAP;
+
 interface CalendarProps {
   daily: DailyRecord[];
 }
@@ -206,7 +219,21 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
   const average = active > 0 ? total / active : 0;
   const averageRatio = max > 0 ? average / max : 0;
 
+  /**
+   * The chart's box, and the part of it a bar may actually occupy.
+   *
+   * Each column stacks its XP value *above* its bar, so a bar drawn to the full
+   * box height pushes that label out of the top of the chart — and since
+   * nothing here clips, the peak week's number landed on top of the "Peak N XP"
+   * caption in the header. The taller the best week, the worse it looked, which
+   * is why it read as a bug that came and went.
+   *
+   * Reserving the row up front is better than clipping it: the number is the
+   * most useful thing in the column, and a chart that hides its own peak value
+   * is worse than one that is a few pixels shorter.
+   */
   const CHART_HEIGHT = 108;
+  const PLOT_HEIGHT = CHART_HEIGHT - VALUE_ROW;
 
   return (
     <View style={styles.chartBlock}>
@@ -223,11 +250,16 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
 
       <View style={[styles.chartArea, { height: CHART_HEIGHT }]}>
         {/* Average reference line — what makes a bar readable as good or bad. */}
+        {/*
+          Measured against `PLOT_HEIGHT`, exactly like the bars. A reference
+          line on a different scale from the thing it references is not a
+          smaller bug than a misdrawn bar — it is a line that lies.
+        */}
         {average > 0 ? (
           <View
             style={[
               styles.averageLine,
-              { bottom: averageRatio * CHART_HEIGHT, borderColor: theme.borderStrong },
+              { bottom: averageRatio * PLOT_HEIGHT, borderColor: theme.borderStrong },
             ]}
           />
         ) : null}
@@ -238,7 +270,7 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
               key={bar.label}
               label={bar.label}
               xp={bar.xp}
-              height={Math.max(3, (bar.xp / max) * CHART_HEIGHT)}
+              height={Math.max(3, (bar.xp / max) * PLOT_HEIGHT)}
               index={index}
               tone={
                 bar.xp === 0
@@ -252,7 +284,12 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
         </View>
       </View>
 
-      <View style={styles.bars}>
+      {/*
+        Its own style, not `styles.bars`. That one carries `height: '100%'` so
+        the columns inside the plot fill it — a percentage that resolves against
+        nothing out here, because this row's parent has no fixed height.
+      */}
+      <View style={styles.labelRow}>
         {data.map((bar, index) => (
           <View key={bar.label} style={styles.barColumn}>
             <Text
@@ -377,6 +414,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   bars: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two, height: '100%' },
+  labelRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.two },
   /**
    * `minWidth: 0` is what keeps a big weekly total inside the card.
    *
@@ -386,8 +424,23 @@ const styles = StyleSheet.create({
    * this app that lays text beside a flexible element already carries this; the
    * chart columns were the one place that did not.
    */
-  barColumn: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
-  barValue: { fontSize: 9 },
+  barColumn: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: VALUE_GAP,
+  },
+  /**
+   * Pinned rather than left to the font.
+   *
+   * `PLOT_HEIGHT` subtracts exactly `VALUE_ROW` to make room for this label, so
+   * the label has to actually be that tall. Left to `variant="caption"`'s own
+   * line height it is a different number on every platform — and on the one
+   * where it is tallest, the reserved gap is too small and the overflow comes
+   * straight back.
+   */
+  barValue: { fontSize: 9, lineHeight: VALUE_TEXT, height: VALUE_TEXT },
   shrink: { flexShrink: 1 },
   bar: { width: '100%', borderRadius: Radius.xs, maxWidth: 34 },
 });
