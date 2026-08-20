@@ -1,4 +1,6 @@
-import { gradeFor, verdictFor, type AnswerError, type GradingProfile, type Verdict } from '@/learning/grading';
+import { spanishVariants } from '@/learning/es-variants';
+import { gradeFor, verdictFor, type AnswerError, type Equivalences, type GradingProfile, type Verdict } from '@/learning/grading';
+import { COVERAGE_THRESHOLD, contentWords, meaningCoverage, polarity } from '@/learning/meaning';
 import type { Grade } from '@/learning/types';
 
 /**
@@ -12,12 +14,22 @@ import type { Grade } from '@/learning/types';
  *      accents, because "como estas" plainly shows you understood;
  *   3. match within a small edit distance — graded "almost", so one typo does
  *      not wipe out a concept's memory record;
- *   4. otherwise wrong.
+ *   4. a paraphrase layer: a mechanically derived Spanish variant (al/del,
+ *      clitic climbing), an equivalent English wording for a comprehension
+ *      check, or — for a free conversation turn — how much of a model's
+ *      meaning the answer covers;
+ *   5. otherwise wrong.
  *
  * Spanish drops subject pronouns freely, so "Voy a comer ahora" and "Yo voy a
  * comer ahora" are both accepted — but only when the pronoun actually agrees
  * with the verb. Silently accepting "tú tengo un perro" would teach the wrong
  * thing, which is worse than rejecting it.
+ *
+ * This module imports from `@/learning/*` only, never `@/content/*`. Every
+ * piece of corpus knowledge (which accents distinguish real words, which
+ * English wordings are equivalent) arrives through the `profile` argument
+ * instead, so the pure grading rule and the data it is calibrated against
+ * cannot drift apart the way `verb-corpus.ts` exists to prevent for verbs.
  */
 
 export interface CheckResult {
@@ -202,24 +214,42 @@ interface Candidate {
   variant: string;
   /** The author-written answer to show the learner. */
   display: string;
+  /**
+   * True only for variants derived from `accepted[0]`. An exact match against
+   * a non-canonical candidate is still fully correct — it is graded as
+   * retrieval, not a lesser thing — but the form shown back is the canonical
+   * one, so precision keeps getting taught even when it was not required.
+   */
+  canonical: boolean;
 }
 
-/** Every accepted answer, plus its pronoun-less form when it has one. */
+/**
+ * Every accepted answer, plus its pronoun-less form and, for Spanish, every
+ * mechanically derived variant (al/del contractions, clitic climbing) — all
+ * pointing at the same author-written `display`. Deriving these here rather
+ * than authoring "Voy al cine" and "Voy a el cine" as two separate accepted
+ * answers is what lets `spanishVariants` cover every sentence in the corpus
+ * without anyone touching content.
+ */
 export function buildCandidates(accepted: string[], language: 'es' | 'en'): Candidate[] {
   const seen = new Set<string>();
   const out: Candidate[] = [];
 
-  const add = (variant: string, display: string) => {
+  const add = (variant: string, display: string, canonical: boolean) => {
     if (variant.length === 0 || seen.has(variant)) return;
     seen.add(variant);
-    out.push({ variant, display });
+    out.push({ variant, display, canonical });
   };
 
-  for (const answer of accepted) {
+  accepted.forEach((answer, index) => {
+    const canonical = index === 0;
     const normalized = normalize(answer, language);
-    add(normalized, answer);
-    if (language === 'es') add(stripSubjectPronoun(normalized), answer);
-  }
+    const forms =
+      language === 'es'
+        ? [...new Set(spanishVariants(normalized).flatMap((v) => [v, stripSubjectPronoun(v)]))]
+        : [normalized];
+    for (const form of forms) add(form, answer, canonical);
+  });
   return out;
 }
 
@@ -274,95 +304,19 @@ function isTypo(given: string, candidate: string): boolean {
 }
 
 /**
- * Words that carry no meaning for a comprehension check. Dropping them lets
- * "and you?" match "and you" and "the coffee" match "coffee".
- */
-const EN_STOPWORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'am', 'do', 'does', 'did', 'to', 'of', 'that', 'it', 'its',
-  'some', 'any', 'so', 'just', 'really', 'quite', 'at', 'in', 'on',
-]);
-
-/**
- * English words that mean the same thing here. Translating into English is a
- * *comprehension* check — if the learner shows they understood, quibbling over
- * "well" versus "good" teaches nothing about Spanish.
- */
-const EN_SYNONYMS: Record<string, string> = {
-  well: 'good',
-  fine: 'good',
-  great: 'good',
-  hi: 'hello',
-  hey: 'hello',
-  movie: 'film',
-  movies: 'film',
-  films: 'film',
-  flat: 'apartment',
-  mum: 'mother',
-  mom: 'mother',
-  dad: 'father',
-  photo: 'picture',
-  cash: 'money',
-  mate: 'friend',
-  buddy: 'friend',
-  guy: 'man',
-  kid: 'child',
-  children: 'child',
-  kids: 'child',
-  wanna: 'want',
-  gonna: 'going',
-  shall: 'will',
-  tired: 'tired',
-  house: 'home',
-  automobile: 'car',
-  underground: 'metro',
-  subway: 'metro',
-  tube: 'metro',
-  lunch: 'lunch',
-  bill: 'check',
-  holiday: 'vacation',
-  autumn: 'fall',
-  lift: 'elevator',
-  queue: 'line',
-};
-
-/**
- * Words that flip the meaning of a sentence rather than colouring it.
- *
- * These are the reason `sameEnglishMeaning` cannot simply allow one unmatched
- * word: "I do not like coffee" and "I like coffee" differ by exactly one word,
- * and it is the only word that matters. Measured on the real checker, all three
- * of "I don't like coffee", "He is not coming" and "I cannot go" were accepted
- * as their own opposites before this existed.
- */
-const EN_POLARITY = new Set([
-  'not', 'no', 'never', 'none', 'nobody', 'nothing', 'neither', 'nor', 'without',
-  'nowhere', 'cannot', 'except', 'unless',
-]);
-
-/** How many polarity words a phrase carries — two of these cancel, one does not. */
-function polarity(words: string[]): number {
-  return words.filter((word) => EN_POLARITY.has(word)).length;
-}
-
-/** Content words of an English answer, normalised for comparison. */
-function contentWords(text: string): string[] {
-  return deaccent(text)
-    .split(' ')
-    .filter(Boolean)
-    .map((word) => EN_SYNONYMS[word] ?? word)
-    .filter((word) => !EN_STOPWORDS.has(word))
-    .map((word) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word))
-    .sort();
-}
-
-/**
  * Do two English answers say the same thing? Compares content words as a
  * multiset, so word order and filler differences do not matter but a genuinely
  * different meaning still fails.
+ *
+ * `contentWords` and `polarity` live in `@/learning/meaning` rather than here —
+ * a second private copy of "what counts as a content word" is exactly how the
+ * app's own stopword and polarity lists could drift from the ones `meaningCoverage`
+ * uses for a free turn, and `contentWords`'s `-s`-stripping already once hid
+ * "jamas" and "unless" from a polarity check that had its own inline copy.
  */
-function sameEnglishMeaning(a: string, b: string): boolean {
-  const left = contentWords(a);
-  const right = contentWords(b);
+function sameEnglishMeaning(a: string, b: string, equivalences?: Equivalences): boolean {
+  const left = contentWords(a, equivalences);
+  const right = contentWords(b, equivalences);
   if (left.length === 0 || right.length === 0) return false;
   if (Math.abs(left.length - right.length) > 1) return false;
   // Negation is never the word we let slide.
@@ -422,9 +376,14 @@ export function checkAnswer(
   const raw = normalize(input, language);
   if (raw.length === 0) return outcome('meaning', fallback);
 
-  // Compare both as typed and with a leading pronoun removed, so an added
-  // "yo" is fine but a mismatched "tú" is not.
-  const forms = language === 'es' ? [raw, stripSubjectPronoun(raw)] : [raw];
+  // Compare as typed, with a leading pronoun removed, and across every
+  // mechanically derived Spanish variant — so an added "yo" is fine, a
+  // mismatched "tú" is not, and "Te quiero ver" matches "Quiero verte" without
+  // either being authored as a second accepted answer.
+  const forms =
+    language === 'es'
+      ? [...new Set(spanishVariants(raw).flatMap((v) => [v, stripSubjectPronoun(v)]))]
+      : [raw];
   const givenForms = [...new Set(forms)];
   const bareForms = givenForms.map(deaccent);
 
@@ -434,10 +393,17 @@ export function checkAnswer(
 
   for (const candidate of candidates) {
     if (givenForms.includes(candidate.variant)) {
+      // A missing ¿/¡ on the very form the learner produced is the more
+      // concrete teachable moment, so it is checked first and wins outright —
+      // "preferred" only fires once the matched form's own punctuation is
+      // clean. Task 8's check is otherwise untouched.
       const mark = missingOpeningMark(input, candidate.display);
-      return mark === null
+      if (mark !== null) {
+        return outcome('punctuation', candidate.display, `Spanish opens it too: ${candidate.display}`);
+      }
+      return candidate.canonical
         ? outcome('none', candidate.display)
-        : outcome('punctuation', candidate.display, `Spanish opens it too: ${candidate.display}`);
+        : outcome('preferred', accepted[0], `Also right. The usual way to say it: ${accepted[0]}`);
     }
 
     const candidateBare = deaccent(candidate.variant);
@@ -497,14 +463,41 @@ export function checkAnswer(
     return outcome('spelling', typoMatch, `Almost — check the spelling: ${typoMatch}`);
   }
 
-  // Translating *into English* is a comprehension check, so accept any phrasing
-  // that carries the same meaning. This never applies to Spanish answers, where
-  // the exact form is the thing being taught.
-  if (language === 'en') {
+  // A profile may declare its own paraphrase mode (a free conversation turn is
+  // 'spanishFree' even though its language is 'es'); otherwise it follows from
+  // the language, which is why plain Spanish translation defaults to none of
+  // this and stays exact.
+  const mode = profile.paraphrase ?? (language === 'en' ? 'english' : 'spanish');
+
+  if (mode === 'english') {
     for (const candidate of candidates) {
-      if (sameEnglishMeaning(raw, candidate.variant)) {
+      // Whole-phrase equivalence first: "a pleasure to meet you" relates to
+      // "nice to meet you" as a unit and by no word-level mapping at all.
+      const givenPhrase = profile.equivalences?.phrase.get(raw);
+      const candidatePhrase = profile.equivalences?.phrase.get(candidate.variant);
+      if (givenPhrase !== undefined && givenPhrase === candidatePhrase) {
         return outcome('paraphrase', candidate.display);
       }
+      if (sameEnglishMeaning(raw, candidate.variant, profile.equivalences)) {
+        return outcome('paraphrase', candidate.display);
+      }
+    }
+  }
+
+  if (mode === 'spanishFree') {
+    /**
+     * A free conversation turn. Exact matching against four long authored
+     * sentences is a test the learner cannot pass, so the question here is
+     * whether they said the same thing — and the closest model becomes the
+     * answer shown, so they see the natural phrasing they did not quite reach.
+     */
+    let best: { display: string; score: number } | null = null;
+    for (const candidate of candidates) {
+      const score = meaningCoverage(raw, candidate.variant, profile.equivalences);
+      if (!best || score > best.score) best = { display: candidate.display, score };
+    }
+    if (best && best.score >= COVERAGE_THRESHOLD) {
+      return outcome('paraphrase', best.display, `Natural version: ${best.display}`);
     }
   }
 

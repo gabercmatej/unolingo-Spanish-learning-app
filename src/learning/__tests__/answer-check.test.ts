@@ -1,4 +1,5 @@
 import { accentCarriesMeaning } from '@/content/accent-pairs';
+import { EN_EQUIVALENCES } from '@/content/equivalences';
 import { checkAnswer, deaccent, levenshtein, normalize, pronounAgrees } from '@/learning/answer-check';
 import { practiceText } from '@/learning/generator';
 import { gradeFor, verdictFor } from '@/learning/grading';
@@ -134,31 +135,31 @@ describe('pronounAgrees', () => {
 });
 
 describe('English comprehension leniency', () => {
+  // The word map that used to live as a private EN_SYNONYMS copy in
+  // answer-check.ts now lives in @/content/equivalences, so these calls must
+  // inject it themselves — the pure checker only ever sees what a profile
+  // hands it.
+  const en = { language: 'en' as const, equivalences: EN_EQUIVALENCES };
+
   it('accepts a different but equivalent English phrasing', () => {
     // The reported case: translating "Muy bien, ¿y tú?"
-    expect(checkAnswer('Very good and you?', ['Very well, and you?'], { language: 'en' }).grade).toBe(
-      'correct',
-    );
+    expect(checkAnswer('Very good and you?', ['Very well, and you?'], en).grade).toBe('correct');
   });
 
   it('accepts synonyms and dropped articles', () => {
-    expect(checkAnswer('Hi, how are you?', ['Hello, how are you?'], { language: 'en' }).grade).toBe('correct');
-    expect(checkAnswer('I like films', ['I like movies'], { language: 'en' }).grade).toBe('correct');
-    expect(checkAnswer('I have dog', ['I have a dog'], { language: 'en' }).grade).toBe('correct');
+    expect(checkAnswer('Hi, how are you?', ['Hello, how are you?'], en).grade).toBe('correct');
+    expect(checkAnswer('I like films', ['I like movies'], en).grade).toBe('correct');
+    expect(checkAnswer('I have dog', ['I have a dog'], en).grade).toBe('correct');
   });
 
   it('accepts a different word order', () => {
-    expect(
-      checkAnswer('In the morning I work', ['I work in the morning'], { language: 'en' }).grade,
-    ).toBe('correct');
+    expect(checkAnswer('In the morning I work', ['I work in the morning'], en).grade).toBe('correct');
   });
 
   it('still rejects a genuinely different meaning', () => {
-    expect(checkAnswer('Very bad, and you?', ['Very well, and you?'], { language: 'en' }).grade).toBe(
-      'incorrect',
-    );
-    expect(checkAnswer('I have a cat', ['I have a dog'], { language: 'en' }).grade).toBe('incorrect');
-    expect(checkAnswer('She works in the morning', ['I work in the morning'], { language: 'en' }).grade).toBe(
+    expect(checkAnswer('Very bad, and you?', ['Very well, and you?'], en).grade).toBe('incorrect');
+    expect(checkAnswer('I have a cat', ['I have a dog'], en).grade).toBe('incorrect');
+    expect(checkAnswer('She works in the morning', ['I work in the morning'], en).grade).toBe(
       'incorrect',
     );
   });
@@ -308,6 +309,18 @@ describe('accents mean different things in different tasks', () => {
     expect(result.grade).toBe('almost');
   });
 
+  it('diffs the pronoun-stripped form against the candidate it actually matched', () => {
+    // "tu estas cansada" strips its agreeing pronoun to "estas cansada" (2
+    // words), which is what lines up with ["Estás cansada"] (2 words). A diff
+    // taken against the *unstripped* 3-word input instead hits
+    // differingWords' equal-length guard, gets back [], and the genuine
+    // estás/estas contrast is silently waved through as harmless. This pins
+    // the index-matched `givenForms[matchIndex]` lookup that replaced that
+    // `givenForms[0]` bug.
+    const result = checkAnswer('tu estas cansada', ['Estás cansada'], real);
+    expect(result.error).toBe('accentContrast');
+  });
+
   it('fails it outright when the form is the thing being tested', () => {
     // A conjugation drill asking for the preterite. hablo is a real word and
     // the wrong one, so this is a form error, not an orthography note.
@@ -366,6 +379,80 @@ describe('English meaning reversals', () => {
     wrong('Nobody came', 'Everybody came');
     wrong('I have no money', 'I have money');
     wrong('She does not work here', 'She works here');
+  });
+});
+
+describe('paraphrase', () => {
+  const en = { language: 'en' as const, equivalences: EN_EQUIVALENCES };
+
+  it('accepts the natural English renderings of a set phrase', () => {
+    for (const given of [
+      'pleased to meet you',
+      'nice to meet you',
+      'lovely to meet you',
+      'delighted to meet you',
+      'a pleasure to meet you',
+    ]) {
+      const result = checkAnswer(given, ['Nice to meet you.'], en);
+      expect(result.verdict).not.toBe('incorrect');
+    }
+  });
+
+  it('shows the canonical wording so precision is still taught', () => {
+    const result = checkAnswer('lovely to meet you', ['Nice to meet you.'], en);
+    expect(result.best).toBe('Nice to meet you.');
+    expect(result.error).toBe('paraphrase');
+  });
+
+  it('still refuses an English answer that means something else', () => {
+    expect(checkAnswer('Very bad, and you?', ['Very well, and you?'], en).verdict).toBe('incorrect');
+    expect(checkAnswer('I have a cat', ['I have a dog'], en).verdict).toBe('incorrect');
+    expect(checkAnswer('I do not like coffee', ['I like coffee'], en).verdict).toBe('incorrect');
+  });
+
+  it('accepts a derived Spanish variant without any authoring', () => {
+    expect(checkAnswer('Voy a el cine', ['Voy al cine'], { language: 'es' }).verdict).not.toBe(
+      'incorrect',
+    );
+    expect(checkAnswer('Te quiero ver', ['Quiero verte'], { language: 'es' }).verdict).not.toBe(
+      'incorrect',
+    );
+  });
+
+  it('does not loosen an ordinary Spanish translation into word salad', () => {
+    expect(checkAnswer('perro un tengo', ['Tengo un perro'], { language: 'es' }).verdict).toBe(
+      'incorrect',
+    );
+  });
+
+  it('lets a free turn be answered in the learner’s own words', () => {
+    const models = [
+      'De acuerdo, siempre y cuando esta vez se resuelva de verdad.',
+      'Acepto siempre y cuando me confirmen por escrito.',
+    ];
+    const result = checkAnswer('Vale, siempre y cuando se resuelva esta vez', models, {
+      language: 'es',
+      paraphrase: 'spanishFree',
+    });
+    expect(result.verdict).not.toBe('incorrect');
+    expect(result.error).toBe('paraphrase');
+    expect(models).toContain(result.best);
+  });
+
+  it('still refuses a free turn that answers a different question', () => {
+    const result = checkAnswer('¿Dónde está la estación de tren?', [
+      'De acuerdo, siempre y cuando esta vez se resuelva de verdad.',
+    ], { language: 'es', paraphrase: 'spanishFree' });
+    expect(result.verdict).toBe('incorrect');
+  });
+
+  it('marks a match against a non-canonical alternative as preferred', () => {
+    const result = checkAnswer('Ahora voy a comer', ['Voy a comer ahora.', 'Ahora voy a comer.'], {
+      language: 'es',
+    });
+    expect(result.error).toBe('preferred');
+    expect(result.grade).toBe('correct');
+    expect(result.best).toBe('Voy a comer ahora.');
   });
 });
 
