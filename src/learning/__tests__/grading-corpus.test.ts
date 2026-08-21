@@ -50,20 +50,32 @@ describe('the corpus grades itself', () => {
     expect(failures).toEqual([]);
   });
 
-  it('lets every free conversation turn be answered with its own model', () => {
-    // The defect that started this: 107 turns nobody could pass. Each turn's
-    // own authored answers must clear the coverage threshold against the turn.
-    const failures: string[] = [];
-    for (const scene of conversations)
-      for (const turn of scene.turns) {
-        if (turn.speaker !== 'you' || !turn.accepted?.length) continue;
-        for (const model of turn.accepted) {
-          const best = Math.max(...turn.accepted.map((m) => meaningCoverage(model, m)));
-          if (best < COVERAGE_THRESHOLD) failures.push(`${scene.id}: ${model}`);
-        }
-      }
-    expect(failures).toEqual([]);
-  });
+  /**
+   * There used to be a test here — "lets every free conversation turn be
+   * answered with its own model" — computing, for each authored model,
+   * `Math.max(...turn.accepted.map((m) => meaningCoverage(model, m)))` and
+   * asserting the max cleared `COVERAGE_THRESHOLD`. It was structurally
+   * vacuous, the same way the test below used to be before the rework
+   * documented in the comment that follows: `turn.accepted` always contains
+   * `model` itself, and `meaningCoverage(model, model)` is 1 by construction,
+   * so the max is always ≥ 1 no matter whether `meaningCoverage` works at
+   * all. Review proved it by fault-injecting a `meaningCoverage` that
+   * returns 0 unless the two strings are identical — every other test in
+   * this file caught that break; this one stayed green.
+   *
+   * It cannot be restated non-vacuously without changing what it measures:
+   * keeping self in the comparison set is vacuous by construction, for
+   * `checkAnswer` as much as for `meaningCoverage` directly, since a learner
+   * typing exactly one of the authored models is comparing that text against
+   * a candidate list that contains that exact text. Excluding self turns it
+   * into "every model has a recognisable paraphrase among the turn's *other*
+   * accepted answers" — which the next comment shows is false about this
+   * corpus for a correct, documented reason, not a bug. So it is dropped
+   * rather than restated: the reflexivity guard below is the honest
+   * one-line version of what it was gesturing at, and the cross-model test
+   * below that is the honest version of "own model recognised against the
+   * turn".
+   */
 
   /**
    * Calibration, asserted rather than assumed.
@@ -156,12 +168,55 @@ describe('the corpus grades itself', () => {
  * only cover the examples somebody remembered, so these mutate the corpus
  * itself — the same six error classes the brief named, applied to every
  * sentence that can carry them.
+ *
+ * `\b` is defined over `[A-Za-z0-9_]` only — to JS, an accented vowel (á, é,
+ * í, ó, ú) or ñ/ü is a *non*-word character, exactly like a space or a comma.
+ * That silently broke the ser/estar mutations, the only ones built out of
+ * accented words, worse than a couple of mangled outputs:
+ *
+ * - Standalone `está` — the single most common estar form in the corpus —
+ *   almost never matched at all. `\b` needs a word/non-word transition on
+ *   *both* sides, and the side right after the `á` is a space or full stop
+ *   in ordinary use, i.e. non-word next to non-word: no transition, no
+ *   match. `está` could only ever satisfy that trailing `\b` when directly
+ *   followed by another letter — which happens only where `está` is a
+ *   literal prefix of `estáis`/`están`. So the mutation's "tried" count
+ *   silently excluded almost every real occurrence of the word it exists to
+ *   mutate, and the rare cases that did fire fired for the wrong reason.
+ * - Those prefix cases then mutated wrong: with the accented tail counted
+ *   as non-word, `\b(está)\b` sees a legal boundary right after the `á`, so
+ *   the alternation matches the *prefix* "está" inside "están" instead of
+ *   the whole word — the replacement leaves the trailing letters behind
+ *   ("Ellos están felices." -> "Ellos esn felices.", not "...son
+ *   felices."). Ordering the alternatives longest-first would not fix this:
+ *   the boundary itself is the bug, not the match order.
+ * - The same mechanism makes a false match the other way: "son" matches
+ *   inside "sonó" ("...de repente sonó el móvil." -> "...estánó el
+ *   móvil.") because JS treats the "n"/"ó" transition as a word boundary,
+ *   when there is no real word break there at all.
+ *
+ * None of this was ever *accepted* by the grader — a mangled or missing
+ * mutation is refused as `incorrect` same as a real ser/estar swap, so there
+ * was no false accept. But it was not testing what this mutation claims to
+ * test: refusing a string that was never mutated, or mutated into
+ * gibberish, proves nothing about whether the grader can tell ser from
+ * estar. `spanishBoundary` replaces `\b` with an explicit lookbehind/
+ * lookahead over a Spanish-aware word-character class, so accents count as
+ * word characters the way they actually are in Spanish — standalone `está`
+ * now matches every time (`está` -> `es` throughout the corpus, not just at
+ * `están`/`estáis`), and the prefix and cross-word false matches above no
+ * longer fire. Reaching for `\b` again here — it is the obvious thing to
+ * reach for — would silently reopen all three holes.
  */
+const SPANISH_WORD = 'A-Za-z0-9_ÁÉÍÓÚÑÜáéíóúñü';
+const spanishBoundary = (alternatives: string) =>
+  new RegExp(`(?<![${SPANISH_WORD}])(${alternatives})(?![${SPANISH_WORD}])`, 'i');
+
 const MUTATIONS: { name: string; apply: (es: string) => string | null }[] = [
   {
     name: 'ser for estar',
     apply: (t) => {
-      const swapped = t.replace(/\b(estoy|estás|está|estamos|estáis|están)\b/i, (m) =>
+      const swapped = t.replace(spanishBoundary('estoy|estás|está|estamos|estáis|están'), (m) =>
         ({ estoy: 'soy', estás: 'eres', está: 'es', estamos: 'somos', estáis: 'sois', están: 'son' })[
           m.toLowerCase()
         ] ?? m);
@@ -171,13 +226,24 @@ const MUTATIONS: { name: string; apply: (es: string) => string | null }[] = [
   {
     name: 'estar for ser',
     apply: (t) => {
-      const swapped = t.replace(/\b(soy|eres|es|somos|sois|son)\b/i, (m) =>
+      const swapped = t.replace(spanishBoundary('soy|eres|es|somos|sois|son'), (m) =>
         ({ soy: 'estoy', eres: 'estás', es: 'está', somos: 'estamos', sois: 'estáis', son: 'están' })[
           m.toLowerCase()
         ] ?? m);
       return swapped === t ? null : swapped;
     },
   },
+  // por/para, negation and the article swaps below stay on plain `\b`. None
+  // of their targets contain an accented letter, so the internal-prefix bug
+  // above cannot occur here, and an audit of the whole corpus (checking
+  // every match's neighbouring character for an accent, both classes of
+  // false boundary) found zero accent-adjacent matches for any of them —
+  // e.g. "por"/"para" never abuts an accented letter with no space between,
+  // and "no" never lands as a false substring next to one the way "son" did
+  // inside "sonó". If new sentences ever add a word like "porúltimo" (no
+  // space) or start a word with "laúd" right after this mutation's target,
+  // that could change; watch for it rather than assuming `\b` is safe here
+  // because it happens to be safe today.
   {
     name: 'por for para',
     apply: (t) => (/\bpara\b/.test(t) ? t.replace(/\bpara\b/, 'por') : null),
