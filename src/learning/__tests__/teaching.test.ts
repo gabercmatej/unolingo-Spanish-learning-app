@@ -20,10 +20,18 @@ function choice(kind: ExerciseKind, over: Partial<Exercise> = {}): Exercise {
   } as Exercise;
 }
 
-// verdict/error are unused by teachingFor — it only reads grade and note —
-// so these are filler that satisfies the now-wider ExerciseResult shape.
+// verdict defaults from grade the way ERROR_POLICY actually maps them, so a
+// fixture built from `grade` alone still exercises the verdict-keyed checks
+// in `teachingFor` correctly. Callers that need a specific verdict (e.g.
+// `correctWithFeedback`) pass it through `over`.
+const VERDICT_FOR_GRADE: Record<ExerciseResult['grade'], ExerciseResult['verdict']> = {
+  correct: 'correct',
+  almost: 'correctWithFeedback',
+  incorrect: 'incorrect',
+};
+
 const graded = (grade: ExerciseResult['grade'], over: Partial<ExerciseResult> = {}): ExerciseResult => ({
-  verdict: 'correct',
+  verdict: VERDICT_FOR_GRADE[grade],
   error: 'none',
   grade,
   expected: 'a',
@@ -51,6 +59,17 @@ describe('listening feedback teaches meaning, not just sound', () => {
 
   it('prefers immersion from B2 up, but never on a wrong answer', () => {
     expect(shouldShowMeaning(choice('listenSelect'), 'correct', 'B2')).toBe(false);
+    expect(shouldShowMeaning(choice('listenSelect'), 'incorrect', 'C1')).toBe(true);
+  });
+});
+
+describe('a paraphrase is still worth teaching from', () => {
+  it('shows the meaning whenever the answer was not exactly right', () => {
+    // A correctWithFeedback answer is still an answer with something to learn
+    // from, and the old rule keyed off grade — which is `correct` for a
+    // paraphrase, so the teaching was suppressed exactly when it was wanted.
+    expect(shouldShowMeaning(choice('listenSelect'), 'correctWithFeedback', 'C1')).toBe(true);
+    expect(shouldShowMeaning(choice('listenSelect'), 'correct', 'C1')).toBe(false);
     expect(shouldShowMeaning(choice('listenSelect'), 'incorrect', 'C1')).toBe(true);
   });
 });

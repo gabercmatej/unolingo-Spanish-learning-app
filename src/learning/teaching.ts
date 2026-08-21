@@ -3,7 +3,7 @@ import type { CefrLevel } from '@/content/types';
 import type { Exercise } from '@/learning/exercise';
 import type { ExerciseResult } from '@/learning/check';
 import { KIND_DEMAND } from '@/learning/eligibility';
-import type { Grade } from '@/learning/types';
+import type { Verdict } from '@/learning/types';
 
 /**
  * What to say after an answer.
@@ -72,10 +72,10 @@ export interface TeachingContext {
 
 export function shouldShowMeaning(
   exercise: Exercise,
-  grade: Grade,
+  verdict: Verdict,
   level: CefrLevel,
 ): boolean {
-  if (grade !== 'correct') return true;
+  if (verdict !== 'correct') return true;
   if (levelIndex(level) < levelIndex(ALWAYS_TRANSLATE_BELOW)) return true;
   // B1: only where answering revealed nothing about meaning.
   if (levelIndex(level) === levelIndex(ALWAYS_TRANSLATE_BELOW)) {
@@ -96,7 +96,7 @@ export function teachingFor(
   if (exercise.form === 'presentation') return null;
 
   const source = exercise.source;
-  const showMeaning = shouldShowMeaning(exercise, result.grade, ctx.level);
+  const showMeaning = shouldShowMeaning(exercise, result.verdict, ctx.level);
 
   /**
    * Re-show the Spanish whenever the learner has not just been staring at it.
@@ -104,7 +104,7 @@ export function teachingFor(
    * so repeating it underneath would be noise.
    */
   const alreadyShown =
-    KIND_DEMAND[exercise.kind] === 'output' && result.grade !== 'correct';
+    KIND_DEMAND[exercise.kind] === 'output' && result.verdict !== 'correct';
   const es = source && !alreadyShown ? source.es : undefined;
   const en = source && showMeaning ? source.en : undefined;
 

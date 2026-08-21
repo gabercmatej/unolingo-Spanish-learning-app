@@ -21,6 +21,7 @@ import { applyAnswerToMistakes } from '@/learning/mistakes';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
 import {
   PRESENTATION_KINDS,
+  type AnswerError,
   type ConceptState,
   type Grade,
   type LearnerState,
@@ -85,6 +86,8 @@ export interface RecordAnswerInput {
   /** What the learner actually gave, for the mistake notebook. */
   given?: string;
   expected?: string;
+  /** What kind of error this was, recorded on the mistake for the feedback bar. */
+  error?: AnswerError;
 }
 
 export interface CompleteSessionInput {
@@ -277,7 +280,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   // --- Actions ------------------------------------------------------------
 
   const recordAnswer = useCallback((input: RecordAnswerInput): AnswerOutcome => {
-    const { exercise, grade, given, expected } = input;
+    const { exercise, grade, given, expected, error } = input;
     const now = Date.now();
 
     let earned = 0;
@@ -325,6 +328,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
            */
           sentenceId: exercise.sourceId,
           targetId: exercise.targetId ?? touched[0],
+          error,
         };
         mistakes = [...prev.mistakes, record].slice(-MAX_MISTAKES);
       } else {

@@ -61,11 +61,11 @@ export function FeedbackBar({
       icon: 'checkmark-circle' as const,
       title: '¡Bien!',
     },
-    almost: {
-      tone: theme.warning,
-      soft: theme.warningSoft,
-      icon: 'alert-circle' as const,
-      title: 'Almost!',
+    correctWithFeedback: {
+      tone: theme.success,
+      soft: theme.successSoft,
+      icon: 'checkmark-circle' as const,
+      title: '¡Bien!',
     },
     incorrect: {
       tone: theme.danger,
@@ -73,9 +73,16 @@ export function FeedbackBar({
       icon: 'information-circle' as const,
       title: 'Not quite',
     },
-  }[result.grade];
+  }[result.verdict];
 
-  const showAnswer = result.grade !== 'correct' && result.expected.length > 0;
+  /**
+   * Shown whenever there is something to learn from, not only when the answer
+   * was wrong. A learner who wrote "pleased to meet you" understood the
+   * Spanish perfectly and should still see the wording the course prefers,
+   * the old rule keyed off `correct`, so it suppressed the teaching in
+   * exactly the case the teaching existed for.
+   */
+  const showAnswer = result.error !== 'none' && result.expected.length > 0;
   /**
    * Only worth showing beside the model answer when the two are actually
    * different to look at — echoing "hola" back at somebody who typed "hola"
@@ -129,7 +136,10 @@ export function FeedbackBar({
           <Text variant="caption" tone={scheme.tone}>
             YOU WROTE
           </Text>
-          <Text variant="esSmall" tone={scheme.tone} style={styles.given}>
+          <Text
+            variant="esSmall"
+            tone={scheme.tone}
+            style={result.verdict === 'incorrect' ? styles.given : undefined}>
             {given}
           </Text>
         </View>
@@ -139,7 +149,7 @@ export function FeedbackBar({
         <View style={styles.answerRow}>
           <View style={styles.flex}>
             <Text variant="caption" tone={scheme.tone}>
-              {showGiven ? 'BETTER' : 'ANSWER'}
+              {result.verdict === 'incorrect' ? (showGiven ? 'BETTER' : 'ANSWER') : 'PREFERRED'}
             </Text>
             <Text variant="esSmall" tone={scheme.tone}>
               {result.expected}

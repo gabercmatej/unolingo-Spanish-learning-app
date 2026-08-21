@@ -325,6 +325,7 @@ export default function SessionScreen() {
       grade: outcome.grade,
       given: outcome.given,
       expected: outcome.expected,
+      error: outcome.error,
     });
 
     setResult(outcome);

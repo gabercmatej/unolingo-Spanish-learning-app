@@ -221,6 +221,11 @@ export interface MistakeRecord {
   attempts?: number;
   /** When it was last retried, whatever the outcome. */
   lastAttemptAt?: number;
+  /**
+   * What kind of error this was. Optional, so no `STATE_VERSION` bump — a
+   * record from an earlier build simply comes back without it.
+   */
+  error?: AnswerError;
 }
 
 export interface SessionRecord {
