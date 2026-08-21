@@ -369,6 +369,68 @@ function missingOpeningMark(input: string, expected: string): '¿' | '¡' | null
   return null;
 }
 
+/**
+ * Function words whose swap is a grammar error rather than a different idea:
+ * ser against estar, por against para, an article of the wrong gender.
+ */
+const FUNCTION_WORDS = new Set([
+  'soy', 'eres', 'es', 'somos', 'sois', 'son', 'ser',
+  'estoy', 'estas', 'esta', 'estamos', 'estais', 'estan', 'estar',
+  'por', 'para', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+  'lo', 'le', 'les', 'me', 'te', 'se', 'nos', 'os', 'mi', 'tu', 'su',
+  'muy', 'mucho', 'hay', 'de', 'a', 'en', 'con', 'sin',
+]);
+
+/** Letters two words share from the start. */
+function sharedPrefix(a: string, b: string): number {
+  let n = 0;
+  while (n < a.length && n < b.length && a[n] === b[n]) n += 1;
+  return n;
+}
+
+/**
+ * What kind of wrong this is.
+ *
+ * Not a softening — every value returned here maps to `incorrect`. It exists
+ * because "wrong" is the least useful thing the app can record about an answer
+ * it has just analysed in detail, and because a mistake queue that knows a
+ * tense error from a vocabulary error can scaffold the retry differently.
+ *
+ * The separation is positional, the same insight that separates a typo from a
+ * grammar error. Spanish inflection lives at the end of a word, so two words
+ * sharing a long prefix and differing at the end are the same word in a
+ * different form (hablo/hablas, rojo/rojos). Two words sharing nothing are
+ * different words — and if one of them is a function word, the error is
+ * grammatical rather than semantic.
+ */
+function classifyFailure(given: string, expected: string): AnswerError {
+  const left = given.split(' ');
+  const right = expected.split(' ');
+
+  if (polarityOf(given) !== polarityOf(expected)) return 'negation';
+
+  if (left.length === right.length) {
+    const differing: [string, string][] = [];
+    for (let i = 0; i < left.length; i += 1) {
+      if (deaccent(left[i]) !== deaccent(right[i])) differing.push([left[i], right[i]]);
+    }
+
+    if (differing.length > 0 && differing.length <= 2) {
+      const [a, b] = differing[0];
+      const bareA = deaccent(a);
+      const bareB = deaccent(b);
+
+      // Same word, different ending: person, tense, number, gender, mood.
+      if (sharedPrefix(bareA, bareB) >= 3 && bareA !== bareB) return 'form';
+
+      // A closed-class swap: ser for estar, por for para, el for la.
+      if (FUNCTION_WORDS.has(bareA) || FUNCTION_WORDS.has(bareB)) return 'grammar';
+    }
+  }
+
+  return 'meaning';
+}
+
 export function checkAnswer(
   input: string,
   accepted: string[],
@@ -395,7 +457,13 @@ export function checkAnswer(
 
   let accentMatch: { display: string; differing: [string, string][] } | null = null;
   let typoMatch: string | null = null;
-  let closest: { answer: string; distance: number } | null = null;
+  // Tracks the candidate object itself, not just its display string: several
+  // candidates can share a display (a canonical answer and its pronoun-
+  // stripped or contraction-derived variants all show the same author-written
+  // text), so looking the closest one back up by display after the loop would
+  // find whichever shares that text lists first, not the variant that was
+  // actually nearest.
+  let closest: { candidate: Candidate; distance: number } | null = null;
 
   for (const candidate of candidates) {
     if (givenForms.includes(candidate.variant)) {
@@ -428,7 +496,7 @@ export function checkAnswer(
       // model answer it came closest to.
       const distance = levenshtein(bare, candidateBare);
       if (!closest || distance < closest.distance) {
-        closest = { answer: candidate.display, distance };
+        closest = { candidate, distance };
       }
     }
   }
@@ -507,7 +575,10 @@ export function checkAnswer(
     }
   }
 
-  return outcome('meaning', closest?.answer ?? fallback);
+  return outcome(
+    classifyFailure(deaccent(raw), deaccent(closest?.candidate.variant ?? normalize(fallback, language))),
+    closest?.candidate.display ?? fallback,
+  );
 }
 
 /**

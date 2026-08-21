@@ -109,6 +109,44 @@ describe('checkAnswer', () => {
   });
 });
 
+describe('a wrong answer says what kind of wrong', () => {
+  const classify = (given: string, expected: string) =>
+    checkAnswer(given, [expected], { accentCarriesMeaning }).error;
+
+  it('names a reversed polarity', () => {
+    expect(checkAnswer('I like coffee', ['I do not like coffee'], {
+      language: 'en', equivalences: EN_EQUIVALENCES,
+    }).error).toBe('negation');
+  });
+
+  it('names an inflection error', () => {
+    expect(classify('Yo hablas español', 'Yo hablo español')).toBe('form');
+    expect(classify('Los libros rojo', 'Los libros rojos')).toBe('form');
+  });
+
+  it('names a wrong function word', () => {
+    expect(classify('Soy cansado', 'Estoy cansado')).toBe('grammar');
+    expect(classify('Gracias para la comida', 'Gracias por la comida')).toBe('grammar');
+  });
+
+  it('names a different meaning', () => {
+    expect(classify('Tengo un gato', 'Tengo un perro')).toBe('meaning');
+    expect(classify('Voy al cine mañana con mi hermana', 'Tengo hambre')).toBe('meaning');
+  });
+
+  it('classifies without ever changing the verdict', () => {
+    // Every one of these is incorrect. Classification is extra information,
+    // never a softening.
+    for (const [given, expected] of [
+      ['Yo hablas español', 'Yo hablo español'],
+      ['Soy cansado', 'Estoy cansado'],
+      ['Tengo un gato', 'Tengo un perro'],
+    ]) {
+      expect(checkAnswer(given, [expected], { accentCarriesMeaning }).verdict).toBe('incorrect');
+    }
+  });
+});
+
 describe('pronounAgrees', () => {
   it('matches regular endings to persons', () => {
     expect(pronounAgrees('yo', 'hablo')).toBe(true);
