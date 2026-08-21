@@ -46,12 +46,32 @@ function deaccent(input: string): string {
 }
 
 /**
+ * Punctuation stripped before tokenising, mirroring `answer-check.ts`'s
+ * `normalize`. Every internal call into this module already goes through
+ * `normalize` first, so on that path this is a no-op — but `contentWords`,
+ * `polarityOf` and `meaningCoverage` are exported and used directly by the
+ * corpus tests (and by anything else that reasons about a raw authored
+ * sentence rather than a normalized answer). Without this, a model answer
+ * ending "…de que el cliente ya sabe que hay trabas" tokenised "trabas" fine,
+ * but "no, gracias" tokenised to `["no,", "gracias"]` — a comma-fused "no,"
+ * that matches neither the stopword-free content word "no" nor, worse, the
+ * polarity word "no": two sentences differing only by a trailing comma on
+ * their negation could silently stop being recognised as opposites at all,
+ * which is exactly the failure this module exists to prevent. Splitting on
+ * punctuation the same way `normalize` does removes the mismatch instead of
+ * relying on every caller to pre-clean its input first.
+ */
+function stripPunctuation(input: string): string {
+  return input.replace(/[¿?¡!.,;:"'«»()\-–—]/g, ' ');
+}
+
+/**
  * The meaning-bearing words of an answer, normalised for comparison. Sorted, so
  * word order does not matter — a comprehension check is about content, and
  * "in the morning I work" is not a different claim from "I work in the morning".
  */
 export function contentWords(text: string, equivalences?: Equivalences): string[] {
-  return deaccent(text.toLowerCase())
+  return stripPunctuation(deaccent(text.toLowerCase()))
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => equivalences?.word.get(word) ?? word)
@@ -87,7 +107,7 @@ function polarity(words: string[]): number {
  * array-taking form stays private.
  */
 export function polarityOf(text: string, equivalences?: Equivalences): number {
-  const words = deaccent(text.toLowerCase())
+  const words = stripPunctuation(deaccent(text.toLowerCase()))
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => equivalences?.word.get(word) ?? word);
