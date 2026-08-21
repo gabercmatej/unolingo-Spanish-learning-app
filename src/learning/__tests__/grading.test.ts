@@ -1,4 +1,5 @@
-import { profileFor } from '@/learning/check';
+import { vocabConcepts } from '@/content';
+import { checkExercise, profileFor } from '@/learning/check';
 import { DEFAULT_SETTINGS } from '@/learning/defaults';
 import type { Exercise } from '@/learning/exercise';
 import { ERROR_POLICY, gradeFor, verdictFor, type AnswerError } from '@/learning/grading';
@@ -95,5 +96,32 @@ describe('profileFor', () => {
     expect(p.accentCarriesMeaning?.('esta')).toBe(true);
     expect(p.accentCarriesMeaning?.('cafe')).toBe(false);
     expect(p.equivalences).toBeDefined();
+  });
+});
+
+describe('altEn', () => {
+  it('is offered to the grader wherever a concept declares it', () => {
+    const withAlts = vocabConcepts.filter((c) => (c.altEn?.length ?? 0) > 0);
+    // If the corpus declares none yet, this test is still the guard that the
+    // wiring exists — add one to `foundations.ts` rather than deleting it.
+    expect(withAlts.length).toBeGreaterThan(0);
+  });
+
+  it('lets a concept-declared alternative pass a typed English translation', () => {
+    // `accepted` deliberately shares no vocabulary with p.encantado's altEn,
+    // nor with the "nice to meet you" equivalence group in equivalences.ts —
+    // that group already contains all three of p.encantado's declared
+    // alternatives, so testing against 'nice to meet you' itself would pass
+    // on paraphrase leniency alone and prove nothing about this wiring. A
+    // match here can only come from `conceptAlternatives` reading the
+    // concept's own declared list into the accepted answers.
+    const ex = exercise({
+      kind: 'translateToEn',
+      conceptIds: ['p.encantado'],
+      accepted: ['hello there'],
+      language: 'en',
+    });
+    const result = checkExercise(ex, 'pleased to meet you', DEFAULT_SETTINGS);
+    expect(result.verdict).not.toBe('incorrect');
   });
 });

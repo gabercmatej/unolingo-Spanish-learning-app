@@ -1,3 +1,4 @@
+import { getConcept, isVocabConcept } from '@/content';
 import { accentCarriesMeaning } from '@/content/accent-pairs';
 import { EN_EQUIVALENCES } from '@/content/equivalences';
 import { checkAnswer } from '@/learning/answer-check';
@@ -75,6 +76,24 @@ export function profileFor(exercise: Exercise, settings: Settings): GradingProfi
 }
 
 /**
+ * Extra English renderings the concepts under test declare.
+ *
+ * `VocabConcept.altEn` has been in the type since the content model was
+ * written, commented "Additional English renderings accepted when translating
+ * ES → EN", and was read by nothing — a concept could declare that "a pleasure
+ * to meet you" is a valid rendering of "nice to meet you" and the grader would
+ * still refuse it. This is what makes the declaration mean anything.
+ */
+function conceptAlternatives(conceptIds: string[]): string[] {
+  const out: string[] = [];
+  for (const id of conceptIds) {
+    const concept = getConcept(id);
+    if (concept && isVocabConcept(concept) && concept.altEn) out.push(...concept.altEn);
+  }
+  return out;
+}
+
+/**
  * Single entry point for grading. Keeping this out of the components means the
  * player, the mistake notebook and the tests all agree on what "correct" means.
  */
@@ -108,7 +127,11 @@ export function checkExercise(
     }
 
     case 'typed': {
-      const { verdict, error, grade, note, best } = checkAnswer(answer, exercise.accepted, profileFor(exercise, settings));
+      const accepted =
+        exercise.language === 'en'
+          ? [...exercise.accepted, ...conceptAlternatives(exercise.conceptIds)]
+          : exercise.accepted;
+      const { verdict, error, grade, note, best } = checkAnswer(answer, accepted, profileFor(exercise, settings));
       return {
         verdict,
         error,

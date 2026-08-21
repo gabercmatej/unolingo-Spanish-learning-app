@@ -184,7 +184,7 @@ export function FeedbackBar({
         <View style={styles.newRow}>
           <Icon name="sparkles" size={13} tone={scheme.tone} />
           <Text variant="caption" tone={scheme.tone} style={styles.flex}>
-            {teaching.untaught && result.grade === 'incorrect' ? 'New here, not your fault — ' : 'New here — '}
+            {teaching.untaught && result.verdict === 'incorrect' ? 'New here, not your fault: ' : 'New here: '}
             {teaching.newToYou
               .map((entry) => (entry.meaning ? `${entry.label}: ${entry.meaning}` : entry.label))
               .join(' · ')}

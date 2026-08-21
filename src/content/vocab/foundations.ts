@@ -217,6 +217,7 @@ export const foundationsVocab: VocabConcept[] = [
     topics: ['introductions'],
     es: 'encantado / encantada',
     en: 'nice to meet you',
+    altEn: ['pleased to meet you', 'delighted to meet you', 'a pleasure to meet you'],
     pos: 'expression',
     note: 'Agrees with you, the speaker: a man says encantado, a woman encantada.',
   },
