@@ -20,10 +20,35 @@ import type { Equivalences } from '@/learning/grading';
  * as 90% coverage would be the single worst thing this module could do.
  */
 
-/** Words that carry no meaning for a comprehension check. */
-const STOPWORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'am', 'be', 'been', 'do', 'does', 'did', 'to', 'of', 'that',
+/**
+ * Words that carry no meaning for a comprehension check — split by language,
+ * not merged.
+ *
+ * They used to be one shared set, and it silently broke English: Spanish's
+ * object/reflexive clitics (`me`, `te`, `se`, `lo`, `le`, `les`, `nos`, `os`)
+ * are legitimately droppable for the Spanish free-turn coverage check
+ * (`meaningCoverage`, which tolerates a dropped clitic the way the app
+ * already tolerates a dropped subject pronoun) — but the same spelling,
+ * `me`, is also an ordinary English object pronoun that carries real
+ * content: "he didn't believe me" and "he didn't believe it" are different
+ * claims. A shared set meant `sameEnglishMeaning` dropped English "me" as
+ * filler too, which let the mutation corpus swap it for "zebra" for free —
+ * "I told him the truth and he didn't believe zebra" graded as a paraphrase
+ * of "...he didn't believe me" — because a lone "me" then registered as no
+ * content lost at all, and `sameEnglishMeaning` already tolerates one
+ * unmatched word. This was one of two causes behind a measured +22 false
+ * acceptances on a corpus-wide last-word-swap mutation; the other was `be`
+ * and `been`, added here as English stopwords with no such collision but the
+ * same effect on a sentence that ends "...there may not be." — neither word
+ * was in the pre-branch stopword list, and this drops both back out of it.
+ */
+const EN_STOPWORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'am', 'do', 'does', 'did', 'to', 'of', 'that',
   'it', 'its', 'some', 'any', 'so', 'just', 'really', 'quite', 'at', 'in', 'on', 'and',
+]);
+
+/** Function words for the Spanish free-turn coverage check — see `EN_STOPWORDS`. */
+const ES_STOPWORDS = new Set([
   'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'al', 'que', 'y', 'o',
   'es', 'son', 'se', 'lo', 'le', 'les', 'me', 'te', 'nos', 'os',
 ]);
@@ -69,13 +94,23 @@ function stripPunctuation(input: string): string {
  * The meaning-bearing words of an answer, normalised for comparison. Sorted, so
  * word order does not matter — a comprehension check is about content, and
  * "in the morning I work" is not a different claim from "I work in the morning".
+ *
+ * `language` defaults to `'en'` because every direct caller outside this
+ * module (the English comprehension check, the corpus tests) reasons about
+ * English; `meaningCoverage` below is the one caller that means Spanish and
+ * says so explicitly.
  */
-export function contentWords(text: string, equivalences?: Equivalences): string[] {
+export function contentWords(
+  text: string,
+  equivalences?: Equivalences,
+  language: 'es' | 'en' = 'en',
+): string[] {
+  const stopwords = language === 'es' ? ES_STOPWORDS : EN_STOPWORDS;
   return stripPunctuation(deaccent(text.toLowerCase()))
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => equivalences?.word.get(word) ?? word)
-    .filter((word) => !STOPWORDS.has(word))
+    .filter((word) => !stopwords.has(word))
     .map((word) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word))
     .sort();
 }
@@ -133,8 +168,10 @@ export function meaningCoverage(
   model: string,
   equivalences?: Equivalences,
 ): number {
-  const answer = contentWords(given, equivalences);
-  const target = contentWords(model, equivalences);
+  // Free conversation turns are always Spanish — this is the one caller that
+  // needs `ES_STOPWORDS` rather than `contentWords`' English default.
+  const answer = contentWords(given, equivalences, 'es');
+  const target = contentWords(model, equivalences, 'es');
   if (answer.length === 0 || target.length === 0) return 0;
 
   // Opposites are not near misses.

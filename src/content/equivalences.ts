@@ -24,7 +24,13 @@
 
 /** Interchangeable single words. First member is the class representative. */
 export const EN_WORD_CLASSES: string[][] = [
-  ['good', 'well', 'fine', 'great', 'nice', 'lovely', 'pleasant', 'wonderful'],
+  // Split by intensity, not merged into one "good" class. "Fine" is mild —
+  // often just acceptance, not enthusiasm — and "wonderful" is not: a
+  // learner who wrote "fine" for a sentence whose model says "wonderful"
+  // has under-translated the register, not just phrased it differently, and
+  // review flagged the merged class for exactly this reason.
+  ['good', 'well', 'fine', 'nice', 'pleasant'],
+  ['great', 'lovely', 'wonderful'],
   ['pleased', 'delighted', 'glad', 'happy'],
   ['hello', 'hi', 'hey'],
   ['goodbye', 'bye'],
@@ -48,6 +54,17 @@ export const EN_WORD_CLASSES: string[][] = [
   ['want', 'wanna'],
   ['car', 'automobile'],
   ['metro', 'underground', 'subway', 'tube'],
+  // 'check' and 'line' are polysemous outside their restaurant/queue senses
+  // ("check the door", "which metro line" — the latter is a real sentence in
+  // this corpus). Both were flagged in review for it, and both stay: each
+  // covers a real full-sentence answer no phrase group reaches ("We never
+  // found out who had paid the bill/check", "...in the queue/line"), and
+  // phrase groups can't help — they only match a whole answer, never a
+  // substring inside a longer one (see Task 15's finding on `p.encantado`).
+  // Narrowing would cost that coverage for a risk this corpus does not
+  // currently realise: nothing here asks a learner to produce "metro line"
+  // as a `check`/`bill`- or `line`/`queue`-shaped near-miss. Left as a known,
+  // written-down tradeoff rather than silently accepted.
   ['check', 'bill'],
   ['vacation', 'holiday', 'holidays'],
   ['fall', 'autumn'],
@@ -59,7 +76,14 @@ export const EN_WORD_CLASSES: string[][] = [
   ['starter', 'appetiser', 'appetizer'],
   ['pavement', 'sidewalk'],
   ['petrol', 'gas', 'gasoline'],
-  ['tired', 'exhausted'],
+  // 'tired'/'exhausted' stays out. They are not a British/American pair like
+  // the ones above them — "exhausted" is a genuinely stronger claim than
+  // "tired", and the corpus draws that line on purpose ("She wasn't
+  // outraged, she was tired, which is nowhere near the same thing" teaches
+  // exactly this kind of register distinction elsewhere). Flagged in review
+  // as spanning intensity rather than dialect; removed rather than kept and
+  // narrowed, because there is no dialect pairing left to preserve once the
+  // intensity claim is dropped.
   ['begin', 'start'],
   ['speak', 'talk'],
   ['buy', 'purchase'],

@@ -320,8 +320,11 @@ function isTypo(given: string, candidate: string): boolean {
  * is no longer exported.
  */
 function sameEnglishMeaning(a: string, b: string, equivalences?: Equivalences): boolean {
-  const left = contentWords(a, equivalences);
-  const right = contentWords(b, equivalences);
+  // 'en' passed explicitly, not relied on as `contentWords`' default — this
+  // is the one place a Spanish clitic like "me" must NOT be dropped as
+  // filler, because in English it is an object pronoun with real content.
+  const left = contentWords(a, equivalences, 'en');
+  const right = contentWords(b, equivalences, 'en');
   if (left.length === 0 || right.length === 0) return false;
   if (Math.abs(left.length - right.length) > 1) return false;
   // Negation is never the word we let slide. Counted from the raw strings,

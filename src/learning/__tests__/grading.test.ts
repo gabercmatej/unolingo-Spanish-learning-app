@@ -107,21 +107,23 @@ describe('altEn', () => {
     expect(withAlts.length).toBeGreaterThan(0);
   });
 
-  it('lets a concept-declared alternative pass a typed English translation', () => {
-    // `accepted` deliberately shares no vocabulary with p.encantado's altEn,
-    // nor with the "nice to meet you" equivalence group in equivalences.ts —
-    // that group already contains all three of p.encantado's declared
-    // alternatives, so testing against 'nice to meet you' itself would pass
-    // on paraphrase leniency alone and prove nothing about this wiring. A
-    // match here can only come from `conceptAlternatives` reading the
-    // concept's own declared list into the accepted answers.
+  it('never lets a concept gloss alone satisfy a whole-sentence translation', () => {
+    // `translateToEn` is always built from a *sentence* — the generator sets
+    // `accepted: [sentence.en, ...sentence.altEn]` — and `p.encantado.altEn`
+    // glosses one phrase *inside* a sentence like "Encantada, yo soy Marta.",
+    // not the sentence itself. `check.ts` used to splice a concept's `altEn`
+    // straight into the accepted list for `typed` English exercises, which
+    // let "pleased to meet you" (a gloss of `p.encantado` alone) grade
+    // `preferred`/`correct` against the accepted answer below — the learner
+    // never attempted "I'm Marta" and was told they were right. This pins the
+    // fix: the fragment must fail, exactly as it does for any other sentence.
     const ex = exercise({
       kind: 'translateToEn',
-      conceptIds: ['p.encantado'],
-      accepted: ['hello there'],
+      conceptIds: ['p.encantado', 'v.ser'],
+      accepted: ["Nice to meet you, I'm Marta."],
       language: 'en',
     });
     const result = checkExercise(ex, 'pleased to meet you', DEFAULT_SETTINGS);
-    expect(result.verdict).not.toBe('incorrect');
+    expect(result.verdict).toBe('incorrect');
   });
 });

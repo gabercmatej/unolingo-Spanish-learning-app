@@ -296,3 +296,99 @@ describe('permissiveness has a floor', () => {
     });
   }
 });
+
+/**
+ * The English mutation gate.
+ *
+ * Everything above mutates `sentence.es` and asserts *zero* acceptances,
+ * because a Spanish answer is graded exactly. Nothing mutated `sentence.en`
+ * at all — English is deliberately graded on meaning, not form, and it
+ * shows: `sameEnglishMeaning` tolerates one unmatched content word by
+ * design, so a whole-branch review found a mutation that swaps a sentence's
+ * final word for "zebra" was already accepted on 106 of 1663 sentences
+ * *before this branch*, purely from that tolerance. A zero-acceptance floor
+ * for English would therefore not be testing this app — it would be lying
+ * about what `sameEnglishMeaning` has always done. But the same review found
+ * that this branch's broadened English equivalences had quietly pushed that
+ * number to 128 (+22), and nothing here noticed, because nothing here looked
+ * at English at all. That is the gap this describe block closes.
+ *
+ * So each class is anchored to a *measured, named* baseline — the count
+ * accepted on the commit before this branch started (`d4c4b69`, `main` at
+ * the time), reproduced by running the identical mutation through that
+ * commit's own `checkAnswer`. The assertion is a ceiling on that baseline,
+ * not a floor: acceptance may fall (a genuine tightening, like the one this
+ * branch just made to `EN_STOPWORDS`/`EN_WORD_CLASSES`) but must never rise
+ * above it without the rise being a deliberate, reviewed decision to accept
+ * more — never a side effect nobody noticed.
+ */
+const PRE_BRANCH_LAST_WORD_SWAPPED = 106; // of 1663 — pre-existing `sameEnglishMeaning` tolerance, not a target
+const PRE_BRANCH_NEGATION_REMOVED = 0; // of 94 — the polarity guard has always caught this one
+const PRE_BRANCH_NEGATION_ADDED = 0; // of ~430 — same guard, the other direction
+
+const EN_MUTATIONS: { name: string; baseline: number; apply: (en: string) => string | null }[] = [
+  {
+    name: "the sentence's own last word swapped for an unrelated one",
+    baseline: PRE_BRANCH_LAST_WORD_SWAPPED,
+    apply: (t) => {
+      const words = t.split(' ');
+      if (words.length < 4) return null;
+      return [...words.slice(0, -1), 'zebra.'].join(' ');
+    },
+  },
+  {
+    name: 'negation removed',
+    baseline: PRE_BRANCH_NEGATION_REMOVED,
+    apply: (t) => {
+      if (/\bnot\b/.test(t)) return t.replace(/\bnot\s+/, '');
+      if (/\bnever\b/.test(t)) return t.replace(/\bnever\s+/, '');
+      return null;
+    },
+  },
+  {
+    name: 'negation added',
+    baseline: PRE_BRANCH_NEGATION_ADDED,
+    apply: (t) => {
+      // Skips every sentence that already carries a negation (the mutation
+      // above covers those) and, deliberately, every contraction too rather
+      // than trying to insert around one. `can't` has a genuine `\b` word
+      // boundary right after "can" — the apostrophe is a non-word character
+      // to a regex engine, curly or straight — so a plain `\b`-bounded match
+      // on the auxiliary list below finds "can" *inside* "can't" and inserts
+      // "I can not't see it": not a negation, not a sentence, and a false
+      // reading of what the mutation was supposed to test either way it
+      // graded. Requiring the match to be followed by whitespace rather than
+      // just a `\b` transition excludes it and every other contraction in
+      // the corpus (`isn't`, `don't`, `won't`, ...) without special-casing
+      // any of them by name.
+      if (/\b(not|never|no|nothing|nobody)\b/i.test(t)) return null;
+      const m = t.replace(/\b(is|are|am|was|were|do|does|did|can|will|would)(?=\s)/, '$1 not');
+      return m === t ? null : m;
+    },
+  },
+];
+
+describe('English permissiveness has a ceiling, not a floor', () => {
+  for (const mutation of EN_MUTATIONS) {
+    it(`never accepts more than the pre-branch baseline: ${mutation.name}`, () => {
+      const accepted: string[] = [];
+      let tried = 0;
+
+      for (const sentence of sentences) {
+        const mutated = mutation.apply(sentence.en);
+        if (mutated === null || mutated === sentence.en) continue;
+        tried += 1;
+        const result = checkAnswer(mutated, [sentence.en, ...(sentence.altEn ?? [])], en);
+        if (result.verdict !== 'incorrect') {
+          accepted.push(`${sentence.id} [${result.error}] "${mutated}" for "${sentence.en}"`);
+        }
+      }
+
+      // A mutation that stops firing tests nothing — fail loudly rather than
+      // reporting a vacuous pass, the same discipline as the Spanish gate
+      // above.
+      expect(tried).toBeGreaterThan(5);
+      expect(accepted.length).toBeLessThanOrEqual(mutation.baseline);
+    });
+  }
+});
