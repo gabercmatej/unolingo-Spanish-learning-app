@@ -1,6 +1,6 @@
 # Grading like a tutor, not a string comparator
 
-**Status:** approved design, pending implementation
+**Status:** implemented
 **Scope:** P1 of four. See "Where this sits" at the end.
 
 ## The problem, measured

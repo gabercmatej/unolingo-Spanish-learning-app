@@ -394,6 +394,14 @@ is exactly what these tests exist to catch.
     locks each case with the real example that exposed it. Extending the guards means adding
     a case there first: the failure mode is a number quietly being too high, which nothing
     else notices.
+  - **JavaScript's `\b` treats an accented character as non-word.** `grading-corpus.test.ts`'s
+    ser/estar mutation barely matched its own `está` — `\b` needs a word/non-word transition on
+    both sides, and the character right after `á` in ordinary text is a space or full stop,
+    itself non-word, so no boundary ever fired there. Where it did fire, on the accented tail of
+    `están`/`estáis`, it matched only the shared prefix and left the rest of the word behind
+    (`"Ellos están felices."` → `"Ellos esn felices."`). `content/verb-corpus.ts` already
+    tokenises rather than matching with `\b`, which is why it never hit this; the test's fix was
+    the same move — a Spanish-aware character class in place of `\b`.
 - **A declared tense with no paradigm is invisible to a coverage percentage.** `TenseId`
   declares eight tenses. For a long time `presentSubjunctive` and `imperative` had no
   paradigm on any verb, so they were absent from the numerator *and* the denominator, and
@@ -453,6 +461,13 @@ is exactly what these tests exist to catch.
   decay curve. That curve — not a fixed interval ladder — ranks Smart Review.
 - **One grading path.** Everything answerable goes through `checkExercise()`. Do not grade
   inside a component.
+- **One classifier, one policy table.** `checkAnswer` decides an `AnswerError` and nothing
+  else; `ERROR_POLICY` in `learning/grading.ts` derives both the learner-facing `Verdict` and
+  the SRS-facing `Grade` from it — never set a grade by hand, or the banner and the scheduler
+  come to disagree. `correctWithFeedback` is successful retrieval in both its forms: `accent`,
+  `punctuation`, `paraphrase` and `preferred` grade `correct`; `accentContrast`, `spelling` and
+  `partial` grade `almost`. No `STATE_VERSION` bump: `Grade` is not persisted, and
+  `MistakeRecord.error` is optional.
 - **One session player.** `src/app/session.tsx` runs every `SessionKind`. Add a kind in
   `session.ts`, not a new screen.
 - **Answer checking is asymmetric on purpose.** English answers are a *comprehension* check
@@ -461,6 +476,14 @@ is exactly what these tests exist to catch.
   - **Negation is never the word that slides.** `sameEnglishMeaning` tolerates one unmatched
     content word, and negation is exactly one content word: "I don't like coffee" was accepted
     as "I like coffee". Polarity counts must match before a paraphrase counts.
+  - **A lossy normaliser must never feed an exact guard.** `contentWords` strips a trailing
+    `-s` from words over four characters, which is right for comparing content words but wrong
+    for the polarity set: it silently folded `jamas` to `jama` and `unless` to `unles`, dropping
+    both out of it. `meaningCoverage` scored "jamas voy" as equivalent to "voy" — an opposite
+    accepted — and `sameEnglishMeaning` let "I will call you unless" pass as "I will call you".
+    The same footgun fired at two different call sites before it was closed structurally:
+    `polarity(words)` is no longer exported, and `polarityOf(text)` — which tokenises for itself
+    rather than trusting a caller's already-stripped words — is the only public entry.
   - **yo shares -a/-e endings with él only in the imperfect and conditional.** Treating every
     -a ending as compatible with yo let "yo habla español" through as a near miss.
   - **A typo is a slipped key; a grammar error is a different word — and position separates
@@ -475,10 +498,18 @@ is exactly what these tests exist to catch.
     the word, which is why that clause keeps "pero" for "perro" a slip and makes "habla" for
     "hablo" an error. Tests come in pairs — the error that must fail beside the slip that must
     pass — because either half alone can be satisfied by moving a threshold.
-  - **Known gap: accent-only minimal pairs.** `hablo`/`habló` and `esta`/`está` differ only by
-    an accent, and the accent layer waves them through. Narrowing that without also rejecting
-    `cafe` for `café` needs to know which words are verbs, which `learning/` cannot ask
-    `content/`. Left alone deliberately; dogfooding decides whether it matters.
+  - **Accent-only minimal pairs are derived from the corpus, not listed by hand.**
+    `src/content/accent-pairs.ts` groups every Spanish surface word by its deaccented form and
+    keeps the groups with two or more spellings — 65 of them, every one a genuine minimal pair:
+    the diacritical set (`qué`/`que`, `él`/`el`, `sí`/`si`, `cómo`/`como`), demonstrative against
+    verb (`está`/`esta`), present yo against preterite él (`hablo`/`habló`), subjunctive against
+    preterite yo (`hable`/`hablé`). Deriving from **Spanish text only** is load-bearing, not
+    tidy: an earlier pass that read every string literal in `content/` found 107 groups, because
+    it was also reading the English glosses (`opinion`, `decision`) and the ASCII id slugs
+    (`espanol`, `anos`, `manana`) — a set that would have made `años`, `español` and `mañana`
+    accent-critical, punishing the learner for the one thing a phone keyboard genuinely makes
+    hard. The same keystroke means something different depending on the task: orthography in a
+    translation, a form error in a conjugation drill.
 - **No hearts, no energy, no daily limits.** A wrong answer shortens a review interval and
   writes a mistake record. It never blocks learning. Streaks are recomputed, never punished.
 - **Unolingo rank ≠ CEFR level.** `learning/ranks.ts` (Principiante → Leyenda) measures
@@ -791,6 +822,8 @@ those tests cross-check content against logic.
 | `session.test.ts` | session assembly and interleaving, checkpoints, the B2 production shift, `skillBalance`, the modality floor, the placement staircase, XP |
 | `srs.test.ts` | `retrievability`, review intervals, mastery bands, due dates |
 | `answer-check.test.ts` | normalisation, accents, the typo-versus-grammar rule, `pronounAgrees`, English comprehension leniency and its polarity guard |
+| `grading.test.ts` | the policy table's totality, and what each exercise kind is actually testing |
+| `grading-corpus.test.ts` | that the corpus accepts its own authored answers, and refuses eight classes of mechanical mutation of them |
 | `cefr.test.ts` | `estimateProficiency`'s skill gate, and the checkpoint's per-skill floor |
 | `ranks.test.ts` | the rank ladder tiles every level with no gaps |
 | `backup.test.ts` | what a backup is, what a restore refuses, when a snapshot is due, and that a reinstall restores the memory model and not merely the totals |
