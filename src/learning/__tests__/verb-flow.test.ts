@@ -8,6 +8,7 @@ import {
 import { paradigmUsage } from '@/content/verb-corpus';
 import type { TenseId } from '@/content/types';
 import { checkExercise } from '@/learning/check';
+import { generateForConcept, mulberry32 } from '@/learning/generator';
 import { hasMetVerbTense, metVerbTenses } from '@/learning/mastery';
 import { buildLessonSession } from '@/learning/session';
 import { createConceptState, mastery, review } from '@/learning/srs';
@@ -139,6 +140,52 @@ describe('verb conjugation pathway', () => {
     for (const concept of reflexive) {
       expect(paradigmUsage(concept.id)?.sentenceIds.length ?? 0).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * `buildVerbForm` is called directly by `generateForConcept` for a `verbform`
+ * concept, bypassing `attemptKind` — the only other place that stamps
+ * `targetId`, and gated on `isVocabConcept` besides, which a verb-form concept
+ * never satisfies. A hand-built fixture with `targetId` set by hand cannot see
+ * that gap: it passes whether or not the generator itself ever sets the field.
+ * So this goes through the real generator, the way a session actually would.
+ */
+describe('strict grading on the exact paradigm form', () => {
+  it('marks a generated verb-form exercise as its own target, and fails a confusable accent', () => {
+    const conceptId = verbFormConceptId('hablar', 'preterite');
+    const state = { ...createConceptState(conceptId), introduced: true, timesSeen: 2 };
+    const ctx = {
+      settings: DEFAULT_SETTINGS_FOR_TEST,
+      now: Date.now(),
+      rng: mulberry32(0),
+      recentKinds: [],
+    };
+
+    const exercise = generateForConcept(conceptId, state, ctx);
+    expect(exercise).not.toBeNull();
+    // Real generator, real path: this is the assertion the reported defect
+    // failed. Without the fix `targetId` is `undefined` here.
+    expect(exercise!.targetId).toBe(conceptId);
+    expect(exercise!.targetId?.startsWith('f.')).toBe(true);
+
+    // Pinned so a content or generator change that silently swaps the branch
+    // fails loudly here rather than exercising a different code path.
+    expect(exercise!.form).toBe('typed');
+    const typed = exercise as Extract<typeof exercise, { form: 'typed' }>;
+    expect(typed!.accepted[0]).toBe('hablé');
+
+    /**
+     * `hable` (present subjunctive, yo/él) and `hablé` (preterite, yo) are a
+     * real accent-only minimal pair — `content/accent-pairs.ts` derives this
+     * from the conjugation table itself, the same way it derives `hablo`
+     * (present) against `habló` (preterite). An ordinary translation forgives
+     * a missing accent; a conjugation drill exists to test exactly that
+     * accent, and must not.
+     */
+    const result = checkExercise(exercise!, 'hable', DEFAULT_SETTINGS_FOR_TEST);
+    expect(result.verdict).toBe('incorrect');
+    expect(result.error).toBe('form');
   });
 });
 

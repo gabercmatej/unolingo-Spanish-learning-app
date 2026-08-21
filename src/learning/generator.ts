@@ -976,6 +976,14 @@ function buildVerbForm(
           language: 'es',
           placeholder: 'Una palabra',
           note: sentence.note,
+          // This builder is called directly by `generateForConcept`, bypassing
+          // `attemptKind` — the only other place that stamps `targetId`, and
+          // gated on `isVocabConcept` besides, which a verb-form concept never
+          // satisfies. Without it here, `profileFor` can never see that this
+          // exercise exists to test one exact conjugated form, and an accent
+          // that distinguishes `hablo` from `habló` gets forgiven exactly
+          // where the tutor is supposed to hold the line.
+          targetId: conceptId,
         };
       }
     }
@@ -1013,6 +1021,11 @@ function buildVerbForm(
     options,
     answerIndex: options.findIndex((option) => option.text === answer),
     note: verb.irregularityNote,
+    // Same reasoning as the sentence-context branch above: this is the other
+    // return path out of `buildVerbForm`, and a caller cannot forget to stamp
+    // `targetId` if the builder does it at every exit instead of leaving it
+    // to whoever calls in.
+    targetId: conceptId,
   };
 }
 
