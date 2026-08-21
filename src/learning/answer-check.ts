@@ -304,6 +304,91 @@ function isTypo(given: string, candidate: string): boolean {
 }
 
 /**
+ * Rewrites every occurrence of a phrase-group member anywhere in `text` to
+ * that group's representative — not only when the member *is* the whole
+ * text.
+ *
+ * Measured against the corpus: an `EN_PHRASE_GROUPS` member is the entire
+ * normalised English string on 3 of 1680 sentences, and a substring of one on
+ * 87 — "Nice to meet you, I'm Marta.", "Hi, how are you?", "Okay, see you
+ * later." The whole-string lookup this replaced (`phrase.get(raw)`) could
+ * only ever fire on the first group, so it was effectively dead for
+ * sentence-level `translateToEn`, the dominant exercise type. Canonicalising
+ * both sides before comparing is what makes the mechanism reach the 87.
+ *
+ * Matches whole tokens, never a substring inside one. `normalize` has
+ * already split `text` on whitespace with punctuation stripped, so comparing
+ * token-for-token (rather than a regex `\b`) needs no boundary logic at
+ * all — the ambiguity a `\b` has around accented characters, which this repo
+ * has already been bitten by in `verb-corpus.ts`, cannot arise here because
+ * there is nothing for it to be ambiguous about.
+ *
+ * Longest member wins. Groups nest ("see you" / "see you later" / "see you
+ * soon"), so every position is tried against every member, longest
+ * token-count first, before falling through to a shorter one — matching
+ * "see you" first would consume the words "see you later" needs. A match
+ * advances past its own tokens rather than being rescanned, so a
+ * representative that happened to itself contain a shorter member could not
+ * loop or double-substitute.
+ *
+ * A representative *longer* than the member it replaces is only substituted
+ * when the member is the entire text, never mid-sentence. This was measured,
+ * not assumed: allowing it everywhere let the corpus mutation gate through —
+ * "Okay, see you later." with its own last word swapped to "Okay, see you
+ * zebra." matched the two-token member "see you" inside the four-token
+ * mutated sentence, and expanding it to the three-token representative "see
+ * you later" spliced a genuine "later" in front of the untouched "zebra",
+ * which then read as the sentence's *only* unmatched word — exactly the
+ * single-word tolerance `sameEnglishMeaning` is supposed to extend to a
+ * harmless rewording, not a meaning-changing mutation. A word this function
+ * invents has to land where nothing of the original text survives beside it,
+ * or it can paper over a real difference the same way. Restricting it to a
+ * whole-text match reproduces exactly what the old `phrase.get(raw)` lookup
+ * already did — it only ever matched a member covering the entire answer —
+ * so the whole-string case loses nothing; only the new substring case is
+ * narrowed, and only in the one direction that was shown unsafe.
+ */
+export function canonicalizePhrases(text: string, equivalences?: Equivalences): string {
+  const phraseMap = equivalences?.phrase;
+  if (!phraseMap || text.length === 0) return text;
+
+  const members = [...phraseMap.entries()]
+    .map(([member, representative]) => ({
+      tokens: member.split(' '),
+      representative,
+      representativeTokens: representative.split(' ').length,
+    }))
+    .sort((a, b) => b.tokens.length - a.tokens.length || b.tokens.join(' ').length - a.tokens.join(' ').length);
+
+  const words = text.split(' ');
+  const out: string[] = [];
+  let i = 0;
+  scan: while (i < words.length) {
+    for (const { tokens, representative, representativeTokens } of members) {
+      if (i + tokens.length > words.length) continue;
+      let matched = true;
+      for (let j = 0; j < tokens.length; j += 1) {
+        if (words[i + j] !== tokens[j]) {
+          matched = false;
+          break;
+        }
+      }
+      if (!matched) continue;
+
+      const wholeText = i === 0 && i + tokens.length === words.length;
+      if (representativeTokens > tokens.length && !wholeText) continue;
+
+      out.push(representative);
+      i += tokens.length;
+      continue scan;
+    }
+    out.push(words[i]);
+    i += 1;
+  }
+  return out.join(' ');
+}
+
+/**
  * Do two English answers say the same thing? Compares content words as a
  * multiset, so word order and filler differences do not matter but a genuinely
  * different meaning still fails.
@@ -547,15 +632,19 @@ export function checkAnswer(
   const mode = profile.paraphrase ?? (language === 'en' ? 'english' : 'spanish');
 
   if (mode === 'english') {
+    // Canonicalised once: it does not depend on the candidate, and a set
+    // phrase embedded anywhere in the answer — not only when it is the
+    // whole answer — is rewritten to its group's representative before any
+    // comparison runs. See `canonicalizePhrases` for why this is the fix.
+    const canonicalRaw = canonicalizePhrases(raw, profile.equivalences);
     for (const candidate of candidates) {
+      const canonicalCandidate = canonicalizePhrases(candidate.variant, profile.equivalences);
       // Whole-phrase equivalence first: "a pleasure to meet you" relates to
       // "nice to meet you" as a unit and by no word-level mapping at all.
-      const givenPhrase = profile.equivalences?.phrase.get(raw);
-      const candidatePhrase = profile.equivalences?.phrase.get(candidate.variant);
-      if (givenPhrase !== undefined && givenPhrase === candidatePhrase) {
+      if (canonicalRaw === canonicalCandidate) {
         return outcome('paraphrase', candidate.display);
       }
-      if (sameEnglishMeaning(raw, candidate.variant, profile.equivalences)) {
+      if (sameEnglishMeaning(canonicalRaw, canonicalCandidate, profile.equivalences)) {
         return outcome('paraphrase', candidate.display);
       }
     }

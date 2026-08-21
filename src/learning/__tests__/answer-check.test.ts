@@ -455,6 +455,33 @@ describe('paraphrase', () => {
     expect(result.error).toBe('paraphrase');
   });
 
+  /**
+   * The phrase lookup used to compare `raw` against the map as a whole
+   * string, which meant it fired only when the phrase *was* the entire
+   * answer. Measured against the corpus: an `EN_PHRASE_GROUPS` member is the
+   * whole of an English sentence in 3 of 1680 cases and a substring of one
+   * in 87 — "Nice to meet you, I'm Marta." among them — so the mechanism was
+   * effectively dead for ordinary sentence-level `translateToEn`, the
+   * dominant exercise type. `canonicalizePhrases` rewrites a set phrase
+   * wherever it sits in the sentence before the comparison runs, which is
+   * what makes this reachable.
+   */
+  it('accepts a set phrase reworded inside a longer sentence, not only on its own', () => {
+    const result = checkAnswer("pleased to meet you, I am Marta", ["Nice to meet you, I'm Marta."], en);
+    expect(result.verdict).not.toBe('incorrect');
+  });
+
+  it('still tells two different people apart when the greeting around them matches', () => {
+    // A different name is a different meaning, however the phrase around it
+    // is reworded — canonicalising the greeting must not paper over that.
+    const result = checkAnswer(
+      'pleased to meet you, I am Pedro',
+      ["Nice to meet you, I'm Marta."],
+      en,
+    );
+    expect(result.verdict).toBe('incorrect');
+  });
+
   it('still refuses an English answer that means something else', () => {
     expect(checkAnswer('Very bad, and you?', ['Very well, and you?'], en).verdict).toBe('incorrect');
     expect(checkAnswer('I have a cat', ['I have a dog'], en).verdict).toBe('incorrect');
