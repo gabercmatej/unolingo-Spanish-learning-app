@@ -449,9 +449,21 @@ function UnitMeta({ unit }: { unit: UnitProgress }) {
   if (unit.state === 'locked') {
     return <Icon name="lock-closed" size={13} color="textTertiary" />;
   }
+  /**
+   * Sessions, not lessons — the same figure the unit screen shows.
+   *
+   * These two screens answer the same question, "how far through this unit am
+   * I", and they were reading it from two different places: this row counted
+   * required *lessons* while the unit screen counted the guided arc. So a unit
+   * read 0/2 here and 0/5 one tap away, and neither number was wrong on its own
+   * terms, which is the worst version of this. `progress.arc` is what completes
+   * a unit's teaching — its required lessons plus the phases that follow them,
+   * with optional enrichment deliberately left out — so it is the one both
+   * screens ask.
+   */
   return (
     <Text variant="caption" color="textSecondary" numeric>
-      {unit.lessonsDone}/{unit.lessonCount}
+      {unit.arc.stepsDone}/{unit.arc.stepCount}
     </Text>
   );
 }
@@ -512,7 +524,7 @@ function unitStateLabel(unit: UnitProgress): string {
     case 'complete':
       return `complete, ${Math.round(unit.mastery * 100)} percent mastery`;
     case 'current':
-      return `in progress, ${unit.lessonsDone} of ${unit.lessonCount} lessons`;
+      return `in progress, ${unit.arc.stepsDone} of ${unit.arc.stepCount} sessions`;
     case 'available':
       return 'ready to start';
     case 'locked':

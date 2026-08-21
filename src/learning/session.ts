@@ -125,6 +125,29 @@ export function completedLessonId(input: {
   return LESSON_KINDS.includes(input.kind) ? input.source : undefined;
 }
 
+/**
+ * Whether an id may be written into `completedLessons`.
+ *
+ * The store used to answer this with `getLesson(id)` alone, which is right for
+ * the lessons in the curriculum and wrong for the other thing that lives in
+ * that map. A unit's guided arc records its phases under `arc:<unitId>:<phase>`
+ * — that is exactly what lets the arc persist progress with no `STATE_VERSION`
+ * bump — and no such id resolves to a lesson. So every guided session a learner
+ * played was discarded on the way in: a phase could only ever be *satisfied* by
+ * `goalMet`, never completed by doing it, and a unit's session counter could
+ * not move past its lesson count however many phases were played.
+ *
+ * The guard itself is worth keeping — it is what stops a mistyped id becoming a
+ * permanent orphan in a learner's record. It just has to know about both kinds
+ * of key, which is why it lives here beside the function that produces them
+ * rather than in the store.
+ */
+export function isCompletionId(id: string): boolean {
+  if (getLesson(id)) return true;
+  const unitId = unitIdForArcStep(id);
+  return unitId !== null && !!getUnit(unitId) && arcPhaseOf(id) !== null;
+}
+
 export interface SessionPlan {
   id: string;
   kind: SessionKind;

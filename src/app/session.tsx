@@ -260,7 +260,16 @@ export default function SessionScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exercise?.id]);
 
-  const finish = useCallback(() => {
+  /**
+   * Bank the session.
+   *
+   * `reachedEnd` is a parameter rather than a constant because this is called
+   * from both routes out of a session, and it used to answer for both of them
+   * at once. The close button banks the work — leaving must not cost the
+   * learner their XP — but it has not walked the lesson, and the old call said
+   * it had. One correct answer and a tap on the X was a completed lesson.
+   */
+  const finish = useCallback((reachedEnd: boolean) => {
     if (committed.current) return;
     committed.current = true;
     const seconds = Math.round((Date.now() - startedAt) / 1000);
@@ -286,7 +295,7 @@ export default function SessionScreen() {
       total: answered,
       seconds,
       newConcepts: newConcepts.current.size,
-      lessonId: completedLessonId({ kind, source, reachedEnd: true }),
+      lessonId: completedLessonId({ kind, source, reachedEnd }),
     });
   }, [answered, completeSession, correct, kind, learner, plan?.title, source, startedAt, xpEarned]);
 
@@ -297,7 +306,7 @@ export default function SessionScreen() {
     setAnswer(null);
     setLastXp(0);
 
-    if (index + 1 >= queue.length) finish();
+    if (index + 1 >= queue.length) finish(true);
     else setIndex((value) => value + 1);
   }, [finish, index, queue.length]);
 
@@ -382,7 +391,7 @@ export default function SessionScreen() {
       destructive: true,
     });
     if (leave) {
-      finish();
+      finish(false);
       goBack();
     }
   }, [answered, confirm, finish]);

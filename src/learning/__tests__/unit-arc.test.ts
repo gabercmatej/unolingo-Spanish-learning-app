@@ -2,7 +2,7 @@ import { curriculum, getUnitConcepts, getUnitTaughtConcepts } from '@/content';
 import type { Unit } from '@/content/types';
 import { makeLearner } from '@/learning/__tests__/helpers';
 import { unitProgress } from '@/learning/mastery';
-import { buildArcSession } from '@/learning/session';
+import { buildArcSession, completedLessonId, isCompletionId } from '@/learning/session';
 import { createConceptState } from '@/learning/srs';
 import { arcStepId, phasesFor, unitArc } from '@/learning/unit-arc';
 import { KIND_DIFFICULTY, type LearnerState } from '@/learning/types';
@@ -296,6 +296,38 @@ describe('the arc records itself without a schema change', () => {
     expect(unitArc(oneLesson, learner, NOW).steps.find((s) => s.phase === 'recall')!.done).toBe(
       true,
     );
+  });
+
+  /**
+   * The gap the two tests around this one left open.
+   *
+   * They both write the arc's key straight into `completedLessons`, which is
+   * the state *after* the store has accepted it — and the store did not. It
+   * gated the write on `getLesson(id)`, which is exactly the thing an arc step
+   * id is defined not to be, so every guided session a learner actually played
+   * was dropped on the way in. The phases could only ever be *satisfied* by
+   * `goalMet`; playing one did nothing, and the unit's session counter could
+   * not move past its lesson count.
+   *
+   * So this walks the id from the session that produced it to the guard that
+   * has to let it through. Each half was tested and the join was not, which is
+   * the failure this codebase keeps meeting.
+   */
+  it('accepts the id a played arc session hands the store', () => {
+    const stepId = arcStepId(oneLesson.id, 'recall');
+    const written = completedLessonId({ kind: 'unitArc', source: stepId, reachedEnd: true });
+
+    expect(written).toBe(stepId);
+    expect(isCompletionId(written!)).toBe(true);
+  });
+
+  it('still refuses an id that names nothing', () => {
+    // The guard earns its place: without it a typo becomes a permanent orphan
+    // in the learner's record.
+    expect(isCompletionId('l.does-not-exist')).toBe(false);
+    expect(isCompletionId(`arc:unit.does-not-exist:recall`)).toBe(false);
+    expect(isCompletionId(`arc:${oneLesson.id}:sideways`)).toBe(false);
+    expect(isCompletionId(oneLesson.id)).toBe(false);
   });
 
   it('does not let an arc step count as a lesson on the path', () => {

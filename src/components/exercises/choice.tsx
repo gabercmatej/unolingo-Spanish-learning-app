@@ -22,7 +22,6 @@ export function ChoiceView({
   onAnswer,
   result,
   settings,
-  onSubmit,
 }: ExerciseViewProps<ChoiceExercise>) {
   const theme = useTheme();
   const selected = answer === null ? -1 : Number.parseInt(answer, 10);
@@ -80,10 +79,18 @@ export function ChoiceView({
             locked={locked}
             isSelected={selected === index}
             isAnswer={index === exercise.answerIndex}
-            onPress={() => {
-              onAnswer(String(index));
-              onSubmit?.();
-            }}
+            /**
+             * Selecting is not answering — `Check` grades.
+             *
+             * This used to call `onSubmit` here too, which was wrong twice
+             * over. It made a tap an irrevocable commit, and it committed the
+             * wrong thing: `submit` closes over the answer from the render it
+             * was built in, so the first tap graded `null` and did nothing
+             * while the second graded whatever the first had picked. Changing
+             * your mind between two options marked you wrong on the one you
+             * had just rejected.
+             */
+            onPress={() => onAnswer(String(index))}
           />
         ))}
       </View>

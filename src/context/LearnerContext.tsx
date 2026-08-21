@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { AppState, useColorScheme as useSystemColorScheme } from 'react-native';
 
-import { getLesson, validateContent } from '@/content';
+import { validateContent } from '@/content';
 import { ColorSchemeContext } from '@/hooks/use-theme';
 import { DEFAULT_SETTINGS, blankLearnerState } from '@/learning/defaults';
 import { migrateState } from '@/learning/migrate';
@@ -18,6 +18,7 @@ import { STATE_VERSION } from '@/learning/schema';
 import type { Exercise } from '@/learning/exercise';
 import { applyPlacement, type PlacementAnswer, type PlacementScore } from '@/learning/placement';
 import { applyAnswerToMistakes } from '@/learning/mistakes';
+import { isCompletionId } from '@/learning/session';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
 import {
   PRESENTATION_KINDS,
@@ -406,7 +407,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       const streak = nextStreak(prev.lastStudyDate, prev.streak, today);
 
       const completedLessons = { ...prev.completedLessons };
-      if (input.lessonId && getLesson(input.lessonId)) {
+      if (input.lessonId && isCompletionId(input.lessonId)) {
         const previousEntry = completedLessons[input.lessonId];
         const accuracy = input.total > 0 ? input.correct / input.total : 1;
         completedLessons[input.lessonId] = {
