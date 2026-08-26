@@ -1,3 +1,4 @@
+import { coreVerbSeeds } from '@/content/verbs-core';
 import { buildVerb, type VerbSeed } from '@/content/verb-utils';
 import type { Verb } from '@/content/types';
 
@@ -680,4 +681,9 @@ const SEEDS: VerbSeed[] = [
   },
 ];
 
-export const verbs: Verb[] = SEEDS.map(buildVerb);
+/**
+ * The high-frequency verbs the coverage audit found missing live in their own
+ * file, appended here. Split for readability rather than for any structural
+ * reason: `buildVerb` neither knows nor cares which array a seed came from.
+ */
+export const verbs: Verb[] = [...SEEDS, ...coreVerbSeeds].map(buildVerb);

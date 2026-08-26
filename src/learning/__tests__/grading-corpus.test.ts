@@ -322,9 +322,22 @@ describe('permissiveness has a floor', () => {
  * above it without the rise being a deliberate, reviewed decision to accept
  * more — never a side effect nobody noticed.
  */
-const PRE_BRANCH_LAST_WORD_SWAPPED = 106; // of 1663 — pre-existing `sameEnglishMeaning` tolerance, not a target
-const PRE_BRANCH_NEGATION_REMOVED = 0; // of 94 — the polarity guard has always caught this one
-const PRE_BRANCH_NEGATION_ADDED = 0; // of ~430 — same guard, the other direction
+/**
+ * Ceilings, as a **share of the sentences each mutation actually fires on**.
+ *
+ * These were absolute counts — 106 accepted of 1663 tried — which measured the
+ * grader only as long as the corpus stayed the same size. It did not: the
+ * curriculum expansion took the corpus past 2000 sentences, and the count rose
+ * to 126 while the *rate* fell from 6.37% to 5.73%. An absolute ceiling would
+ * have reported that improvement as a regression, and the obvious repair —
+ * raising the number to 126 — would have quietly ratcheted the ceiling upward
+ * every time content was added, which is the opposite of what a ceiling is for.
+ *
+ * The numbers are the pre-branch rates, unchanged. Only the units moved.
+ */
+const PRE_BRANCH_LAST_WORD_SWAPPED = 106 / 1663; // pre-existing `sameEnglishMeaning` tolerance, not a target
+const PRE_BRANCH_NEGATION_REMOVED = 0; // the polarity guard has always caught this one
+const PRE_BRANCH_NEGATION_ADDED = 0; // same guard, the other direction
 
 const EN_MUTATIONS: { name: string; baseline: number; apply: (en: string) => string | null }[] = [
   {
@@ -388,7 +401,7 @@ describe('English permissiveness has a ceiling, not a floor', () => {
       // reporting a vacuous pass, the same discipline as the Spanish gate
       // above.
       expect(tried).toBeGreaterThan(5);
-      expect(accepted.length).toBeLessThanOrEqual(mutation.baseline);
+      expect(accepted.length / tried).toBeLessThanOrEqual(mutation.baseline);
     });
   }
 });

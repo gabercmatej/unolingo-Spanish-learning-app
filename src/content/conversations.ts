@@ -1,3 +1,4 @@
+import { everydayConversations } from '@/content/conversations-everyday';
 import type { ConversationScene } from '@/content/types';
 
 /**
@@ -2350,4 +2351,5 @@ export const conversations: ConversationScene[] = [
       },
     ],
   },
+  ...everydayConversations,
 ];

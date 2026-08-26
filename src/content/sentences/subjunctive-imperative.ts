@@ -83,7 +83,14 @@ export const subjunctiveImperativeSentences: Sentence[] = [
     id: 's.j7',
     es: '¡Sal de ahí ahora mismo!',
     en: 'Get out of there right now!',
-    concepts: ['g.commands'],
+    /**
+     * `v.salir` is load-bearing, not decoration. `sal` is also the noun for
+     * salt, so the corpus treats the form as ambiguous and will only read it as
+     * salir's imperative when the sentence carries the verb's own vocabulary
+     * concept. Tagged with `g.commands` alone, this line stopped counting the
+     * moment the course learned the word for salt.
+     */
+    concepts: ['g.commands', 'v.salir'],
     level: 'A2',
     topics: ['home'],
     blanks: ['Sal'],

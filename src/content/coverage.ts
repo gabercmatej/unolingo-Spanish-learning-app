@@ -551,7 +551,7 @@ export const COVERAGE: CoverageDomain[] = [
     slots: [
       slot('in my opinion', 'en mi opinión', 'desde mi punto de vista'),
       slot('I think that', 'creo que', 'me parece que'),
-      slot("I don't agree", 'no estoy de acuerdo'),
+      slot("I don't agree", 'no estoy de acuerdo', 'no estoy de acuerdo con…'),
       slot('to be right', 'tener razón'),
       slot('to recommend', 'te recomiendo que…', 'recomendar'),
       slot('to complain', 'quejarse'),
@@ -603,7 +603,7 @@ export const COVERAGE: CoverageDomain[] = [
       slot('drawback', 'el inconveniente', 'la desventaja'),
       slot('advantage', 'la ventaja', 'la ventaja es'),
       slot('to assume', 'asumir', 'dar por hecho'),
-      slot('to bear in mind', 'hay que tener en cuenta'),
+      slot('to bear in mind', 'hay que tener en cuenta', 'hay que tener en cuenta que…', 'tener en cuenta'),
     ],
   },
 ];

@@ -254,11 +254,24 @@ describe('unknown words, not merely unknown tags', () => {
     // Structural words are learned by exposure and arrive in lesson one.
     expect(lexis.words).not.toContain('el');
     expect(lexis.words).not.toContain('en');
-    // "vecinos" has no concept anywhere in this course, so refusing every
-    // sentence containing it would measure the vocabulary files, not the
-    // learner. It is reported to the audit instead.
-    expect(lexis.untracked).toContain('vecinos');
-    expect(unknownWords(found, new Set())).not.toContain('vecinos');
+
+    /**
+     * The untracked half needs its own sentence now.
+     *
+     * This assertion used to run on `vecinos` in the offending sentence above,
+     * and it stopped holding for the best possible reason: the course teaches
+     * `v.vecino`, `v.bar` and `v.abajo`, so that line has no untracked word
+     * left in it. The rule under test is unchanged — a content word no concept
+     * covers is reported to the audit and never counted as unknown, because
+     * refusing every sentence containing one would measure the completeness of
+     * the vocabulary files rather than the learner. Only the example moved, to
+     * `nadie`, which the audit still lists as the most frequent untaught word
+     * in the corpus.
+     */
+    const withUntracked = getSentence('s.k12')!;
+    const untrackedLexis = sentenceLexis(withUntracked);
+    expect(untrackedLexis.untracked).toContain('nadie');
+    expect(unknownWords(withUntracked, new Set())).not.toContain('nadie');
   });
 
   it('reads an inflected form through its headword', () => {

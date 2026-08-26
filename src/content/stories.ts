@@ -1,3 +1,4 @@
+import { everydayStories } from '@/content/stories-everyday';
 import type { Story } from '@/content/types';
 
 /**
@@ -2263,4 +2264,5 @@ export const stories: Story[] = [
       },
     ],
   },
+  ...everydayStories,
 ];
