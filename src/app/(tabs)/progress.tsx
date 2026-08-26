@@ -1,15 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ActivityCalendar, XpChart } from '@/components/progress/charts';
 import { Card } from '@/components/ui/card';
 import { EmptyState, Section, Stat, StatGrid } from '@/components/ui/layout';
+import { Icon } from '@/components/ui/icon';
 import { stagger } from '@/components/ui/motion';
+import { PressScale } from '@/components/ui/press-scale';
 import { ProgressBar, RingProgress } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
-import { allLessons } from '@/content';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { useNow } from '@/hooks/use-now';
@@ -22,6 +23,7 @@ import {
   wordsLearned,
   wordsMastered,
 } from '@/learning/mastery';
+import { requiredLessons, requiredLessonsDone } from '@/learning/progression';
 import { levelInfo } from '@/learning/xp';
 import { formatDuration } from '@/lib/date';
 
@@ -31,6 +33,8 @@ import { formatDuration } from '@/lib/date';
  */
 export default function ProgressScreen() {
   const theme = useTheme();
+  /** Weeks back from the current one. Opens on 0 — this week — by default. */
+  const [weeksAgo, setWeeksAgo] = useState(0);
   const { learner } = useLearner();
   const now = useNow();
 
@@ -41,7 +45,15 @@ export default function ProgressScreen() {
   const stages = useMemo(() => courseProgress(learner, now), [learner, now]);
   const levels = levelInfo(learner.xp);
 
-  const lessonsDone = Object.keys(learner.completedLessons).length;
+  /**
+   * Required lessons only.
+   *
+   * This counted every key in `completedLessons`, which also holds practice
+   * history under `arc:<unit>:<phase>` — so playing optional revision inflated
+   * the learner's "lessons completed" figure, and the denominator it was shown
+   * against never moved. Lessons are progression; practice is not a lesson.
+   */
+  const lessonsDone = requiredLessonsDone(learner);
   const totalAnswers = learner.sessions.reduce((sum, session) => sum + session.total, 0);
   const totalCorrect = learner.sessions.reduce((sum, session) => sum + session.correct, 0);
   const accuracy = totalAnswers > 0 ? totalCorrect / totalAnswers : 0;
@@ -108,7 +120,7 @@ export default function ProgressScreen() {
           icon="checkmark-circle-outline"
           tone={theme.success}
         />
-        <Stat value={`${lessonsDone}/${allLessons.length}`} label="Lessons" icon="school-outline" />
+        <Stat value={`${lessonsDone}/${requiredLessons().length}`} label="Lessons" icon="school-outline" />
         <Stat value={`${learner.longestStreak}`} label="Best streak" icon="flame-outline" tone={theme.tint} />
       </StatGrid>
 
@@ -196,9 +208,54 @@ export default function ProgressScreen() {
         </Card>
       </Section>
 
-      <Section title="XP over time" caption="Weekly totals against your average">
+      {/*
+        XP by day, Monday to Sunday.
+
+        Replaces a chart of rolling seven-day totals, which could say whether
+        the learner was studying more than before but never which days they
+        actually showed up — and consistency inside a week is the thing worth
+        seeing. The week is navigable but opens on the current one.
+      */}
+      <Section
+        title="XP by day"
+        caption={weeksAgo === 0 ? 'This week, Monday to Sunday' : `${weeksAgo} week${weeksAgo === 1 ? '' : 's'} ago`}>
         <Card variant="flat">
-          <XpChart daily={learner.daily} />
+          <XpChart daily={learner.daily} weeksAgo={weeksAgo} />
+          <View style={styles.weekNav}>
+            <PressScale
+              onPress={() => setWeeksAgo((value) => value + 1)}
+              scaleTo={0.92}
+              haptic="tap"
+              accessibilityLabel="Previous week">
+              <View style={[styles.weekButton, { borderColor: theme.border }]}>
+                <Icon name="chevron-back" size={15} color="textSecondary" />
+              </View>
+            </PressScale>
+            <PressScale
+              onPress={() => setWeeksAgo(0)}
+              disabled={weeksAgo === 0}
+              scaleTo={0.96}
+              haptic="tap"
+              accessibilityLabel="Jump to this week">
+              <Text variant="caption" tone={weeksAgo === 0 ? theme.textTertiary : theme.tint}>
+                This week
+              </Text>
+            </PressScale>
+            <PressScale
+              onPress={() => setWeeksAgo((value) => Math.max(0, value - 1))}
+              disabled={weeksAgo === 0}
+              scaleTo={0.92}
+              haptic="tap"
+              accessibilityLabel="Next week">
+              <View
+                style={[
+                  styles.weekButton,
+                  { borderColor: theme.border, opacity: weeksAgo === 0 ? 0.4 : 1 },
+                ]}>
+                <Icon name="chevron-forward" size={15} color="textSecondary" />
+              </View>
+            </PressScale>
+          </View>
         </Card>
       </Section>
 
@@ -247,6 +304,20 @@ function skillTone(skill: string, theme: ReturnType<typeof useTheme>): string {
 }
 
 const styles = StyleSheet.create({
+  weekNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.two,
+  },
+  weekButton: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   flex: { flex: 1, minWidth: 0 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four },
   stageRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, minHeight: 26 },

@@ -21,6 +21,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { Fonts, Radius, Spacing, Type } from '@/constants/theme';
 import { hasReminderPermission, requestReminderPermission } from '@/lib/notifications';
 import { STATE_VERSION, useLearner } from '@/context/LearnerContext';
+import { requiredLessonsDone } from '@/learning/progression';
 import { useTheme } from '@/hooks/use-theme';
 import { achievements, achievementsByGroup, type AchievementTier } from '@/learning/achievements';
 import {
@@ -93,7 +94,15 @@ export default function ProfileScreen() {
   }, []);
   const progress = useMemo(() => rankProgress(learner.xp), [learner.xp]);
   const streak = currentStreak(learner.lastStudyDate, learner.streak);
-  const lessonsDone = Object.keys(learner.completedLessons).length;
+  /**
+   * Required lessons only.
+   *
+   * This counted every key in `completedLessons`, which also holds practice
+   * history under `arc:<unit>:<phase>` — so playing optional revision inflated
+   * the learner's "lessons completed" figure, and the denominator it was shown
+   * against never moved. Lessons are progression; practice is not a lesson.
+   */
+  const lessonsDone = requiredLessonsDone(learner);
   const mastered = useMemo(() => wordsMastered(learner), [learner]);
   const proficiency = useMemo(() => estimateProficiency(learner), [learner]);
   const courseLevel = useMemo(() => curriculumLevel(learner), [learner]);

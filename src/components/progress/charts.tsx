@@ -192,45 +192,76 @@ export function ActivityCalendar({ daily }: CalendarProps) {
 
 interface XpChartProps {
   daily: DailyRecord[];
-  weeks?: number;
+  /** Weeks back from the current one. 0 is this week. */
+  weeksAgo?: number;
 }
 
-export function XpChart({ daily, weeks = 8 }: XpChartProps) {
+/** Monday-first, because the week the learner lives in starts on Monday. */
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/**
+ * XP earned on each day of one week, Monday to Sunday.
+ *
+ * This used to plot rolling seven-day totals — "now", "1w", "2w" — which
+ * answers "am I studying more than I was?" and cannot answer "which days do I
+ * actually show up?". Consistency within a week is the thing worth seeing, and
+ * a bucket boundary that moves with the current date makes it invisible: the
+ * same Tuesday sits in a different bar depending on when you look.
+ *
+ * Days with no XP are drawn rather than dropped. A gap in a week is the most
+ * informative mark on this chart, and a missing bar reads as missing data.
+ *
+ * Reuses `learner.daily`, which already stores `{date, xp, seconds, exercises}`
+ * per local ISO day — no new tracking, and the same source the calendar above
+ * it reads, so the two can never disagree.
+ */
+export function XpChart({ daily, weeksAgo = 0 }: XpChartProps) {
   const theme = useTheme();
 
-  const data = useMemo(() => {
+  const { bars, weekLabel, total, activeDays } = useMemo(() => {
     const lookup = new Map(daily.map((entry) => [entry.date, entry.xp]));
     const today = toISODate();
-    const bars: { label: string; xp: number }[] = [];
 
-    for (let week = weeks - 1; week >= 0; week -= 1) {
-      let xp = 0;
-      for (let day = 0; day < 7; day += 1) {
-        xp += lookup.get(addDays(today, -(week * 7 + day))) ?? 0;
-      }
-      bars.push({ label: week === 0 ? 'now' : `${week}w`, xp });
-    }
-    return bars;
-  }, [daily, weeks]);
+    // Monday of the week being shown. `getDay()` is Sunday-first, so shift it.
+    const todayDate = new Date(today);
+    const isoWeekday = (todayDate.getDay() + 6) % 7;
+    const monday = addDays(today, -isoWeekday - weeksAgo * 7);
 
-  const max = Math.max(1, ...data.map((bar) => bar.xp));
-  const total = data.reduce((sum, bar) => sum + bar.xp, 0);
-  const active = data.filter((bar) => bar.xp > 0).length;
-  const average = active > 0 ? total / active : 0;
-  const averageRatio = max > 0 ? average / max : 0;
+    const rows = WEEKDAYS.map((label, index) => {
+      const date = addDays(monday, index);
+      return {
+        label,
+        date,
+        // A future day is not a zero — it has not happened. Distinguished so
+        // the rest of this week does not read as six days of failure.
+        future: date > today,
+        isToday: date === today,
+        xp: lookup.get(date) ?? 0,
+      };
+    });
+
+    const sunday = addDays(monday, 6);
+    return {
+      bars: rows,
+      weekLabel:
+        weeksAgo === 0
+          ? 'This week'
+          : `${monday.slice(8)}–${sunday.slice(8)} ${MONTHS[Number(sunday.slice(5, 7)) - 1]}`,
+      total: rows.reduce((sum, row) => sum + row.xp, 0),
+      activeDays: rows.filter((row) => row.xp > 0).length,
+    };
+  }, [daily, weeksAgo]);
+
+  const max = Math.max(1, ...bars.map((bar) => bar.xp));
 
   /**
    * The chart's box, and the part of it a bar may actually occupy.
    *
    * Each column stacks its XP value *above* its bar, so a bar drawn to the full
    * box height pushes that label out of the top of the chart — and since
-   * nothing here clips, the peak week's number landed on top of the "Peak N XP"
-   * caption in the header. The taller the best week, the worse it looked, which
-   * is why it read as a bug that came and went.
-   *
+   * nothing here clips, the peak day's number lands on the caption above it.
    * Reserving the row up front is better than clipping it: the number is the
-   * most useful thing in the column, and a chart that hides its own peak value
-   * is worse than one that is a few pixels shorter.
+   * most useful thing in the column.
    */
   const CHART_HEIGHT = 108;
   const PLOT_HEIGHT = CHART_HEIGHT - VALUE_ROW;
@@ -239,45 +270,37 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
     <View style={styles.chartBlock}>
       <View style={styles.chartHead}>
         <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.shrink}>
-          Peak {max} XP
+          {weekLabel} · {total} XP
         </Text>
-        {average > 0 ? (
-          <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.shrink}>
-            Average {Math.round(average)} XP / active week
-          </Text>
-        ) : null}
+        <Text variant="caption" color="textTertiary" numberOfLines={1} style={styles.shrink}>
+          {activeDays} of 7 days
+        </Text>
       </View>
 
       <View style={[styles.chartArea, { height: CHART_HEIGHT }]}>
-        {/* Average reference line — what makes a bar readable as good or bad. */}
-        {/*
-          Measured against `PLOT_HEIGHT`, exactly like the bars. A reference
-          line on a different scale from the thing it references is not a
-          smaller bug than a misdrawn bar — it is a line that lies.
-        */}
-        {average > 0 ? (
-          <View
-            style={[
-              styles.averageLine,
-              { bottom: averageRatio * PLOT_HEIGHT, borderColor: theme.borderStrong },
-            ]}
-          />
-        ) : null}
-
         <View style={styles.bars}>
-          {data.map((bar, index) => (
+          {bars.map((bar, index) => (
             <Bar
-              key={bar.label}
+              key={bar.date}
               label={bar.label}
               xp={bar.xp}
-              height={Math.max(3, (bar.xp / max) * PLOT_HEIGHT)}
+              future={bar.future}
+              /*
+                A zero day still draws its baseline tick. Drawing nothing would
+                make an empty Wednesday indistinguishable from the chart ending
+                there, and "which days did I miss?" is the question this chart
+                exists to answer.
+              */
+              height={bar.xp > 0 ? Math.max(4, (bar.xp / max) * PLOT_HEIGHT) : 2}
               index={index}
               tone={
-                bar.xp === 0
-                  ? theme.backgroundSunken
-                  : index === data.length - 1
-                    ? theme.tint
-                    : mix(theme.tint, theme.backgroundSunken, 0.55)
+                bar.future
+                  ? 'transparent'
+                  : bar.xp === 0
+                    ? theme.border
+                    : bar.isToday
+                      ? theme.tint
+                      : mix(theme.tint, theme.backgroundSunken, 0.55)
               }
             />
           ))}
@@ -290,12 +313,20 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
         nothing out here, because this row's parent has no fixed height.
       */}
       <View style={styles.labelRow}>
-        {data.map((bar, index) => (
-          <View key={bar.label} style={styles.barColumn}>
+        {bars.map((bar) => (
+          <View key={bar.date} style={styles.barColumn}>
             <Text
               variant="caption"
               numberOfLines={1}
-              tone={index === data.length - 1 ? theme.tint : theme.textTertiary}>
+              tone={
+                bar.isToday
+                  ? theme.tint
+                  : bar.future
+                    ? theme.border
+                    : bar.xp > 0
+                      ? theme.textSecondary
+                      : theme.textTertiary
+              }>
               {bar.label}
             </Text>
           </View>
@@ -306,13 +337,13 @@ export function XpChart({ daily, weeks = 8 }: XpChartProps) {
 }
 
 /**
- * One weekly column.
+ * One day's column.
  *
- * Bars grow from the baseline, left to right. That is not decoration on a chart
- * of XP over time: the axis *is* time, so drawing it in the direction time runs
- * makes the shape of the last two months legible in a way a chart that simply
- * exists does not. Eight bars at one stagger step is over in under half a
- * second, which is short enough that it never delays reading the number.
+ * Bars grow from the baseline, Monday to Sunday. That is not decoration: the
+ * axis *is* time, so drawing it in the direction time runs makes the shape of
+ * the week legible in a way a chart that simply exists does not. Seven bars at
+ * one stagger step is over in under half a second, short enough that it never
+ * delays reading the number.
  *
  * The calendar above it is deliberately left static — 119 cells is where a
  * per-element animation stops being a flourish and starts being a frame budget.
@@ -323,12 +354,14 @@ function Bar({
   height,
   index,
   tone,
+  future,
 }: {
   label: string;
   xp: number;
   height: number;
   index: number;
   tone: string;
+  future?: boolean;
 }) {
   const grown = useSharedValue(0);
 
@@ -350,9 +383,15 @@ function Bar({
           minimumFontScale={0.7}>
           {xp}
         </Text>
-      ) : null}
+      ) : (
+        // Holds the column's height so a zero day lines up with the others
+        // instead of floating its bar upward.
+        <View style={styles.barValueSpacer} />
+      )}
       <Animated.View
-        accessibilityLabel={`${label}: ${xp} XP`}
+        accessibilityLabel={
+          future ? `${label}: still to come` : `${label}: ${xp} XP`
+        }
         style={[styles.bar, { backgroundColor: tone }, style]}
       />
     </View>
@@ -441,6 +480,7 @@ const styles = StyleSheet.create({
    * straight back.
    */
   barValue: { fontSize: 9, lineHeight: VALUE_TEXT, height: VALUE_TEXT },
+  barValueSpacer: { height: VALUE_TEXT },
   shrink: { flexShrink: 1 },
   bar: { width: '100%', borderRadius: Radius.xs, maxWidth: 34 },
 });
