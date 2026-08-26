@@ -62,6 +62,8 @@ jest.mock('@/context/LearnerContext', () => ({
       recordAnswer: mockRecordAnswer,
       markIntroduced: jest.fn(),
       completeSession: mockCompleteSession,
+      beginLesson: jest.fn(),
+      abandonLesson: jest.fn(),
     };
   },
 }));

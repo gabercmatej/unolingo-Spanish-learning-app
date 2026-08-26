@@ -29,7 +29,7 @@ import { MaxContentWidth, Motion, Radius, Spacing } from '@/constants/theme';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { WhyPanel } from '@/components/session/why-panel';
-import { getStageForUnit, getUnitForLesson } from '@/content';
+import { getLesson, getStageForUnit, getUnitForLesson } from '@/content';
 import { checkExercise, type ExerciseResult } from '@/learning/check';
 import type { Exercise } from '@/learning/exercise';
 import {
@@ -86,7 +86,8 @@ export default function SessionScreen() {
   }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { learner, settings, recordAnswer, markIntroduced, completeSession } = useLearner();
+  const { learner, settings, recordAnswer, markIntroduced, completeSession, beginLesson, abandonLesson } =
+    useLearner();
   const confirm = useConfirm();
 
   const kind = (params.kind ?? 'smartReview') as SessionKind;
@@ -217,7 +218,28 @@ export default function SessionScreen() {
     const done = committed;
     const { source: from, kind: how, title } = identity.current;
 
+    /**
+     * In progress, from this moment until the screen is left or finished.
+     *
+     * Only a real curriculum lesson gets a marker. Practice sessions are not
+     * lessons — they cannot be resumed as one, and offering to "resume" a
+     * consolidation drill would put optional revision back into the place this
+     * whole pass took it out of.
+     *
+     * The marker is cleared in the teardown below (the learner left) or by
+     * `completeSession` (the learner finished). Nothing clears it when the OS
+     * suspends or kills the process, which is exactly the case Resume is for:
+     * React cleanup does not run on a kill, so the marker survives and the home
+     * screen can offer to pick the lesson back up.
+     */
+    const isLesson = !!getLesson(from);
+    if (isLesson) beginLesson(from);
+
     return () => {
+      // Leaving by any route — the close button, the back gesture, a redirect —
+      // is abandonment. Abandoned and in-progress are different states, and the
+      // difference is entirely whether this cleanup ran.
+      if (isLesson) abandonLesson(from);
       if (done.current) return;
       if (totals.current.answered === 0) return;
       done.current = true;

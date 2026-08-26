@@ -22,8 +22,8 @@ import {
   type TopicId,
   type Unit,
 } from '@/content/types';
-import { isLessonUnlocked } from '@/learning/session';
-import { unitArc, type UnitArc } from '@/learning/unit-arc';
+import { unitPractice, type UnitPractice } from '@/learning/unit-practice';
+import { continueTarget, isRequired } from '@/learning/progression';
 import { mastery, masteryBand, retrievability, urgency } from '@/learning/srs';
 import type { ConceptState, ExerciseKind, LearnerState, Skill } from '@/learning/types';
 
@@ -518,13 +518,21 @@ export type UnitPhase = 'learning' | 'practising' | 'strengthening' | 'maintaini
 export type UnitState =
   /** Not written yet — curriculum outline only. */
   | 'planned'
-  /** Prerequisites unmet. */
+  /**
+   * Ahead of the learner's position on the path.
+   *
+   * A **soft** lock. The unit is dimmed and visibly off the recommended route,
+   * but it opens, and its lessons can be played. Finishing one is how the
+   * learner says "I already know what came before" — see
+   * `learning/progression.ts`. The name is kept because the visual language is
+   * unchanged; what changed is that it no longer refuses.
+   */
   | 'locked'
-  /** Unlocked, nothing started. */
+  /** On the path, nothing started. */
   | 'available'
   /** Started but not finished. */
   | 'current'
-  /** Every lesson finished. */
+  /** Every required lesson finished. */
   | 'complete';
 
 export interface UnitProgress {
@@ -549,15 +557,15 @@ export interface UnitProgress {
   /** The lesson to open when the learner taps Continue / Start. */
   nextLesson: Lesson | null;
   /**
-   * The unit's guided teaching arc: its lessons plus the practice phases that
-   * follow them. See `learning/unit-arc.ts`.
+   * Optional practice, offered once the unit is complete.
    *
-   * `state === 'complete'` still means "every required lesson is finished",
-   * which is what the path and the stage counters have always measured and
-   * what an existing learner's record already reflects. Whether the *teaching*
-   * is finished is a different and longer question, and it is this.
+   * Deliberately **not** part of any progress figure. This used to be `arc`,
+   * and its step counter was what the Learn page rendered as the unit's
+   * progress — so a unit with every lesson ticked read `2/5`. Lessons are
+   * progression; practice is optional mastery; they never share a number.
+   * See `learning/unit-practice.ts`.
    */
-  arc: UnitArc;
+  practice: UnitPractice;
 }
 
 /**
@@ -583,41 +591,60 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
   // A unit built entirely of enrichment (a standalone conversation, say) is
   // itself the optional thing — measure it against all of its lessons, or it
   // would report complete before it had been opened.
-  const nonOptional = unit.lessons.filter((lesson) => !lesson.optional);
+  const nonOptional = unit.lessons.filter(isRequired);
   const required = nonOptional.length > 0 ? nonOptional : unit.lessons;
   const lessonCount = required.length;
   const completedLessonIds = unit.lessons
     .filter((lesson) => learner.completedLessons[lesson.id])
     .map((lesson) => lesson.id);
   const lessonsDone = required.filter((lesson) => learner.completedLessons[lesson.id]).length;
-  const nextLesson = unit.lessons.find((lesson) => !learner.completedLessons[lesson.id]) ?? null;
-  const unlocked = unit.lessons.some((lesson) => isLessonUnlocked(lesson, learner));
+  /**
+   * The next thing to play here, required first.
+   *
+   * Required before optional, so opening a half-finished unit offers the next
+   * step on the spine rather than a story that happens to sit earlier in the
+   * list. Optional lessons are still reachable — they are listed — they just
+   * never present themselves as the way forward.
+   */
+  const nextLesson =
+    required.find((lesson) => !learner.completedLessons[lesson.id]) ??
+    unit.lessons.find((lesson) => !learner.completedLessons[lesson.id]) ??
+    null;
+
+  /**
+   * Whether this unit sits on the learner's path or ahead of it.
+   *
+   * `locked` is now a soft state: it dims the unit and marks it as ahead, and
+   * the unit still opens. A unit is on the path once anything in it has been
+   * started, or once the course's own Continue target lands inside it.
+   */
+  const target = continueTarget(learner);
+  const onPath = target ? unit.lessons.some((lesson) => lesson.id === target.id) : false;
 
   let state: UnitState;
   if (unit.status === 'planned' || unit.lessons.length === 0) state = 'planned';
-  else if (lessonsDone === lessonCount) state = 'complete';
-  else if (!unlocked) state = 'locked';
-  else if (lessonsDone > 0) state = 'current';
-  else state = 'available';
+  else if (lessonCount > 0 && lessonsDone === lessonCount) state = 'complete';
+  else if (lessonsDone > 0 || completedLessonIds.length > 0) state = 'current';
+  else if (onPath) state = 'available';
+  else state = 'locked';
 
   /**
-   * Phase is read off mastery, not off lesson count, which is the whole point:
-   * finishing the lessons moves a unit out of `learning` and no further.
+   * The unit's *revision* standing, which is a different question from whether
+   * it is complete and is never allowed to answer that one.
+   *
+   * Read off mastery, so finishing the lessons moves a unit out of `learning`
+   * and no further — what happens after that is practice's business.
    */
-  const arc = unitArc(unit, learner, now);
+  const practice = unitPractice(unit, learner, now);
 
   let phase: UnitPhase;
   if (state !== 'complete') phase = 'learning';
-  // A unit still holding material the learner has never been shown is not
-  // finished learning, however solid the part they have met looks. Lessons
+  // A complete unit still holding material the learner has never been shown has
+  // more to introduce, however solid the part they have met looks. Lessons
   // introduce at most `MAX_NEW_PER_SESSION` concepts a sitting, so a large unit
   // legitimately has some left after its lessons are ticked.
   else if (getUnitTaughtConcepts(unit).some((id) => !learner.concepts[id]?.introduced))
-    phase = 'learning';
-  // Nor is a unit whose guided arc still has sessions to run: the lessons
-  // introduced the material, and the phases after them are what turn an
-  // introduction into something retrievable.
-  else if (!arc.complete) phase = 'practising';
+    phase = 'practising';
   else if (value >= MAINTENANCE_MASTERY) phase = 'maintaining';
   else if (value >= PRACTISED_MASTERY) phase = 'strengthening';
   else phase = 'practising';
@@ -635,7 +662,7 @@ export function unitProgress(unit: Unit, learner: LearnerState, now = Date.now()
     conceptIds,
     completedLessonIds,
     nextLesson,
-    arc,
+    practice,
   };
 }
 

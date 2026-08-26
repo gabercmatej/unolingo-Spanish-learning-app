@@ -16,13 +16,13 @@ import { ProgressBar } from '@/components/ui/progress';
 import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
-import { getUnitForLesson } from '@/content';
+import { getLesson, getUnitForLesson } from '@/content';
 import { CEFR_LEVELS, type Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { useNow } from '@/hooks/use-now';
 import { courseProgress, dueConcepts, levelProgress, weakAreas } from '@/learning/mastery';
-import { nextLesson } from '@/learning/session';
+import { continueTarget } from '@/learning/progression';
 import { levelInfo } from '@/learning/xp';
 import { currentStreak, toISODate } from '@/lib/date';
 
@@ -38,7 +38,25 @@ export default function LearnScreen() {
   const { learner, settings } = useLearner();
   const now = useNow();
 
-  const upcoming = useMemo(() => nextLesson(learner), [learner]);
+  /**
+   * Where Continue goes: the first incomplete required lesson, which — because
+   * skipping ahead back-fills everything behind it — is always the lesson
+   * immediately after the furthest one fully completed. Progression state only;
+   * never session recency, and never nudged by an unfinished lesson.
+   */
+  const upcoming = useMemo(() => continueTarget(learner), [learner]);
+  /**
+   * A lesson that was opened and neither finished nor abandoned — the app was
+   * backgrounded, the phone locked, or the process killed. Offered as Resume
+   * *beside* Continue rather than instead of it, because an unfinished lesson
+   * has not moved the learner's position and must not look as though it has.
+   */
+  const resuming = useMemo(() => {
+    const id = learner.activeLesson?.lessonId;
+    if (!id || id === upcoming?.id) return null;
+    const lesson = getLesson(id);
+    return lesson && !learner.completedLessons[id] ? lesson : null;
+  }, [learner.activeLesson, learner.completedLessons, upcoming]);
   const stages = useMemo(() => courseProgress(learner, now), [learner, now]);
   const due = useMemo(() => dueConcepts(learner, now).length, [learner, now]);
   const weak = useMemo(() => weakAreas(learner, now, 3), [learner, now]);
@@ -111,6 +129,32 @@ export default function LearnScreen() {
           ) : null}
         </Card>
       </Reveal>
+
+      {/*
+        Resume — an interrupted lesson, offered above Continue and clearly
+        distinct from it. It does not replace the Continue target: an unfinished
+        lesson never advances progression, so both can be true at once and the
+        screen says so rather than picking one.
+      */}
+      {resuming ? (
+        <Reveal delay={stagger(3)}>
+          <Section title="Pick up where you left off">
+            <Card variant="flat" padding="four">
+              <View style={styles.continueTop}>
+                <Pill label="Unfinished" tone={theme.warning} background={theme.warningSoft} />
+                <Pill label={`${resuming.estMinutes} min`} />
+              </View>
+              <Text variant="bodyBold">{resuming.title}</Text>
+              <Button
+                title="Resume lesson"
+                size="lg"
+                icon="refresh"
+                onPress={() => startLesson(resuming)}
+              />
+            </Card>
+          </Section>
+        </Reveal>
+      ) : null}
 
       {/* Continue */}
       {upcoming ? (
@@ -233,17 +277,17 @@ export default function LearnScreen() {
             stages={stages}
             onOpenUnit={(unitId) => router.push({ pathname: '/unit/[id]', params: { id: unitId } })}
             onStartLesson={startLesson}
-            onStrengthenUnit={(unitId, arcStep) =>
+            onPractiseUnit={(unitId, step) =>
               /*
-                The guided arc first, strengthening second. While a unit still
-                has teaching sessions left, "what should I do here?" has a
-                better answer than a targeted drill — and both are local to the
-                unit, which is what the `unit` param carries.
+                A suggested practice phase first, a targeted drill second. Both
+                are optional and both are local to the unit, which is what the
+                `unit` param carries. Neither can change whether the unit is
+                completed — that was settled by its lessons.
               */
               router.push({
                 pathname: '/session',
-                params: arcStep
-                  ? { kind: 'unitArc', source: arcStep, unit: unitId }
+                params: step
+                  ? { kind: 'unitArc', source: step, unit: unitId }
                   : { kind: 'unitSmart', source: unitId, unit: unitId },
               })
             }

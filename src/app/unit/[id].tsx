@@ -25,7 +25,7 @@ import type { Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
 import { unitProgress, unitStrengthPlan, type UnitPhase } from '@/learning/mastery';
-import type { ArcStep } from '@/learning/unit-arc';
+import type { PracticeStep } from '@/learning/unit-practice';
 import { mastery, masteryBand } from '@/learning/srs';
 import { goBack } from '@/lib/navigation';
 
@@ -107,7 +107,7 @@ export default function UnitScreen() {
   const practice = (kind: string) =>
     router.push({ pathname: '/session', params: { kind, source: unit.id, unit: unit.id } });
 
-  const openArcStep = (stepId: string) =>
+  const openPracticeStep = (stepId: string) =>
     router.push({ pathname: '/session', params: { kind: 'unitArc', source: stepId, unit: unit.id } });
 
   const openLesson = (lesson: Lesson) => {
@@ -177,27 +177,27 @@ export default function UnitScreen() {
           <Card variant="flat">
             <View style={styles.metricRow}>
               {/*
-                Sessions, not lessons. A unit is a guided arc — its lessons plus
-                the practice phases that turn an introduction into something
-                retrievable — and counting only the lessons was what made a
-                one-lesson unit report itself finished after twelve questions.
-                See `learning/unit-arc.ts`.
+                Lessons, and only lessons.
+
+                This used to count the guided arc — the unit's lessons *plus*
+                its practice phases — which meant a unit with every lesson
+                ticked reported itself unfinished, and the number disagreed with
+                the one on the Learn page. Completing a unit means completing
+                its required lessons; practice comes after and has its own
+                counter, further down this screen, where it cannot be mistaken
+                for progress.
               */}
               <View style={styles.flex}>
                 <Text variant="caption" color="textTertiary">
-                  Sessions
+                  Lessons
                 </Text>
                 <Text variant="heading" rounded numeric>
-                  {progress.arc.stepsDone}/{progress.arc.stepCount}
+                  {progress.lessonsDone}/{progress.lessonCount}
                 </Text>
                 <ProgressBar
-                  value={
-                    progress.arc.stepCount > 0
-                      ? progress.arc.stepsDone / progress.arc.stepCount
-                      : 0
-                  }
+                  value={progress.progress}
                   height={5}
-                  tone={tone}
+                  tone={progress.state === 'complete' ? theme.success : tone}
                   delay={stagger(1)}
                 />
               </View>
@@ -234,32 +234,41 @@ export default function UnitScreen() {
               icon="play"
               onPress={() => openLesson(progress.nextLesson!)}
             />
-          ) : progress.arc.next ? (
+          ) : progress.practice.suggested ? (
             /*
-              The lessons are done and the arc is not. This is the single most
-              important button on the screen: it is the answer to "I finished
-              the lessons and this says 22%, now what?", and before the arc
-              existed there was no answer except tapping the same lesson again.
+              The lessons are done, so the unit is complete — that is settled
+              and nothing below can unsettle it. This is the answer to "I
+              finished the unit and it says 22%, now what?", offered as the
+              obvious next thing rather than as an obligation.
             */
             <Button
-              title={`Continue — ${progress.arc.next.title}`}
+              title={`Practise — ${progress.practice.suggested.title}`}
               size="lg"
               tone={tone}
-              icon="play"
-              onPress={() => openArcStep(progress.arc.next!.id)}
+              icon="barbell-outline"
+              onPress={() => openPracticeStep(progress.practice.suggested!.id)}
             />
           ) : null}
 
-          {/* The guided arc, once the lessons are behind us */}
-          {!progress.nextLesson && progress.arc.steps.length > 0 ? (
-            <Section title="Guided practice">
+          {/*
+            Optional practice, once the unit is complete.
+
+            Titled and counted separately from the lessons above on purpose.
+            These sessions improve mastery and can be replayed as often as the
+            learner likes; none of them can change whether the unit is
+            completed. Steps are unordered — any one can be started at any time.
+          */}
+          {progress.practice.unlocked && progress.practice.steps.length > 0 ? (
+            <Section
+              title="Optional practice"
+              caption={`${progress.practice.done}/${progress.practice.total} done · does not affect completion`}>
               <View style={styles.practiceList}>
-                {progress.arc.steps.map((step, index) => (
+                {progress.practice.steps.map((step, index) => (
                   <Reveal key={step.id} delay={stagger(index)}>
                     <ArcRow
                       step={step}
                       tone={tone}
-                      onPress={() => openArcStep(step.id)}
+                      onPress={() => openPracticeStep(step.id)}
                     />
                   </Reveal>
                 ))}
@@ -505,12 +514,21 @@ function ArcRow({
   tone,
   onPress,
 }: {
-  step: ArcStep;
+  step: PracticeStep;
   tone: string;
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const locked = !step.unlocked && !step.done;
+  /**
+   * Nothing here locks any more.
+   *
+   * Practice steps used to chain — each unlocked by the one before it — because
+   * they were part of the unit's completion sequence. They are not part of it
+   * now: the whole set becomes available the moment the unit's lessons are
+   * done, in any order, as often as the learner wants. A sequence would be this
+   * screen quietly re-introducing the obligation the redesign removed.
+   */
+  const locked = false;
 
   return (
     <PressScale
@@ -536,7 +554,7 @@ function ArcRow({
             { backgroundColor: step.done ? theme.successSoft : theme.backgroundSunken },
           ]}>
           <Icon
-            name={step.done ? 'checkmark' : locked ? 'lock-closed' : 'play'}
+            name={step.done ? 'checkmark' : 'play'}
             size={16}
             tone={step.done ? theme.success : tone}
           />

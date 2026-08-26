@@ -4,19 +4,24 @@ import { makeLearner } from '@/learning/__tests__/helpers';
 import { unitProgress } from '@/learning/mastery';
 import { buildArcSession, completedLessonId, isCompletionId } from '@/learning/session';
 import { createConceptState } from '@/learning/srs';
-import { arcStepId, phasesFor, unitArc } from '@/learning/unit-arc';
+import { practiceStepId, phasesFor, unitPractice } from '@/learning/unit-practice';
 import { KIND_DIFFICULTY, type LearnerState } from '@/learning/types';
 
 /**
- * A unit is a guided arc, not a single lesson with a tick on it.
+ * Optional practice, and the line between it and progression.
  *
- * The measurement that prompted this: **36 of the course's 63 units have
- * exactly one required lesson**, and the median unit carries 13 minutes of
- * required content. So finishing a unit meant meeting nine new words, answering
- * about twelve questions, and arriving at a mastery figure around 22% with
- * nothing to do about it but replay the same lesson. The arc adds the sessions
- * between "met it" and "can use it", and it adds no content to do so — the
- * phases are generated from material the unit already declares.
+ * The measurement that prompted these sessions existing at all: **36 of the
+ * course's 63 units have exactly one required lesson**, and the median unit
+ * carries 13 minutes of required content. So finishing a unit meant meeting
+ * nine new words, answering about twelve questions, and arriving near 22%
+ * mastery with nothing to do but replay the same lesson.
+ *
+ * What these tests now pin is the *placement* of the fix. Practice sits after
+ * completion, never inside it: a unit is complete when its required lessons
+ * are, practice steps are unordered and always available once it is, and
+ * nothing about them can move the unit's state. The version of this that
+ * chained the steps and counted them into the unit's progress is what made a
+ * fully-lessoned unit render `2/5`.
  */
 
 const NOW = Date.UTC(2026, 1, 1);
@@ -63,11 +68,17 @@ describe('the arc exists precisely where the course was thin', () => {
     expect(phasesFor(oneLesson)).toEqual(['mixed', 'recall', 'consolidate']);
   });
 
-  it('turns a one-lesson unit into a four-session arc', () => {
-    const arc = unitArc(oneLesson, havingFinishedLessons(oneLesson), NOW);
-    expect(arc.stepCount).toBe(4);
-    expect(arc.stepsDone).toBe(1); // the lesson
-    expect(arc.complete).toBe(false);
+  it('counts only practice steps, never the unit\'s lessons', () => {
+    /**
+     * The regression this pins. `total` used to be lessons *plus* steps and
+     * `done` used to include the finished lessons — a single number answering
+     * "how far through this unit am I?" and "how much optional practice have I
+     * done?" at once, and readable as neither. Practice counts practice.
+     */
+    const practice = unitPractice(oneLesson, havingFinishedLessons(oneLesson), NOW);
+    expect(practice.total).toBe(3);
+    expect(practice.done).toBe(0);
+    expect(practice.complete).toBe(false);
   });
 
   it('does not pad a unit that already runs long', () => {
@@ -88,32 +99,45 @@ describe('the arc exists precisely where the course was thin', () => {
   });
 });
 
-describe('the arc is a sequence', () => {
-  it('unlocks nothing until the lessons are done', () => {
-    const arc = unitArc(oneLesson, makeLearner(), NOW);
-    expect(arc.steps.every((step) => !step.unlocked)).toBe(true);
-    expect(arc.next).toBeNull();
+describe('practice is optional, unordered, and gated only by completion', () => {
+  it('offers nothing until the unit\'s lessons are done', () => {
+    const practice = unitPractice(oneLesson, makeLearner(), NOW);
+    expect(practice.unlocked).toBe(false);
+    expect(practice.suggested).toBeNull();
   });
 
-  it('opens one step at a time', () => {
-    const learner = havingFinishedLessons(oneLesson);
-    const arc = unitArc(oneLesson, learner, NOW);
-    expect(arc.steps[0].unlocked).toBe(true);
-    expect(arc.steps[1].unlocked).toBe(false);
-    expect(arc.next?.phase).toBe('mixed');
+  it('opens every step at once when the unit completes', () => {
+    /**
+     * The steps used to chain, each unlocked by the one before it, because they
+     * were part of finishing the unit. They are not part of it now — so a
+     * learner who wants to jump straight to consolidation may, and nothing is
+     * withheld to manufacture a sequence.
+     */
+    const practice = unitPractice(oneLesson, havingFinishedLessons(oneLesson), NOW);
+    expect(practice.unlocked).toBe(true);
+    expect(practice.total).toBe(3);
+    expect(practice.suggested?.phase).toBe('mixed');
   });
 
-  it('advances when a step is played', () => {
+  it('moves its own counter when a step is played, and nothing else', () => {
     const learner = havingFinishedLessons(oneLesson);
-    learner.completedLessons[arcStepId(oneLesson.id, 'mixed')] = {
+    const before = unitProgress(oneLesson, learner, NOW);
+
+    learner.completedLessons[practiceStepId(oneLesson.id, 'mixed')] = {
       at: NOW,
       accuracy: 0.9,
       times: 1,
     };
-    const arc = unitArc(oneLesson, learner, NOW);
-    expect(arc.steps[0].done).toBe(true);
-    expect(arc.steps[1].unlocked).toBe(true);
-    expect(arc.next?.phase).toBe('recall');
+    const after = unitProgress(oneLesson, learner, NOW);
+
+    expect(after.practice.done).toBe(before.practice.done + 1);
+    expect(after.practice.suggested?.phase).toBe('recall');
+    // The thing this whole pass exists to guarantee: playing practice cannot
+    // move the unit's progress, because progress is lessons.
+    expect(after.lessonsDone).toBe(before.lessonsDone);
+    expect(after.lessonCount).toBe(before.lessonCount);
+    expect(after.progress).toBe(before.progress);
+    expect(after.state).toBe(before.state);
   });
 });
 
@@ -135,20 +159,20 @@ describe('a phase whose goal is already met is not busywork', () => {
       lastReviewed: NOW - DAY,
       dueAt: NOW + 30 * DAY,
     });
-    const arc = unitArc(oneLesson, learner, NOW);
+    const practice = unitPractice(oneLesson, learner, NOW);
 
-    expect(arc.complete).toBe(true);
-    expect(arc.steps.every((step) => step.satisfied)).toBe(true);
-    expect(arc.next).toBeNull();
+    expect(practice.complete).toBe(true);
+    expect(practice.steps.every((step) => step.satisfied)).toBe(true);
+    expect(practice.suggested).toBeNull();
   });
 
   it('does not mark it satisfied for a learner who has only recognised the material', () => {
     // Exactly the state a single lesson pass leaves behind: met once, never
     // retrieved under pressure. This is the case the arc exists for.
     const learner = havingFinishedLessons(oneLesson);
-    const arc = unitArc(oneLesson, learner, NOW);
-    expect(arc.complete).toBe(false);
-    expect(arc.steps.some((step) => step.satisfied)).toBe(false);
+    const practice = unitPractice(oneLesson, learner, NOW);
+    expect(practice.complete).toBe(false);
+    expect(practice.steps.some((step) => step.satisfied)).toBe(false);
   });
 
   it('satisfies recall only on evidence of demanding retrieval, not on repetition', () => {
@@ -162,8 +186,8 @@ describe('a phase whose goal is already met is not busywork', () => {
       strength: 0.6,
       depth: 1,
     });
-    const arc = unitArc(oneLesson, learner, NOW);
-    const byPhase = Object.fromEntries(arc.steps.map((step) => [step.phase, step]));
+    const practice = unitPractice(oneLesson, learner, NOW);
+    const byPhase = Object.fromEntries(practice.steps.map((step) => [step.phase, step]));
     expect(byPhase.mixed.done).toBe(true);
     expect(byPhase.recall.done).toBe(false);
   });
@@ -180,21 +204,21 @@ describe('completion and mastery stay separate', () => {
      */
     const progress = unitProgress(oneLesson, havingFinishedLessons(oneLesson), NOW);
     expect(progress.state).toBe('complete');
-    expect(progress.arc.complete).toBe(false);
+    expect(progress.practice.complete).toBe(false);
     expect(progress.phase).toBe('practising');
   });
 
   it('does not let a finished arc claim mastery it has not earned', () => {
     const learner = havingFinishedLessons(oneLesson);
     for (const phase of ['mixed', 'recall', 'consolidate'] as const) {
-      learner.completedLessons[arcStepId(oneLesson.id, phase)] = {
+      learner.completedLessons[practiceStepId(oneLesson.id, phase)] = {
         at: NOW,
         accuracy: 0.7,
         times: 1,
       };
     }
     const progress = unitProgress(oneLesson, learner, NOW);
-    expect(progress.arc.complete).toBe(true);
+    expect(progress.practice.complete).toBe(true);
     // The arc being done is a claim about the teaching, not about the memory.
     expect(progress.mastery).toBeLessThan(0.8);
   });
@@ -283,7 +307,7 @@ describe('the phases are actually different sessions', () => {
 
 describe('the arc records itself without a schema change', () => {
   it('stores completion under an id that is not a lesson', () => {
-    const id = arcStepId(oneLesson.id, 'recall');
+    const id = practiceStepId(oneLesson.id, 'recall');
     expect(id).toBe(`arc:${oneLesson.id}:recall`);
     /**
      * `completedLessons` is a `Record<string, …>` and nothing requires its keys
@@ -293,7 +317,7 @@ describe('the arc records itself without a schema change', () => {
      */
     const learner = havingFinishedLessons(oneLesson);
     learner.completedLessons[id] = { at: NOW, accuracy: 1, times: 1 };
-    expect(unitArc(oneLesson, learner, NOW).steps.find((s) => s.phase === 'recall')!.done).toBe(
+    expect(unitPractice(oneLesson, learner, NOW).steps.find((s) => s.phase === 'recall')!.done).toBe(
       true,
     );
   });
@@ -314,7 +338,7 @@ describe('the arc records itself without a schema change', () => {
    * the failure this codebase keeps meeting.
    */
   it('accepts the id a played arc session hands the store', () => {
-    const stepId = arcStepId(oneLesson.id, 'recall');
+    const stepId = practiceStepId(oneLesson.id, 'recall');
     const written = completedLessonId({ kind: 'unitArc', source: stepId, reachedEnd: true });
 
     expect(written).toBe(stepId);
@@ -332,7 +356,7 @@ describe('the arc records itself without a schema change', () => {
 
   it('does not let an arc step count as a lesson on the path', () => {
     const learner = havingFinishedLessons(oneLesson);
-    learner.completedLessons[arcStepId(oneLesson.id, 'mixed')] = {
+    learner.completedLessons[practiceStepId(oneLesson.id, 'mixed')] = {
       at: NOW,
       accuracy: 1,
       times: 1,

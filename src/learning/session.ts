@@ -1,5 +1,4 @@
 import {
-  allLessons,
   conversations,
   getGrammar,
   getLesson,
@@ -34,11 +33,12 @@ import {
   type SelectionIntent,
 } from '@/learning/scope';
 import {
-  arcPhaseOf,
-  arcStepId,
-  unitIdForArcStep,
-  type ArcPhase,
-} from '@/learning/unit-arc';
+  practicePhaseOf,
+  practiceStepId,
+  unitIdForPracticeStep,
+  type PracticePhase,
+} from '@/learning/unit-practice';
+import { continueTarget } from '@/learning/progression';
 import {
   dueConcepts,
   estimateLevel,
@@ -144,8 +144,8 @@ export function completedLessonId(input: {
  */
 export function isCompletionId(id: string): boolean {
   if (getLesson(id)) return true;
-  const unitId = unitIdForArcStep(id);
-  return unitId !== null && !!getUnit(unitId) && arcPhaseOf(id) !== null;
+  const unitId = unitIdForPracticeStep(id);
+  return unitId !== null && !!getUnit(unitId) && practicePhaseOf(id) !== null;
 }
 
 export interface SessionPlan {
@@ -680,7 +680,7 @@ export function buildSmartReview(options: BuildOptions): SessionPlan {
  * and a phase that silently drops a third of the unit is worse than one that
  * occasionally offers an easy question.
  */
-const PHASE_KINDS: Record<ArcPhase, ExerciseKind[] | null> = {
+const PHASE_KINDS: Record<PracticePhase, ExerciseKind[] | null> = {
   /**
    * Null means "let the learner's own history choose", which is what mixed
    * practice should be: the ordinary adaptive mix, interleaved with earlier
@@ -719,7 +719,7 @@ const PHASE_KINDS: Record<ArcPhase, ExerciseKind[] | null> = {
 };
 
 /** Nudged down where the phase has no explicit kind list to impose. */
-const PHASE_DEMOTE: Record<ArcPhase, ExerciseKind[]> = {
+const PHASE_DEMOTE: Record<PracticePhase, ExerciseKind[]> = {
   mixed: ['multipleChoice', 'match'],
   recall: ['multipleChoice', 'match', 'wordBank', 'listenSelect'],
   consolidate: ['multipleChoice', 'match'],
@@ -727,7 +727,7 @@ const PHASE_DEMOTE: Record<ArcPhase, ExerciseKind[]> = {
 
 export function buildArcSession(
   unitId: string,
-  phase: ArcPhase,
+  phase: PracticePhase,
   options: BuildOptions,
 ): SessionPlan | null {
   const unit = getUnit(unitId);
@@ -815,14 +815,14 @@ export function buildArcSession(
   }[phase];
 
   return {
-    id: `${arcStepId(unit.id, phase)}:${ctx.now}`,
+    id: `${practiceStepId(unit.id, phase)}:${ctx.now}`,
     kind: 'unitArc',
     /**
      * The arc step id, not the unit id. `completeSession` writes `source` into
      * `completedLessons` for lesson-shaped sessions, which is how an arc step
      * records that it was played without needing a new persisted field.
      */
-    source: arcStepId(unit.id, phase),
+    source: practiceStepId(unit.id, phase),
     title: `${unit.title} — ${copy.title}`,
     subtitle: copy.subtitle,
     exercises: interleaved,
@@ -1189,8 +1189,8 @@ export function buildSession(
       return buildMistakeSession(options);
     case 'unitArc': {
       // `source` is the arc step id: "arc:<unitId>:<phase>".
-      const unitId = unitIdForArcStep(source);
-      const phase = arcPhaseOf(source);
+      const unitId = unitIdForPracticeStep(source);
+      const phase = practicePhaseOf(source);
       return unitId && phase ? buildArcSession(unitId, phase, options) : null;
     }
     case 'hardMode':
@@ -1202,6 +1202,19 @@ export function buildSession(
 
 // --- Progression ------------------------------------------------------------
 
+/**
+ * Whether a lesson's prerequisites are met — i.e. whether it is *on the path*
+ * rather than ahead of it.
+ *
+ * This no longer gates navigation. Locking is soft now: the course still guides
+ * order, and a lesson whose prerequisites are unmet is shown dimmed and clearly
+ * ahead, but it opens and can be played. Completing one is the sanctioned way
+ * for the learner to say "I already know what came before", which
+ * `skipForwardPatch` then acts on.
+ *
+ * Kept because "is this on the recommended route?" is still a real question —
+ * the Learn page asks it to decide what to dim. It is simply no longer a veto.
+ */
 export function isLessonUnlocked(lesson: Lesson, learner: LearnerState): boolean {
   if (!lesson.requires || lesson.requires.length === 0) return true;
   return lesson.requires.every((id) => !!learner.completedLessons[id]);
@@ -1212,16 +1225,17 @@ export function isLessonComplete(lessonId: string, learner: LearnerState): boole
 }
 
 /**
- * The lesson the home screen offers. Prefers the first incomplete unlocked
- * lesson; if a placement test set a starting point, everything before it counts
- * as already available.
+ * The lesson the home screen offers.
+ *
+ * Delegates to `learning/progression.ts`, which owns this question. Kept as a
+ * re-export because a dozen call sites and tests already name it, and because
+ * "the next lesson" reads better at those call sites than "the continue
+ * target". The behaviour is the progression module's: the first incomplete
+ * *required* lesson, which — given that skips back-fill and placement completes
+ * a prefix — is also the lesson immediately after the furthest one completed.
  */
 export function nextLesson(learner: LearnerState): Lesson | null {
-  for (const lesson of allLessons) {
-    if (learner.completedLessons[lesson.id]) continue;
-    if (isLessonUnlocked(lesson, learner)) return lesson;
-  }
-  return null;
+  return continueTarget(learner);
 }
 
 /** Stories unlocked by progress, for the Library. */

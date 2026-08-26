@@ -326,7 +326,39 @@ export interface LearnerState {
   version: number;
   settings: Settings;
   concepts: Record<string, ConceptState>;
-  completedLessons: Record<string, { at: number; accuracy: number; times: number }>;
+  /**
+   * Lesson ids the learner has finished, plus the practice sessions that store
+   * their progress here (`arc:<unitId>:<phase>`). Keyed by string on purpose:
+   * nothing requires a key to name a lesson, which is what lets practice
+   * persist with no `STATE_VERSION` bump and lets a renamed lesson orphan an
+   * entry rather than break a screen.
+   *
+   * `skipped` marks an entry ticked by finishing a lesson *after* it rather
+   * than by playing it. Optional, so recording it needs no version bump — the
+   * `MistakeRecord` shape — and a record from an earlier build simply comes
+   * back without it. It exists so a skip can be shown honestly rather than
+   * being indistinguishable from work done.
+   */
+  completedLessons: Record<
+    string,
+    { at: number; accuracy: number; times: number; skipped?: boolean }
+  >;
+  /**
+   * A lesson opened but not yet finished or abandoned.
+   *
+   * In progress, abandoned and completed are three different states, and
+   * completion is never inferred from answers submitted or XP earned — that is
+   * `completedLessonId`'s job, and it gates on reaching the end of the queue.
+   * This field carries the first of the three: pressing X or backing out clears
+   * it (abandoned), while backgrounding, locking the phone or being killed by
+   * the OS leaves it set, so reopening the app can offer to resume rather than
+   * silently moving on.
+   *
+   * Optional, so no `STATE_VERSION` bump — the `settings.developerMode` shape.
+   * Resume restarts the lesson from its first exercise; question-level
+   * restoration is deliberately out of scope.
+   */
+  activeLesson?: { lessonId: string; at: number };
   mistakes: MistakeRecord[];
   sessions: SessionRecord[];
   daily: DailyRecord[];

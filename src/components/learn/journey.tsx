@@ -22,15 +22,25 @@ import type { StageProgress, UnitProgress, UnitState } from '@/learning/mastery'
 /**
  * The learning path.
  *
- * The brief was to make the whole course legible as one journey without an
- * endless screen, so: CEFR stages are accordions (the current one open by
- * default), units are the navigation unit, and only the unit you are on expands
- * to show its lessons. Completed units stay visible and tappable — finishing
- * something once is not the same as knowing it, which is why each carries its
- * own decaying mastery figure and can ask for review.
+ * CEFR stages are accordions; **the unit is the visual unit**. Everything a
+ * unit owns is drawn inside one bounded block with a rail running down its
+ * lessons and an explicit cap where it ends, so that where a unit begins, what
+ * belongs to it, and where it hands over to the next are all answerable at a
+ * glance rather than inferred from spacing.
  *
- * Iconography is a single Ionicons vocabulary, not emoji. Emoji here would read
- * as decoration and break the one-icon-style rule the rest of the app follows.
+ * The one rule this screen now enforces above all others:
+ *
+ *   **Lessons are progression. Practice is optional mastery.**
+ *
+ * The lesson list is the spine and every row in it is required. The practice
+ * row is a separate affordance below the cap, reachable only once the unit is
+ * complete, and it is never counted in the unit's progress. This screen used to
+ * render the *practice* counter as the unit's progress, which is how a unit with
+ * every lesson ticked came to display `2/5` with "Next: Active recall" under
+ * it — two different questions answered through one number, and unreadable as
+ * either.
+ *
+ * Iconography is a single Ionicons vocabulary, not emoji.
  */
 
 interface JourneyProps {
@@ -38,17 +48,16 @@ interface JourneyProps {
   onOpenUnit: (unitId: string) => void;
   onStartLesson: (lesson: Lesson) => void;
   /**
-   * Start a targeted strengthen session for a unit.
+   * Start optional practice for a completed unit.
    *
-   * The mastery figure on a finished unit was the most useful number on this
-   * screen and the only one that did nothing when pressed — a diagnosis with no
-   * treatment. This is the treatment.
+   * `step` is a suggested practice phase when the unit still has one that has
+   * not been played. It is a recommendation only — practice steps are unordered
+   * and nothing about them gates anything.
    */
-  /** `arcStep` is the next guided phase, when the unit still has one. */
-  onStrengthenUnit: (unitId: string, arcStep?: string) => void;
+  onPractiseUnit: (unitId: string, step?: string) => void;
 }
 
-export function Journey({ stages, onOpenUnit, onStartLesson, onStrengthenUnit }: JourneyProps) {
+export function Journey({ stages, onOpenUnit, onStartLesson, onPractiseUnit }: JourneyProps) {
   const currentStageId = stages.find((stage) => stage.state === 'current')?.stage.id ?? null;
   const [open, setOpen] = useState<string | null>(currentStageId ?? stages[0]?.stage.id ?? null);
 
@@ -75,7 +84,7 @@ export function Journey({ stages, onOpenUnit, onStartLesson, onStrengthenUnit }:
           onToggle={() => setOpen((value) => (value === stage.stage.id ? null : stage.stage.id))}
           onOpenUnit={onOpenUnit}
           onStartLesson={onStartLesson}
-          onStrengthenUnit={onStrengthenUnit}
+          onPractiseUnit={onPractiseUnit}
         />
       ))}
     </View>
@@ -88,15 +97,14 @@ function StageSection({
   onToggle,
   onOpenUnit,
   onStartLesson,
-  onStrengthenUnit,
+  onPractiseUnit,
 }: {
   stage: StageProgress;
   expanded: boolean;
   onToggle: () => void;
   onOpenUnit: (unitId: string) => void;
   onStartLesson: (lesson: Lesson) => void;
-  /** `arcStep` is the next guided phase, when the unit still has one. */
-  onStrengthenUnit: (unitId: string, arcStep?: string) => void;
+  onPractiseUnit: (unitId: string, step?: string) => void;
 }) {
   const theme = useTheme();
   const { state } = stage;
@@ -196,13 +204,14 @@ function StageSection({
           exiting={FadeOut.duration(Motion.fast)}
           style={styles.units}>
           {stage.units.map((unit, index) => (
-            <UnitRow
+            <UnitBlock
               key={unit.unit.id}
               unit={unit}
+              index={index}
               isLast={index === stage.units.length - 1}
               onOpen={() => onOpenUnit(unit.unit.id)}
               onStartLesson={onStartLesson}
-              onStrengthen={() => onStrengthenUnit(unit.unit.id, unit.arc.next?.id)}
+              onPractise={() => onPractiseUnit(unit.unit.id, unit.practice.suggested?.id)}
             />
           ))}
         </Animated.View>
@@ -211,110 +220,111 @@ function StageSection({
   );
 }
 
-function nodeAppearance(state: UnitState, theme: ReturnType<typeof useTheme>) {
+/**
+ * How a unit's state reads at a glance.
+ *
+ * `locked` is a **soft** state now: the unit is dimmed and marked as ahead of
+ * the path, and it still opens. Finishing a lesson inside it is how the learner
+ * declares they meant to skip what came before, so presenting it as a refusal
+ * would be a lie about what pressing it does.
+ */
+function unitChrome(state: UnitState, theme: ReturnType<typeof useTheme>) {
   switch (state) {
     case 'complete':
-      return { fill: theme.success, ring: theme.success, icon: 'checkmark' as IconName, iconTone: theme.onTint };
+      return { label: 'Completed', tone: theme.success, icon: 'checkmark-circle' as IconName };
     case 'current':
-      return { fill: theme.tint, ring: theme.tint, icon: 'ellipse' as IconName, iconTone: theme.onTint };
+      return { label: 'In progress', tone: theme.tint, icon: 'radio-button-on' as IconName };
     case 'available':
-      return { fill: theme.backgroundElement, ring: theme.tint, icon: null, iconTone: theme.tint };
+      return { label: 'Ready to start', tone: theme.tint, icon: 'play-circle' as IconName };
     case 'locked':
-      return {
-        fill: theme.backgroundSunken,
-        ring: theme.border,
-        icon: 'lock-closed' as IconName,
-        iconTone: theme.textTertiary,
-      };
+      return { label: 'Ahead', tone: theme.textTertiary, icon: 'arrow-forward-circle-outline' as IconName };
     case 'planned':
     default:
-      return { fill: 'transparent', ring: theme.borderStrong, icon: null, iconTone: theme.textTertiary };
+      return { label: 'Planned', tone: theme.textTertiary, icon: 'ellipsis-horizontal-circle-outline' as IconName };
   }
 }
 
-function UnitRow({
+function UnitBlock({
   unit,
+  index,
   isLast,
   onOpen,
   onStartLesson,
-  onStrengthen,
+  onPractise,
 }: {
   unit: UnitProgress;
+  index: number;
   isLast: boolean;
   onOpen: () => void;
   onStartLesson: (lesson: Lesson) => void;
-  onStrengthen: () => void;
+  onPractise: () => void;
 }) {
   const theme = useTheme();
   const { state } = unit;
-  const node = nodeAppearance(state, theme);
-  /**
-   * The node pops when the unit's state changes underneath it — which in
-   * practice means the moment a learner comes back from the session that
-   * finished it, and the dot they left as "current" is now a tick. `usePop`
-   * skips its first run, so a screen opening on an already-complete unit stays
-   * still; only the transition is worth marking.
-   */
-  const nodePop = usePop(state, { scale: 1.35 });
+  const chrome = unitChrome(state, theme);
   const tone = theme[unit.unit.tone];
   const soft = theme[`${unit.unit.tone}Soft` as keyof typeof theme] as string;
 
-  const isCurrent = state === 'current' || state === 'available';
+  const active = state === 'current' || state === 'available';
   const dimmed = state === 'locked' || state === 'planned';
+  const complete = state === 'complete';
+
+  /**
+   * Which units open their lesson list without being asked.
+   *
+   * The one being worked on, and nothing else. A completed unit's lessons are
+   * still there and still replayable — the block expands on tap — but leaving
+   * every finished unit open turns a six-stage course into an endless screen
+   * and buries the one row that matters.
+   */
+  const [expanded, setExpanded] = useState(active);
+
+  /**
+   * The badge pops when the unit's state changes underneath it — in practice,
+   * the moment a learner returns from the session that finished it. `usePop`
+   * skips its first run, so a screen opening on an already-complete unit stays
+   * still; only the transition is worth marking.
+   */
+  const statePop = usePop(state, { scale: 1.25 });
+
+  const required = unit.unit.lessons.filter((lesson) => !lesson.optional);
+  const extras = unit.unit.lessons.filter((lesson) => lesson.optional);
 
   return (
-    <View style={styles.unitRow}>
-      {/* Rail: node plus the connector down to the next unit. */}
-      <View style={styles.rail}>
-        <Animated.View
-          style={[
-            styles.node,
-            {
-              backgroundColor: node.fill,
-              borderColor: node.ring,
-              borderStyle: state === 'planned' ? 'dashed' : 'solid',
-            },
-            nodePop,
-          ]}>
-          {node.icon ? <Icon name={node.icon} size={12} tone={node.iconTone} /> : null}
-        </Animated.View>
-        {!isLast ? (
-          <View
-            style={[
-              styles.connector,
-              { backgroundColor: state === 'complete' ? theme.success : theme.border },
-            ]}
-          />
-        ) : null}
-      </View>
-
-      {/* The lesson rows are siblings of the header, not children of it: a
-          pressable inside a pressable is invalid on web and breaks a11y. */}
+    <View style={styles.unitBlock}>
       <View
         style={[
-          styles.unitCard,
-          styles.flex,
+          styles.unit,
           {
-            backgroundColor: isCurrent ? soft : 'transparent',
-            borderColor: isCurrent ? tone : 'transparent',
-            borderWidth: isCurrent ? 1.5 : 0,
-            opacity: dimmed ? 0.55 : 1,
+            backgroundColor: active ? soft : theme.backgroundElement,
+            borderColor: active ? tone : complete ? theme.border : theme.border,
+            borderWidth: active ? 1.5 : 1,
+            opacity: dimmed ? 0.6 : 1,
           },
         ]}>
+        {/* --- Unit header: where the unit begins ------------------------- */}
         <PressScale
-          onPress={onOpen}
+          onPress={() => {
+            if (state === 'planned') return;
+            setExpanded((value) => !value);
+          }}
           disabled={state === 'planned'}
-          scaleTo={0.99}
+          scaleTo={0.995}
           hover="lift"
           haptic="press"
-          accessibilityLabel={`${unit.unit.title}, ${unitStateLabel(unit)}`}>
-          <View style={styles.unitTop}>
+          accessibilityLabel={`${unit.unit.title}, ${unitStateLabel(unit)}`}
+          accessibilityState={{ selected: expanded }}>
+          <View style={styles.unitHead}>
             <View
               style={[
                 styles.unitIcon,
-                { backgroundColor: isCurrent ? theme.backgroundElement : theme.backgroundSunken },
+                {
+                  backgroundColor: active ? theme.backgroundElement : theme.backgroundSunken,
+                  borderColor: active ? tone : 'transparent',
+                  borderWidth: active ? 1 : 0,
+                },
               ]}>
-              <Icon name={unit.unit.icon} size={17} tone={dimmed ? theme.textTertiary : tone} />
+              <Icon name={unit.unit.icon} size={18} tone={dimmed ? theme.textTertiary : tone} />
             </View>
 
             <View style={styles.flex}>
@@ -326,81 +336,151 @@ function UnitRow({
               </Text>
             </View>
 
-            <UnitMeta unit={unit} />
+            <Animated.View style={[styles.unitBadge, statePop]}>
+              <Icon name={chrome.icon} size={15} tone={chrome.tone} />
+              {/*
+                Lessons, and only lessons. This figure used to come from the
+                practice counter, which is what made a finished unit read as
+                unfinished. Required lessons are the whole of what completing a
+                unit means, so they are the whole of what this counts.
+              */}
+              {state !== 'planned' && unit.lessonCount > 0 ? (
+                <Text variant="caption" numeric tone={chrome.tone}>
+                  {unit.lessonsDone}/{unit.lessonCount}
+                </Text>
+              ) : null}
+            </Animated.View>
           </View>
         </PressScale>
 
-        {/* Only the unit you are on opens up inline. */}
-        {isCurrent ? (
-          <>
-            <Text variant="caption" color="textSecondary" numberOfLines={1}>
-              {unit.unit.topics.join(' · ')}
-            </Text>
-            <View style={styles.lessonList}>
-              {unit.unit.lessons.map((lesson, lessonIndex) => (
-                <Animated.View
-                  key={lesson.id}
-                  // Keyed on the lesson's position in its own unit, not on the
-                  // unit's position in the stage — offsetting by the unit index
-                  // means the seventh unit's lessons start arriving a third of
-                  // a second late for no reason the learner can see.
-                  entering={FadeIn.duration(Motion.base).delay(stagger(lessonIndex))}>
-                  <LessonLine
+        {state !== 'planned' && unit.lessonCount > 0 ? (
+          <ProgressBar
+            value={unit.progress}
+            height={4}
+            tone={complete ? theme.success : tone}
+          />
+        ) : null}
+
+        {/* --- The spine: every required lesson, on one rail -------------- */}
+        {expanded && state !== 'planned' ? (
+          <Animated.View
+            entering={FadeIn.duration(Motion.base)}
+            exiting={FadeOut.duration(Motion.fast)}
+            style={styles.lessons}>
+            {required.map((lesson, lessonIndex) => (
+              <LessonRow
+                key={lesson.id}
+                lesson={lesson}
+                index={lessonIndex}
+                done={unit.completedLessonIds.includes(lesson.id)}
+                isNext={unit.nextLesson?.id === lesson.id}
+                tone={tone}
+                /* The rail runs between nodes, so the last row has no tail. */
+                connected={lessonIndex < required.length - 1 || extras.length > 0}
+                onPress={() => onStartLesson(lesson)}
+              />
+            ))}
+
+            {/*
+              Enrichment, fenced off. Stories, listening and conversation
+              lessons never gate a unit and are never auto-completed by a skip,
+              so presenting them in the same list as the spine would be telling
+              the learner they are required. The divider is the whole point.
+            */}
+            {extras.length > 0 ? (
+              <>
+                <View style={styles.extrasDivider}>
+                  <View style={[styles.rule, { backgroundColor: theme.border }]} />
+                  <Text variant="caption" color="textTertiary">
+                    Extra — optional
+                  </Text>
+                  <View style={[styles.rule, { backgroundColor: theme.border }]} />
+                </View>
+                {extras.map((lesson, extraIndex) => (
+                  <LessonRow
+                    key={lesson.id}
                     lesson={lesson}
+                    index={required.length + extraIndex}
                     done={unit.completedLessonIds.includes(lesson.id)}
-                    isNext={unit.nextLesson?.id === lesson.id}
+                    isNext={false}
+                    optional
                     tone={tone}
+                    connected={extraIndex < extras.length - 1}
                     onPress={() => onStartLesson(lesson)}
                   />
-                </Animated.View>
-              ))}
-            </View>
-          </>
+                ))}
+              </>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
+        {/* --- The cap: where the unit ends ------------------------------- */}
+        {state !== 'planned' ? (
+          <View
+            style={[
+              styles.cap,
+              {
+                backgroundColor: complete ? theme.successSoft : theme.backgroundSunken,
+                borderColor: complete ? theme.success : theme.border,
+              },
+            ]}>
+            <Icon
+              name={complete ? 'flag' : 'flag-outline'}
+              size={13}
+              tone={complete ? theme.success : theme.textTertiary}
+            />
+            <Text
+              variant="caption"
+              tone={complete ? theme.successText : theme.textTertiary}
+              numberOfLines={1}
+              style={styles.flex}>
+              {complete
+                ? `${unit.unit.title} complete`
+                : `Finish ${unit.lessonCount - unit.lessonsDone} lesson${
+                    unit.lessonCount - unit.lessonsDone === 1 ? '' : 's'
+                  } to complete`}
+            </Text>
+          </View>
         ) : null}
 
         {/*
-          A sibling of the header's PressScale, never a child of it: nesting
-          pressables emits nested <button> elements, which is invalid HTML and a
-          hydration error on web. That constraint is also the better design —
-          the strengthen action is its own affordance, not a second meaning
-          hidden inside "open the unit".
+          Practice — a sibling of the header's PressScale, never a child of it.
+          Nesting pressables emits nested <button> elements, invalid HTML and a
+          hydration error on web.
+
+          It sits *below the cap* deliberately. The unit is already finished by
+          the time this appears; nothing here can change that, and its counter
+          is its own. This is the "revision/mastery" half of the model and it is
+          drawn outside the spine so it can never be mistaken for one.
         */}
-        {state === 'complete' ? (
+        {complete && unit.practice.unlocked ? (
           <PressScale
-            onPress={onStrengthen}
+            onPress={onPractise}
             scaleTo={0.98}
             hover="lift"
             haptic="press"
-            accessibilityLabel={`Strengthen ${unit.unit.title}, ${Math.round(unit.mastery * 100)} percent mastery`}>
+            accessibilityLabel={`Practise ${unit.unit.title}, ${Math.round(unit.mastery * 100)} percent mastery`}>
             <View
               style={[
-                styles.reviewFlag,
-                {
-                  backgroundColor: unit.needsReview ? theme.warningSoft : theme.backgroundSunken,
-                },
+                styles.practice,
+                { backgroundColor: unit.needsReview ? theme.warningSoft : theme.backgroundSunken },
               ]}>
               <Icon
-                name={unit.needsReview ? 'refresh-outline' : 'trending-up-outline'}
+                name={unit.needsReview ? 'refresh-outline' : 'barbell-outline'}
                 size={13}
                 tone={unit.needsReview ? theme.warning : theme.textSecondary}
               />
-              {/*
-                The lessons being finished does not mean the teaching is. While
-                the unit's guided arc still has sessions to run, this row names
-                the next one rather than offering a percentage and leaving the
-                learner to work out what to do with it — which is what it used
-                to do, and the reason a unit could sit at 22% indefinitely.
-              */}
               <Text
                 variant="caption"
                 tone={unit.needsReview ? theme.warning : theme.textSecondary}
                 style={styles.flex}
                 numberOfLines={1}>
-                {unit.arc.next
-                  ? `Next: ${unit.arc.next.title} — ${unit.arc.stepsDone}/${unit.arc.stepCount} sessions`
-                  : unit.needsReview
-                    ? `Review recommended — ${Math.round(unit.mastery * 100)}% mastery`
-                    : `Strengthen — ${Math.round(unit.mastery * 100)}% mastery`}
+                {unit.needsReview
+                  ? `Review recommended — ${Math.round(unit.mastery * 100)}% mastery`
+                  : `Practice — ${Math.round(unit.mastery * 100)}% mastery`}
+                {unit.practice.total > 0
+                  ? ` · ${unit.practice.done}/${unit.practice.total} sessions`
+                  : ''}
               </Text>
               <Icon
                 name="chevron-forward"
@@ -412,8 +492,9 @@ function UnitRow({
         ) : null}
 
         {state === 'locked' ? (
-          <Text variant="caption" color="textTertiary">
-            Finish the previous unit to unlock
+          <Text variant="caption" color="textTertiary" numberOfLines={2}>
+            Ahead of your path — you can still open it. Finishing a lesson here marks
+            the units before it complete.
           </Text>
         ) : null}
 
@@ -422,120 +503,155 @@ function UnitRow({
             {unit.unit.topics.join(' · ')}
           </Text>
         ) : null}
+
+        {/* Full unit detail — the study sheet — is one tap away, always. */}
+        {state !== 'planned' ? (
+          <PressScale
+            onPress={onOpen}
+            scaleTo={0.98}
+            haptic="tap"
+            accessibilityLabel={`Open ${unit.unit.title}`}>
+            <View style={styles.openRow}>
+              <Text variant="caption" tone={theme.textSecondary}>
+                {complete ? 'What I learned here' : 'Unit details'}
+              </Text>
+              <Icon name="chevron-forward" size={13} color="textTertiary" />
+            </View>
+          </PressScale>
+        ) : null}
       </View>
+
+      {/*
+        The hand-over to the next unit. A short connector rather than a plain
+        gap: the gap alone says "these are two cards", and this says "and you
+        pass from the first to the second", which is the thing a path has to
+        communicate.
+      */}
+      {!isLast ? (
+        <View style={styles.handover}>
+          <View
+            style={[
+              styles.handoverLine,
+              { backgroundColor: complete ? theme.success : theme.border },
+            ]}
+          />
+          <Icon
+            name="chevron-down"
+            size={12}
+            tone={complete ? theme.success : theme.textTertiary}
+          />
+          <View
+            style={[
+              styles.handoverLine,
+              { backgroundColor: complete ? theme.success : theme.border },
+            ]}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function UnitMeta({ unit }: { unit: UnitProgress }) {
-  const theme = useTheme();
-
-  if (unit.state === 'planned') {
-    return (
-      <View style={[styles.tag, { backgroundColor: theme.backgroundSunken }]}>
-        <Text variant="caption" color="textTertiary">
-          Planned
-        </Text>
-      </View>
-    );
-  }
-  if (unit.state === 'complete') {
-    return (
-      <Text variant="caption" numeric tone={unit.needsReview ? theme.warning : theme.success}>
-        {Math.round(unit.mastery * 100)}%
-      </Text>
-    );
-  }
-  if (unit.state === 'locked') {
-    return <Icon name="lock-closed" size={13} color="textTertiary" />;
-  }
-  /**
-   * Sessions, not lessons — the same figure the unit screen shows.
-   *
-   * These two screens answer the same question, "how far through this unit am
-   * I", and they were reading it from two different places: this row counted
-   * required *lessons* while the unit screen counted the guided arc. So a unit
-   * read 0/2 here and 0/5 one tap away, and neither number was wrong on its own
-   * terms, which is the worst version of this. `progress.arc` is what completes
-   * a unit's teaching — its required lessons plus the phases that follow them,
-   * with optional enrichment deliberately left out — so it is the one both
-   * screens ask.
-   */
-  return (
-    <Text variant="caption" color="textSecondary" numeric>
-      {unit.arc.stepsDone}/{unit.arc.stepCount}
-    </Text>
-  );
-}
-
-function LessonLine({
+function LessonRow({
   lesson,
+  index,
   done,
   isNext,
+  optional,
   tone,
+  connected,
   onPress,
 }: {
   lesson: Lesson;
+  index: number;
   done: boolean;
   isNext: boolean;
+  optional?: boolean;
   tone: string;
+  connected: boolean;
   onPress: () => void;
 }) {
   const theme = useTheme();
 
+  const nodeTone = done ? theme.success : isNext ? tone : theme.borderStrong;
+
   return (
-    <PressScale
-      onPress={onPress}
-      scaleTo={0.98}
-      haptic="press"
-      accessibilityLabel={`${lesson.title}. ${lesson.goal}`}>
-      <View
-        style={[
-          styles.lessonLine,
-          {
-            backgroundColor: isNext ? theme.backgroundElement : 'transparent',
-            borderColor: isNext ? tone : theme.border,
-          },
-        ]}>
-        <Icon
-          name={done ? 'checkmark-circle' : isNext ? 'play-circle' : 'ellipse-outline'}
-          size={16}
-          tone={done ? theme.success : isNext ? tone : theme.textTertiary}
-        />
-        <Text
-          variant={isNext ? 'smallBold' : 'small'}
-          color={done ? 'textSecondary' : 'text'}
-          numberOfLines={1}
-          style={styles.flex}>
-          {lesson.title}
-        </Text>
-        {isNext ? (
-          <Text variant="caption" tone={tone}>
-            {lesson.estMinutes} min
-          </Text>
+    <Animated.View
+      // Keyed on the lesson's position in its own unit, not on the unit's
+      // position in the stage — offsetting by the unit index means the seventh
+      // unit's lessons start arriving a third of a second late for no reason
+      // the learner can see.
+      entering={FadeIn.duration(Motion.base).delay(stagger(index))}
+      style={styles.lessonRow}>
+      {/* The rail. This is what makes the lessons read as belonging to the
+          unit above them rather than as a loose list underneath it. */}
+      <View style={styles.rail}>
+        <View
+          style={[
+            styles.node,
+            {
+              backgroundColor: done ? theme.success : isNext ? tone : theme.backgroundElement,
+              borderColor: nodeTone,
+              borderStyle: optional ? 'dashed' : 'solid',
+            },
+          ]}>
+          {done ? <Icon name="checkmark" size={9} tone={theme.onTint} /> : null}
+        </View>
+        {connected ? (
+          <View style={[styles.railLine, { backgroundColor: done ? theme.success : theme.border }]} />
         ) : null}
       </View>
-    </PressScale>
+
+      <PressScale
+        onPress={onPress}
+        scaleTo={0.98}
+        haptic="press"
+        style={styles.flex}
+        accessibilityLabel={`${lesson.title}. ${lesson.goal}`}>
+        <View
+          style={[
+            styles.lesson,
+            {
+              backgroundColor: isNext ? theme.backgroundElement : 'transparent',
+              borderColor: isNext ? tone : theme.border,
+              borderWidth: isNext ? 1.5 : 1,
+            },
+          ]}>
+          <Text
+            variant={isNext ? 'smallBold' : 'small'}
+            color={done ? 'textSecondary' : 'text'}
+            numberOfLines={1}
+            style={styles.flex}>
+            {lesson.title}
+          </Text>
+          <Text variant="caption" tone={isNext ? tone : theme.textTertiary}>
+            {lesson.estMinutes} min
+          </Text>
+        </View>
+      </PressScale>
+    </Animated.View>
   );
 }
 
 function unitStateLabel(unit: UnitProgress): string {
   switch (unit.state) {
     case 'complete':
-      return `complete, ${Math.round(unit.mastery * 100)} percent mastery`;
+      return `completed, ${Math.round(unit.mastery * 100)} percent mastery`;
     case 'current':
-      return `in progress, ${unit.arc.stepsDone} of ${unit.arc.stepCount} sessions`;
+      return `in progress, ${unit.lessonsDone} of ${unit.lessonCount} lessons`;
     case 'available':
       return 'ready to start';
     case 'locked':
-      return 'locked';
+      return 'ahead of your path, still openable';
     default:
       return 'planned';
   }
 }
 
+const NODE = 18;
+
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, minWidth: 0 },
   stages: { gap: Spacing.three },
   stage: {
     borderRadius: Radius.lg,
@@ -546,25 +662,15 @@ const styles = StyleSheet.create({
   stageHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   stageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   stageBar: { paddingHorizontal: Spacing.half },
-  units: { gap: 0, paddingTop: Spacing.two },
-  unitRow: { flexDirection: 'row', gap: Spacing.three },
-  rail: { alignItems: 'center', width: 24, paddingTop: Spacing.three },
-  node: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.full,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  connector: { width: 2, flex: 1, minHeight: 16, marginTop: 2 },
-  unitCard: {
-    gap: Spacing.two,
-    padding: Spacing.three,
+  units: { paddingTop: Spacing.two },
+
+  unitBlock: { gap: 0 },
+  unit: {
     borderRadius: Radius.md,
-    marginBottom: Spacing.two,
+    padding: Spacing.three,
+    gap: Spacing.two,
   },
-  unitTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  unitHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   unitIcon: {
     width: 34,
     height: 34,
@@ -572,13 +678,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tag: {
-    paddingVertical: 3,
-    paddingHorizontal: Spacing.two,
+  unitBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+
+  lessons: { paddingTop: Spacing.one },
+  lessonRow: { flexDirection: 'row', gap: Spacing.two, alignItems: 'stretch' },
+  rail: { width: NODE, alignItems: 'center', paddingTop: Spacing.two },
+  node: {
+    width: NODE,
+    height: NODE,
     borderRadius: Radius.full,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  lessonList: { gap: Spacing.two, paddingTop: Spacing.one },
-  lessonLine: {
+  railLine: { width: 2, flex: 1, minHeight: 10 },
+  lesson: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.sm,
+    marginBottom: Spacing.two,
+  },
+  extrasDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+    paddingLeft: NODE + Spacing.two,
+  },
+  rule: { height: 1, flex: 1 },
+
+  cap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
@@ -586,8 +718,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.sm,
     borderWidth: 1,
+    borderStyle: 'dashed',
   },
-  reviewFlag: {
+  practice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
@@ -595,4 +728,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.sm,
   },
+  openRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    paddingTop: Spacing.one,
+  },
+
+  handover: { alignItems: 'center', paddingVertical: Spacing.one },
+  handoverLine: { width: 2, height: 8 },
 });

@@ -18,6 +18,7 @@ import { STATE_VERSION } from '@/learning/schema';
 import type { Exercise } from '@/learning/exercise';
 import { applyPlacement, type PlacementAnswer, type PlacementScore } from '@/learning/placement';
 import { applyAnswerToMistakes } from '@/learning/mistakes';
+import { skipForwardPatch } from '@/learning/progression';
 import { isCompletionId } from '@/learning/session';
 import { createConceptState, introduce, mastery, review } from '@/learning/srs';
 import {
@@ -114,6 +115,10 @@ interface LearnerContextValue {
   recordAnswer: (input: RecordAnswerInput) => AnswerOutcome;
   markIntroduced: (conceptIds: string[]) => void;
   completeSession: (input: CompleteSessionInput) => void;
+  /** Marks a lesson opened but unfinished, so a kill can offer Resume. */
+  beginLesson: (lessonId: string) => void;
+  /** Clears that marker deliberately: the learner quit rather than finished. */
+  abandonLesson: (lessonId?: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   toggleFavourite: (conceptId: string) => void;
   resolveMistake: (mistakeId: string) => void;
@@ -407,6 +412,9 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       const streak = nextStreak(prev.lastStudyDate, prev.streak, today);
 
       const completedLessons = { ...prev.completedLessons };
+      let concepts = prev.concepts;
+      let activeLesson = prev.activeLesson;
+
       if (input.lessonId && isCompletionId(input.lessonId)) {
         const previousEntry = completedLessons[input.lessonId];
         const accuracy = input.total > 0 ? input.correct / input.total : 1;
@@ -415,6 +423,29 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
           accuracy: previousEntry ? Math.max(previousEntry.accuracy, accuracy) : accuracy,
           times: (previousEntry?.times ?? 0) + 1,
         };
+
+        /**
+         * Finishing a lesson ahead of the learner's position is the one act
+         * that counts as "I meant to skip what came before".
+         *
+         * The policy is pure and lives in `learning/progression.ts`; this is
+         * only the write. Note where it sits: inside the `isCompletionId`
+         * branch, which `completedLessonId` has already gated on the learner
+         * reaching the real end of the queue. So answering a few questions and
+         * closing the screen cannot trigger a skip, and neither can a practice
+         * session — its `arc:<unit>:<phase>` id is not a lesson.
+         */
+        const patch = skipForwardPatch(prev, input.lessonId, now);
+        for (const skippedId of patch.lessonIds) {
+          completedLessons[skippedId] = { at: now, accuracy: 0, times: 0, skipped: true };
+        }
+        if (Object.keys(patch.concepts).length > 0) {
+          concepts = { ...concepts, ...patch.concepts };
+        }
+
+        // The lesson is finished, so it is no longer in progress. Abandoning
+        // clears this too; the difference between the two is who cleared it.
+        if (activeLesson?.lessonId === input.lessonId) activeLesson = undefined;
       }
 
       return {
@@ -422,11 +453,40 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         sessions: [...prev.sessions, record].slice(-MAX_SESSIONS),
         daily: daily.slice(-MAX_DAILY),
         completedLessons,
+        concepts,
+        activeLesson,
         streak,
         longestStreak: Math.max(prev.longestStreak, streak),
         lastStudyDate: today,
         totalSeconds: prev.totalSeconds + input.seconds,
       };
+    });
+  }, []);
+
+  /**
+   * Marks a lesson as opened but not finished.
+   *
+   * In progress, abandoned and completed are three different states. This sets
+   * the first; `abandonLesson` clears it deliberately, and `completeSession`
+   * clears it by finishing. Nothing here infers completion — an in-progress
+   * lesson never advances the Continue target, however much XP was earned
+   * inside it.
+   */
+  const beginLesson = useCallback((lessonId: string) => {
+    setLearner((prev) =>
+      prev.activeLesson?.lessonId === lessonId
+        ? prev
+        : { ...prev, activeLesson: { lessonId, at: Date.now() } },
+    );
+  }, []);
+
+  /** The learner pressed X or backed out: the lesson is abandoned, not finished. */
+  const abandonLesson = useCallback((lessonId?: string) => {
+    setLearner((prev) => {
+      if (!prev.activeLesson) return prev;
+      if (lessonId && prev.activeLesson.lessonId !== lessonId) return prev;
+      const { activeLesson: _dropped, ...rest } = prev;
+      return rest as LearnerState;
     });
   }, []);
 
@@ -524,6 +584,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       recordAnswer,
       markIntroduced,
       completeSession,
+      beginLesson,
+      abandonLesson,
       updateSettings,
       toggleFavourite,
       resolveMistake,
@@ -541,6 +603,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       recordAnswer,
       markIntroduced,
       completeSession,
+      beginLesson,
+      abandonLesson,
       updateSettings,
       toggleFavourite,
       resolveMistake,
