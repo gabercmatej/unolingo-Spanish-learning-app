@@ -18,6 +18,7 @@ import {
   vocabConcepts,
   verbs,
 } from '@/content';
+import { COVERAGE, CORE_GRAMMAR, CORE_VERBS } from '@/content/coverage';
 import { errorDrills, naturalDrills } from '@/content/drills';
 import { sentenceLexis } from '@/content/lexicon';
 import { ceilingFromKnown, sentenceEligible, type Knowledge } from '@/learning/eligibility';
@@ -309,6 +310,10 @@ export function auditCurriculum(): CurriculumAudit {
       ...findMistaggedSentences(),
       ...findUntrackedVocabulary(),
       ...findParadigmGaps(),
+      ...findDomainCoverageGaps(),
+      ...findCoreVerbGaps(),
+      ...findCoreGrammarGaps(),
+      ...findStageShallowness(stages),
       ...findTemplates(),
     ],
   };
@@ -1112,6 +1117,241 @@ function pct(part: number, whole: number): string {
 }
 
 /** Human-readable report, printed by `npm run audit:content`. */
+
+// --- CEFR credibility -------------------------------------------------------
+
+/**
+ * Whether a stage can credibly claim its level.
+ *
+ * The volume table above answers "how much is there?", which is not the
+ * question. A stage teaching 244 words is compatible with a learner who can
+ * discuss the weather four ways and cannot name a single part of the body. So
+ * these checks measure **semantic coverage**: could somebody who mastered this
+ * stage express the things the level implies?
+ *
+ * Declared in `content/coverage.ts` as slots — one thing to express, several
+ * acceptable words — which is deliberately not a quota. Adding forty adjectives
+ * does not fill the "knee" slot; the only way to close a gap is to teach the
+ * missing thing. See that file for why the shape matters.
+ */
+
+/** Strips the article and the gender alternant so `la mano` matches `mano`. */
+function coverageKey(word: string): string {
+  return word
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[¿?¡!.,…]/g, '')
+    .replace(/^(el|la|los|las|un|una)\s+/, '')
+    .split('/')[0]
+    .trim();
+}
+
+/** Every Spanish surface the course teaches, keyed for comparison, with its level. */
+function taughtSurfaces(): Map<string, CefrLevel> {
+  const out = new Map<string, CefrLevel>();
+  for (const concept of vocabConcepts) {
+    for (const surface of [concept.es, ...(concept.es.includes('/') ? concept.es.split('/') : [])]) {
+      const key = coverageKey(surface);
+      if (!key) continue;
+      const existing = out.get(key);
+      if (!existing || levelIndex(concept.level) < levelIndex(existing)) {
+        out.set(key, concept.level);
+      }
+    }
+  }
+  return out;
+}
+
+function findDomainCoverageGaps(): Gap[] {
+  const gaps: Gap[] = [];
+  const surfaces = taughtSurfaces();
+
+  for (const domain of COVERAGE) {
+    const ceiling = levelIndex(domain.by);
+    const missing: string[] = [];
+    const late: string[] = [];
+
+    for (const slot of domain.slots) {
+      let bestLevel: CefrLevel | undefined;
+      for (const word of slot.any) {
+        const level = surfaces.get(coverageKey(word));
+        if (level && (!bestLevel || levelIndex(level) < levelIndex(bestLevel))) bestLevel = level;
+      }
+      if (!bestLevel) missing.push(slot.gloss);
+      else if (levelIndex(bestLevel) > ceiling) late.push(`${slot.gloss} (${bestLevel})`);
+    }
+
+    const covered = domain.slots.length - missing.length;
+    const where = `${domain.by} ${domain.label}`;
+
+    if (missing.length > 0) {
+      gaps.push({
+        severity: 'warn',
+        where,
+        message:
+          `${covered}/${domain.slots.length} covered — the course teaches no word for: ` +
+          missing.join(', '),
+      });
+    } else {
+      gaps.push({
+        severity: 'info',
+        where,
+        message: `${covered}/${domain.slots.length} covered`,
+      });
+    }
+
+    if (late.length > 0) {
+      gaps.push({
+        severity: 'info',
+        where,
+        message: `taught later than the level needs them: ${late.join(', ')}`,
+      });
+    }
+  }
+
+  return gaps;
+}
+
+function findCoreVerbGaps(): Gap[] {
+  const gaps: Gap[] = [];
+  const known = new Map(verbs.map((verb) => [coverageKey(verb.infinitive), verb.level]));
+  // A verb may also be reached as vocabulary without a conjugation table.
+  const asVocab = new Set(
+    vocabConcepts.filter((c) => c.pos === 'verb').map((c) => coverageKey(c.es)),
+  );
+
+  for (const band of CORE_VERBS) {
+    const missing: string[] = [];
+    const unconjugated: string[] = [];
+    for (const infinitive of band.infinitives) {
+      const key = coverageKey(infinitive);
+      if (known.has(key)) continue;
+      if (asVocab.has(key)) unconjugated.push(infinitive);
+      else missing.push(infinitive);
+    }
+    const where = `${band.level} core verbs`;
+    if (missing.length > 0) {
+      gaps.push({
+        severity: 'warn',
+        where,
+        message: `${band.infinitives.length - missing.length - unconjugated.length}/${band.infinitives.length} conjugated — absent from the course: ${missing.join(', ')}`,
+      });
+    }
+    if (unconjugated.length > 0) {
+      gaps.push({
+        severity: 'info',
+        where,
+        message: `taught as vocabulary but with no conjugation table: ${unconjugated.join(', ')}`,
+      });
+    }
+    if (missing.length === 0 && unconjugated.length === 0) {
+      gaps.push({
+        severity: 'info',
+        where,
+        message: `${band.infinitives.length}/${band.infinitives.length} conjugated`,
+      });
+    }
+  }
+  return gaps;
+}
+
+function findCoreGrammarGaps(): Gap[] {
+  const gaps: Gap[] = [];
+  /**
+   * Matched loosely against titles, ids and summaries, because the course's
+   * naming is its own and this list should not have to track it word for word.
+   * A miss means "nothing in the course looks like it covers this", which is a
+   * prompt for a human rather than an assertion that it is absent.
+   */
+  const haystacks = grammarConcepts.map((concept) =>
+    `${concept.id} ${concept.title} ${concept.short}`.toLowerCase(),
+  );
+
+  for (const band of CORE_GRAMMAR) {
+    const missing: string[] = [];
+    for (const point of band.points) {
+      const found = haystacks.some((hay) =>
+        point.match.every((needle) => hay.includes(needle.toLowerCase())),
+      ) || haystacks.some((hay) => point.match.some((needle) => hay.includes(needle.toLowerCase())));
+      if (!found) missing.push(point.label);
+    }
+    const where = `${band.level} core grammar`;
+    if (missing.length > 0) {
+      gaps.push({
+        severity: 'warn',
+        where,
+        message: `${band.points.length - missing.length}/${band.points.length} present — nothing covers: ${missing.join(', ')}`,
+      });
+    } else {
+      gaps.push({
+        severity: 'info',
+        where,
+        message: `${band.points.length}/${band.points.length} present`,
+      });
+    }
+  }
+  return gaps;
+}
+
+/**
+ * Whether a later stage goes shallow relative to the ones before it.
+ *
+ * The specific failure this catches: a course that is credible at A1 and then
+ * thins out, so the learner's experience degrades exactly when the material
+ * gets harder and they need more support, not less. Measured relative to the
+ * course's own earlier stages rather than against an absolute target, because
+ * an absolute target is a quota and a quota is an instruction to pad.
+ *
+ * Deliberately compares *new material introduced*, not sentence count: a stage
+ * can carry a large corpus while introducing almost nothing, which is precisely
+ * the shape a stage takes when it has been filled out with examples rather than
+ * with curriculum.
+ */
+function findStageShallowness(stages: StageAudit[]): Gap[] {
+  const gaps: Gap[] = [];
+  if (stages.length < 3) return gaps;
+
+  const introduced = (stage: StageAudit) => stage.vocab + stage.phrases + stage.grammar;
+  const values = stages.map(introduced);
+  const busiest = Math.max(...values);
+
+  /**
+   * A later stage introducing under this fraction of the busiest stage is
+   * suspicious rather than wrong — some thinning is legitimate, because at C1
+   * the work is control rather than coverage. A fifth is where "fewer new
+   * things" becomes "almost no new things".
+   */
+  const THIN_FRACTION = 0.2;
+
+  for (const [index, stage] of stages.entries()) {
+    const value = values[index];
+    if (index === 0) continue;
+    if (value >= busiest * THIN_FRACTION) continue;
+    gaps.push({
+      severity: 'warn',
+      where: stage.levelRange,
+      message:
+        `introduces ${value} new items (${stage.vocab} words, ${stage.phrases} chunks, ${stage.grammar} grammar) ` +
+        `against ${busiest} in the course's busiest stage — progression goes shallow here`,
+    });
+  }
+
+  const requiredLessons = stages.map((stage) => stage.requiredLessons);
+  const mostRequired = Math.max(...requiredLessons);
+  for (const [index, stage] of stages.entries()) {
+    if (index === 0) continue;
+    if (stage.requiredLessons >= mostRequired * 0.35) continue;
+    gaps.push({
+      severity: 'warn',
+      where: stage.levelRange,
+      message: `${stage.requiredLessons} required lessons against ${mostRequired} in the fullest stage — too few sittings to build the level`,
+    });
+  }
+
+  return gaps;
+}
+
 export function formatAudit(audit: CurriculumAudit = auditCurriculum()): string {
   const width = 78;
   const out: string[] = ['', 'UNOLINGO CURRICULUM AUDIT', '='.repeat(width), ''];
