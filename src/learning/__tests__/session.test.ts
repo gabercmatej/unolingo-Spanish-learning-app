@@ -16,7 +16,7 @@ import {
 import { skillBalance } from '@/learning/mastery';
 import { buildLessonSession, buildSmartReview, nextLesson } from '@/learning/session';
 import { createConceptState, review } from '@/learning/srs';
-import { KIND_SKILL, PRESENTATION_KINDS } from '@/learning/types';
+import { KIND_SKILL, PRESENTATION_KINDS, type ConceptState } from '@/learning/types';
 import { cumulativeXp, levelInfo, xpForAnswer } from '@/learning/xp';
 
 /** Every exercise the app can produce must be answerable and well-formed. */
@@ -586,6 +586,97 @@ describe('modality inside ordinary lessons', () => {
     // the claim being protected is "most ordinary lessons", not an exact ratio.
     expect(withListening / ordinary.length).toBeGreaterThan(0.8);
     expect(withProduction / ordinary.length).toBeGreaterThan(0.8);
+  });
+
+  /**
+   * Sentence building is a core format, not an occasional one.
+   *
+   * It is the only kind that tests word order, clitic position, agreement,
+   * negation, question inversion and preposition choice at once — a multiple
+   * choice cannot ask any of them — which is why it earns a floor of its own
+   * beside listening and production.
+   *
+   * The measurement that prompted it: `wordBank` was absent from the tier that
+   * brand-new concepts sit in, and generation is a pure read, so nothing a
+   * learner answered inside a lesson moved them out of that tier while it was
+   * being built. Across the 86 core and grammar lessons it appeared in **none**
+   * for a first pass, and in 7 of 86 for a learner early in the course.
+   */
+  it('makes sentence building a core format at every stage of knowing a word', () => {
+    const ordinary = allLessons.filter((l) => l.kind === 'core' || l.kind === 'grammar');
+
+    // Every band below mastery. Above it the mix deliberately moves to free
+    // production and the word bank drops out — asserted separately below.
+    for (const strength of [0.2, 0.45, 0.7]) {
+      const concepts: Record<string, ConceptState> = {};
+      for (const lesson of allLessons) {
+        for (const id of [...lesson.teaches, ...(lesson.grammar ?? [])]) {
+          concepts[id] = {
+            ...createConceptState(id, Date.now() - 20 * 86_400_000),
+            introduced: true,
+            timesSeen: 4,
+            correct: 3,
+            strength,
+            depth: 3,
+            lastReviewed: Date.now() - 86_400_000,
+            stability: 10,
+          };
+        }
+      }
+      const learner = makeLearner({ concepts });
+
+      let withWordBank = 0;
+      for (const lesson of ordinary) {
+        const plan = buildLessonSession(lesson.id, { learner, seed: lesson.id.length * 7 });
+        if ((plan?.exercises ?? []).some((e) => e.kind === 'wordBank')) withWordBank += 1;
+      }
+
+      // A floor, not the observed value. Observed is 100% at each of these.
+      expect(withWordBank / ordinary.length).toBeGreaterThan(0.75);
+    }
+  });
+
+  it('steps past sentence building once a concept is produced freely', () => {
+    /**
+     * The other half of the claim, and the reason the floor above stops at
+     * 0.78. Assembling blocks is the bridge *to* production; handing it back to
+     * somebody already across it is a step backwards dressed up as variety.
+     */
+    const ctx = {
+      settings: DEFAULT_SETTINGS_FOR_TEST,
+      now: Date.now(),
+      rng: () => 0.5,
+      recentKinds: [],
+    };
+    const mastered = {
+      ...createConceptState('v.hola', Date.now() - 40 * 86_400_000),
+      introduced: true,
+      timesSeen: 12,
+      correct: 12,
+      strength: 0.95,
+      stability: 40,
+      depth: 5 as const,
+      lastReviewed: Date.now(),
+    };
+    const kinds = candidateKinds(mastered, ctx);
+    expect(kinds.indexOf('wordBank')).toBeGreaterThan(kinds.indexOf('translateToEs'));
+  });
+
+  it('offers sentence building on a concept\'s very first practice', () => {
+    /**
+     * The `unseen` tier specifically. A concept met moments ago gets one gentle
+     * recognition and then builds a sentence with the word — rather than four
+     * more ways of picking it out of a list.
+     */
+    const ctx = {
+      settings: DEFAULT_SETTINGS_FOR_TEST,
+      now: Date.now(),
+      rng: () => 0.5,
+      recentKinds: [],
+    };
+    const kinds = candidateKinds(undefined, ctx);
+    expect(kinds).toContain('wordBank');
+    expect(kinds.indexOf('wordBank')).toBeLessThan(kinds.indexOf('match'));
   });
 });
 

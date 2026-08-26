@@ -410,14 +410,50 @@ export function candidateKinds(state: ConceptState | undefined, ctx: GenContext)
       ? [...RECONSTRUCTION]
       : advanced
         ? [...RECONSTRUCTION.slice(0, 3), 'translateToEn']
-        : [...RECOGNITION, 'translateToEn'];
+        : /**
+           * `wordBank` sits second, immediately after the gentlest recognition.
+           *
+           * It was absent from this tier entirely, and this tier is what a
+           * lesson's brand-new concepts sit in for the whole of a first pass —
+           * generation is a pure read, so nothing a learner answers inside a
+           * lesson moves them out of `unseen` while that lesson is being built.
+           * Measured across the 86 core and grammar lessons: **`wordBank`
+           * appeared in none of them.** Assembling a sentence from blocks — the
+           * bridge between recognising a word and producing one — was
+           * unreachable on a first encounter with every word in the course.
+           *
+           * Second rather than first because a word met thirty seconds ago
+           * still deserves one gentle look before being built into a sentence.
+           */
+          [RECOGNITION[0], 'wordBank', ...RECOGNITION.slice(1), 'translateToEn'];
   } else {
     const strength = mastery(state, ctx.now);
 
-    if (strength < 0.3) tiers = [...RECOGNITION, 'translateToEn', 'wordBank'];
+    /**
+     * `wordBank` runs through every band rather than sitting at the end of the
+     * weakest one. Sentence construction is the format that carries word order,
+     * clitic position, agreement, negation, question inversion and preposition
+     * choice — none of which a multiple choice can test — so it belongs
+     * wherever the learner is, at the difficulty that band implies.
+     */
+    if (strength < 0.3)
+      tiers = [RECOGNITION[0], 'wordBank', ...RECOGNITION.slice(1), 'translateToEn'];
     else if (strength < 0.55) tiers = [...RECONSTRUCTION, 'listenSelect'];
     else if (strength < 0.78) tiers = [...PRODUCTION, ...RECONSTRUCTION.slice(0, 2)];
-    else tiers = [...FREE, ...PRODUCTION];
+    /**
+     * At the top band it sits behind free production, and in practice that
+     * means it effectively disappears — the five free kinds all build, so a
+     * learner above 0.78 on a concept is asked to produce rather than assemble.
+     * That is deliberate, and measured: 0 of 86 lessons offer a word bank to a
+     * learner who is already there. Assembling blocks is the bridge *to*
+     * production, and once somebody is across it, handing them the bridge again
+     * is a step backwards dressed up as variety.
+     *
+     * It stays in the list rather than being dropped so hard mode and the
+     * per-skill ranking can still reach it when free production is out of
+     * range for the skill in question.
+     */
+    else tiers = [...FREE, 'wordBank', ...PRODUCTION];
 
     if (advanced && !hard) {
       // Shift one tier up rather than removing recognition outright — a B2
