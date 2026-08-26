@@ -287,6 +287,67 @@ for (const verb of verbs) {
 
 export const verbTeachingOrder = (verbId: string): number => verbOrder.get(verbId) ?? UNTAUGHT;
 
+// --- Where a concept was taught -------------------------------------------
+
+/**
+ * The lesson, unit and stage that first teach a concept.
+ *
+ * One lookup, shared by everything that needs to say *where* something was
+ * learned: the Library's section/unit grouping, and a completed unit's study
+ * sheet. Both questions are "which part of the course owns this?", and
+ * answering them separately is how two screens come to disagree about the same
+ * word.
+ *
+ * `undefined` for a concept no lesson teaches — a derived verb paradigm that
+ * was never assigned, say. That is a real state the audit reports on, so it is
+ * represented rather than papered over.
+ */
+export interface ConceptOrigin {
+  lesson: Lesson;
+  unit: Unit;
+  stage: Stage;
+}
+
+const originByConcept = new Map<string, ConceptOrigin>();
+for (const [conceptId, lessonId] of introducingLesson) {
+  const lesson = lessonById.get(lessonId);
+  const unit = unitByLessonId.get(lessonId);
+  const stage = stageByLessonId.get(lessonId);
+  if (lesson && unit && stage) originByConcept.set(conceptId, { lesson, unit, stage });
+}
+
+export const conceptOrigin = (conceptId: string): ConceptOrigin | undefined =>
+  originByConcept.get(conceptId);
+
+/**
+ * The earliest unit that reaches a verb, through any of its paradigms or its
+ * vocabulary entry — the same rule `verbTeachingOrder` uses, so the Library's
+ * verb grouping and its verb ordering cannot drift apart.
+ */
+const verbOriginById = new Map<string, ConceptOrigin>();
+for (const verb of verbs) {
+  let best: ConceptOrigin | undefined;
+  let bestOrder = UNTAUGHT;
+  const candidates = [
+    ...verbFormConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
+    ...vocabConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
+  ];
+  for (const id of candidates) {
+    const order = teachingOrder(id);
+    if (order < bestOrder) {
+      const origin = originByConcept.get(id);
+      if (origin) {
+        bestOrder = order;
+        best = origin;
+      }
+    }
+  }
+  if (best) verbOriginById.set(verb.id, best);
+}
+
+export const verbOrigin = (verbId: string): ConceptOrigin | undefined =>
+  verbOriginById.get(verbId);
+
 /** Comparator for concepts: course order first, then level, then alphabetical. */
 export function byTeachingOrder(
   a: { id: string; level: CefrLevel },

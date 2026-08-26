@@ -1,0 +1,197 @@
+import { conceptOrigin, curriculum, getLessonThatIntroduces, vocabConcepts } from '@/content';
+import { makeLearner } from '@/learning/__tests__/helpers';
+import {
+  RECENT_WINDOW_DAYS,
+  countMet,
+  currentStageId,
+  groupByCourse,
+  passesFilter,
+  sortForGrouping,
+} from '@/learning/library';
+import { createConceptState, introduce } from '@/learning/srs';
+import type { ConceptState, LearnerState } from '@/learning/types';
+
+/**
+ * Browsing the Library once it is too big to scroll.
+ *
+ * The organising claim under test: entries are grouped by **where the learner
+ * met them**, in curriculum order, and the filters distinguish *shown to me*
+ * from *retrieved by me* — the same encountered-vs-retrieved line the mastery
+ * figures draw, because a filter called "Learned" that counted teaching cards
+ * would overstate exactly what the rest of the app is careful not to.
+ */
+
+const NOW = Date.UTC(2026, 1, 1);
+const DAY = 86_400_000;
+
+function retrieved(id: string, firstSeen = NOW - DAY): ConceptState {
+  return {
+    ...createConceptState(id, firstSeen),
+    introduced: true,
+    timesSeen: 3,
+    correct: 3,
+    strength: 0.7,
+    depth: 3,
+    lastReviewed: NOW - DAY,
+  };
+}
+
+describe('grouping walks the curriculum', () => {
+  const ids = vocabConcepts.map((concept) => concept.id);
+  const { stages, ungrouped } = groupByCourse(ids);
+
+  it('emits stages in curriculum order', () => {
+    const expected = curriculum.map((stage) => stage.id);
+    const actual = stages.map((group) => group.stage.id);
+    expect(actual).toEqual(expected.filter((id) => actual.includes(id)));
+  });
+
+  it('emits units in curriculum order inside each stage', () => {
+    for (const group of stages) {
+      const expected = group.stage.units.map((unit) => unit.id);
+      const actual = group.units.map((unit) => unit.unit.id);
+      expect(actual).toEqual(expected.filter((id) => actual.includes(id)));
+    }
+  });
+
+  it('files every concept under the unit whose lesson first teaches it', () => {
+    for (const group of stages) {
+      for (const unit of group.units) {
+        for (const id of unit.ids) {
+          expect(conceptOrigin(id)?.unit.id).toBe(unit.unit.id);
+        }
+      }
+    }
+  });
+
+  it('loses nothing: every id lands in exactly one place', () => {
+    const placed = stages.flatMap((group) => group.units.flatMap((unit) => unit.ids));
+    expect([...placed, ...ungrouped].sort()).toEqual([...ids].sort());
+    expect(new Set(placed).size).toBe(placed.length);
+  });
+
+  it('sets aside anything no lesson teaches rather than filing it wrongly', () => {
+    for (const id of ungrouped) {
+      expect(getLessonThatIntroduces(id)).toBeUndefined();
+    }
+  });
+});
+
+describe('the filters distinguish shown from retrieved', () => {
+  const id = vocabConcepts[0].id;
+  const base = { id, learner: makeLearner(), now: NOW };
+
+  it('counts a never-seen concept as not yet met', () => {
+    expect(passesFilter('unmet', { ...base, state: undefined })).toBe(true);
+    expect(passesFilter('learned', { ...base, state: undefined })).toBe(false);
+  });
+
+  it('does not call a concept learned just because a card introduced it', () => {
+    /**
+     * The case a skipped-ahead unit produces, and the one this rule exists for.
+     * `introduce` sets `introduced` and schedules review without touching
+     * `timesSeen` — so the concept is in the Library and out of "Not yet met",
+     * and it is not claimed as learned.
+     */
+    const state = introduce(createConceptState(id, NOW), NOW);
+    expect(passesFilter('unmet', { ...base, state })).toBe(false);
+    expect(passesFilter('learned', { ...base, state })).toBe(false);
+    expect(passesFilter('all', { ...base, state })).toBe(true);
+  });
+
+  it('calls it learned once it has been retrieved', () => {
+    expect(passesFilter('learned', { ...base, state: retrieved(id) })).toBe(true);
+  });
+
+  it('scopes "recent" to the recency window', () => {
+    const fresh = retrieved(id, NOW - 2 * DAY);
+    const old = retrieved(id, NOW - (RECENT_WINDOW_DAYS + 5) * DAY);
+    expect(passesFilter('recent', { ...base, state: fresh })).toBe(true);
+    expect(passesFilter('recent', { ...base, state: old })).toBe(false);
+  });
+
+  it('never reports a merely-introduced concept as recent', () => {
+    const state = introduce(createConceptState(id, NOW), NOW);
+    expect(passesFilter('recent', { ...base, state })).toBe(false);
+  });
+});
+
+describe('met counts and the section that opens first', () => {
+  const ids = vocabConcepts.map((concept) => concept.id);
+
+  it('counts introduced concepts as met, in the section that taught them', () => {
+    const groups = groupByCourse(ids);
+    const firstUnit = groups.stages[0].units[0];
+    const concepts: Record<string, ConceptState> = {};
+    for (const id of firstUnit.ids) concepts[id] = introduce(createConceptState(id, NOW), NOW);
+    const learner: LearnerState = makeLearner({ concepts });
+
+    const counted = countMet(groups, learner);
+    expect(counted.stages[0].units[0].met).toBe(firstUnit.ids.length);
+    expect(counted.stages[0].met).toBe(firstUnit.ids.length);
+    // Nothing leaks into a later section.
+    expect(counted.stages[counted.stages.length - 1].met).toBe(0);
+  });
+
+  it('opens on the section the learner is partway through', () => {
+    const groups = groupByCourse(ids);
+    const target = groups.stages[1];
+    const concepts: Record<string, ConceptState> = {};
+    for (const id of groups.stages[0].ids) concepts[id] = retrieved(id);
+    for (const id of target.ids.slice(0, 3)) concepts[id] = retrieved(id);
+
+    const counted = countMet(groups, makeLearner({ concepts }));
+    expect(currentStageId(counted.stages)).toBe(target.stage.id);
+  });
+
+  it('opens on the first section for a learner who has met nothing', () => {
+    const counted = countMet(groupByCourse(ids), makeLearner());
+    expect(currentStageId(counted.stages)).toBe(counted.stages[0].stage.id);
+  });
+});
+
+describe('ordering', () => {
+  const sample = vocabConcepts.slice(0, 40).map((c) => c.id);
+  const label = (id: string) => {
+    const concept = vocabConcepts.find((c) => c.id === id)!;
+    return concept.es;
+  };
+  const level = (id: string) => vocabConcepts.find((c) => c.id === id)!.level;
+
+  it('sorts alphabetically on request', () => {
+    const sorted = sortForGrouping(sample, 'alphabetical', {
+      learner: makeLearner(),
+      now: NOW,
+      label,
+      order: () => 0,
+      level,
+    });
+    const labels = sorted.map(label);
+    expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b, 'es')));
+  });
+
+  it('puts retrieved concepts before unmet ones under progress ordering', () => {
+    const concepts: Record<string, ConceptState> = {};
+    for (const id of sample.slice(10, 15)) concepts[id] = retrieved(id);
+    const sorted = sortForGrouping(sample, 'progress', {
+      learner: makeLearner({ concepts }),
+      now: NOW,
+      label,
+      order: () => 0,
+      level,
+    });
+    expect(sorted.slice(0, 5).sort()).toEqual(sample.slice(10, 15).sort());
+  });
+
+  it('does not mutate the array it was given', () => {
+    const original = [...sample];
+    sortForGrouping(sample, 'alphabetical', {
+      learner: makeLearner(),
+      now: NOW,
+      label,
+      order: () => 0,
+      level,
+    });
+    expect(sample).toEqual(original);
+  });
+});

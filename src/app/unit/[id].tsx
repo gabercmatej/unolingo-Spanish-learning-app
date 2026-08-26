@@ -18,15 +18,16 @@ import {
   getConcept,
   getStageForUnit,
   getUnit,
+  getUnitTaughtConcepts,
+  getVerb,
   isGrammarConcept,
   isVocabConcept,
 } from '@/content';
 import type { Lesson } from '@/content/types';
 import { useLearner } from '@/context/LearnerContext';
 import { useTheme } from '@/hooks/use-theme';
-import { unitProgress, unitStrengthPlan, type UnitPhase } from '@/learning/mastery';
+import { hasEncountered, unitProgress, unitStrengthPlan, type UnitPhase } from '@/learning/mastery';
 import type { PracticeStep } from '@/learning/unit-practice';
-import { mastery, masteryBand } from '@/learning/srs';
 import { goBack } from '@/lib/navigation';
 
 /**
@@ -68,6 +69,74 @@ export default function UnitScreen() {
     [unit, learner],
   );
 
+  /**
+   * The unit's study sheet.
+   *
+   * Built from `getUnitTaughtConcepts` — what the unit *owns* — rather than
+   * `getUnitConcepts`, which sweeps in every concept its sentences happen to
+   * mention. The latter is right for measuring what a unit exercises and wrong
+   * for a page that claims to list what it taught: a café unit would otherwise
+   * claim credit for every grammar point its example sentences borrowed.
+   *
+   * Verbs are collected through their vocabulary entries and their paradigms,
+   * so a unit that teaches a conjugation lists the verb even when the
+   * infinitive itself was introduced earlier.
+   */
+  const sheet = useMemo(() => {
+    const taught = unit ? getUnitTaughtConcepts(unit) : [];
+    const words: SheetItem[] = [];
+    const expressions: SheetItem[] = [];
+    const grammarItems: SheetItem[] = [];
+    const verbIds = new Set<string>();
+
+    for (const id of taught) {
+      const concept = getConcept(id);
+      if (!concept) continue;
+      const met = hasEncountered(learner.concepts[id]);
+
+      if (isVocabConcept(concept)) {
+        if (concept.verbId) verbIds.add(concept.verbId);
+        const item: SheetItem = {
+          id,
+          label: concept.es,
+          sub: concept.en,
+          met,
+          route: 'word',
+        };
+        if (concept.kind === 'phrase' || concept.pos === 'expression') expressions.push(item);
+        else words.push(item);
+      } else if (isGrammarConcept(concept)) {
+        grammarItems.push({ id, label: concept.title, sub: concept.short, met, route: 'grammar' });
+      } else if (concept.kind === 'verbform') {
+        verbIds.add(concept.verbId);
+      }
+    }
+
+    const verbItems: SheetItem[] = [];
+    for (const verbId of verbIds) {
+      const verb = getVerb(verbId);
+      if (!verb) continue;
+      const paradigms = Object.keys(verb.tenses).map((tense) => `f.${verb.id}.${tense}`);
+      verbItems.push({
+        id: verbId,
+        label: verb.infinitive,
+        sub: verb.en,
+        met: paradigms.some((formId) => hasEncountered(learner.concepts[formId])),
+        route: 'verb',
+      });
+    }
+
+    const all = [...words, ...expressions, ...verbItems, ...grammarItems];
+    return {
+      words,
+      expressions,
+      verbs: verbItems,
+      grammar: grammarItems,
+      total: all.length,
+      met: all.filter((item) => item.met).length,
+    };
+  }, [unit, learner.concepts]);
+
   if (!unit || !progress) {
     return (
       <Screen title="Not found" tabBarPadding={false}>
@@ -93,6 +162,7 @@ export default function UnitScreen() {
     .map(getConcept)
     .filter((concept) => !!concept && isGrammarConcept(concept))
     .map((concept) => concept!);
+
 
   const started = progress.lessonsDone > 0;
 
@@ -447,55 +517,135 @@ export default function UnitScreen() {
             </Section>
           ) : null}
 
-          {/* What it taught */}
-          {started && vocab.length > 0 ? (
-            <Section title="What this unit taught you">
-              <Card variant="flat">
-                <View style={styles.chips}>
-                  {vocab.slice(0, 24).map((concept) => {
-                    const state = learner.concepts[concept.id];
-                    const band = masteryBand(state);
-                    const value = state ? mastery(state) : 0;
-                    return (
-                      <PressScale
-                        key={concept.id}
-                        scaleTo={0.94}
-                        onPress={() =>
-                          router.push({ pathname: '/word/[id]', params: { id: concept.id } })
-                        }
-                        accessibilityLabel={`${isVocabConcept(concept) ? concept.es : conceptLabel(concept)}, ${Math.round(value * 100)} percent`}>
-                        <View
-                          style={[
-                            styles.chip,
-                            {
-                              backgroundColor: theme.backgroundSunken,
-                              borderColor:
-                                band === 'familiar'
-                                  ? theme.danger
-                                  : band === 'mastered'
-                                    ? theme.success
-                                    : theme.border,
-                            },
-                          ]}>
-                          <Text variant="caption">
-                            {isVocabConcept(concept) ? concept.es : conceptLabel(concept)}
-                          </Text>
-                        </View>
-                      </PressScale>
-                    );
-                  })}
-                </View>
-                {vocab.length > 24 ? (
-                  <Text variant="caption" color="textTertiary">
-                    +{vocab.length - 24} more
-                  </Text>
-                ) : null}
-              </Card>
+          {/*
+            The study sheet — everything this unit taught, in one place.
+
+            Its own section rather than a truncated chip list, because a
+            completed unit's most useful job is revision and "+18 more" is the
+            opposite of a revision aid. Split by kind, because words, verbs,
+            grammar and set expressions are revised differently — which is the
+            same reason the Library surfaces phrases separately from words.
+
+            Everything here is derived from the registry. Nothing about a unit's
+            contents is stored twice.
+          */}
+          {sheet.total > 0 ? (
+            <Section
+              title={progress.state === 'complete' ? 'What you learned here' : 'What this unit teaches'}
+              caption={`${sheet.met} of ${sheet.total} met · tap anything to revise it`}>
+              <View style={styles.sheet}>
+                <SheetGroup
+                  title="Words"
+                  icon="book-outline"
+                  tone={theme.vocab}
+                  items={sheet.words}
+                />
+                <SheetGroup
+                  title="Expressions"
+                  icon="chatbubbles-outline"
+                  tone={theme.conversation}
+                  items={sheet.expressions}
+                />
+                <SheetGroup
+                  title="Verbs"
+                  icon="git-branch-outline"
+                  tone={theme.speaking}
+                  items={sheet.verbs}
+                />
+                <SheetGroup
+                  title="Grammar"
+                  icon="construct-outline"
+                  tone={theme.grammar}
+                  items={sheet.grammar}
+                />
+              </View>
             </Section>
           ) : null}
+
         </>
       )}
     </Screen>
+  );
+}
+
+/** One entry on a unit's study sheet. */
+interface SheetItem {
+  id: string;
+  label: string;
+  sub: string;
+  /** The course has shown it — not necessarily that it has been retrieved. */
+  met: boolean;
+  route: 'word' | 'verb' | 'grammar';
+}
+
+/**
+ * One kind of thing a unit taught.
+ *
+ * Renders nothing when empty rather than an empty heading: a unit that teaches
+ * no verbs should not have a Verbs section explaining that it has none.
+ *
+ * A dimmed entry is one the course has not shown yet — which happens on a large
+ * unit, because a lesson introduces at most `MAX_NEW_PER_SESSION` concepts in a
+ * sitting. Listing them anyway is the point: this is the sheet for the whole
+ * unit, and knowing what is still to come is part of revising it.
+ */
+function SheetGroup({
+  title,
+  icon,
+  tone,
+  items,
+}: {
+  title: string;
+  icon: IconName;
+  tone: string;
+  items: SheetItem[];
+}) {
+  const theme = useTheme();
+  if (items.length === 0) return null;
+
+  return (
+    <View style={styles.sheetGroup}>
+      <View style={styles.row}>
+        <Icon name={icon} size={15} tone={tone} />
+        <Text variant="smallBold" style={styles.flex}>
+          {title}
+        </Text>
+        <Text variant="caption" color="textTertiary" numeric>
+          {items.filter((item) => item.met).length}/{items.length}
+        </Text>
+      </View>
+      <View style={styles.chips}>
+        {items.map((item) => (
+          <PressScale
+            key={`${item.route}:${item.id}`}
+            scaleTo={0.94}
+            haptic="tap"
+            onPress={() =>
+              router.push(
+                item.route === 'word'
+                  ? { pathname: '/word/[id]', params: { id: item.id } }
+                  : item.route === 'verb'
+                    ? { pathname: '/verb/[id]', params: { id: item.id } }
+                    : { pathname: '/grammar/[id]', params: { id: item.id } },
+              )
+            }
+            accessibilityLabel={`${item.label} — ${item.sub}${item.met ? '' : ', not met yet'}`}>
+            <View
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: item.met ? theme.backgroundSunken : 'transparent',
+                  borderColor: item.met ? theme.border : theme.borderStrong,
+                  borderStyle: item.met ? 'solid' : 'dashed',
+                  opacity: item.met ? 1 : 0.6,
+                },
+              ]}>
+              <Text variant="caption">{item.label}</Text>
+            </View>
+          </PressScale>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -691,6 +841,8 @@ function PracticeOption({
 }
 
 const styles = StyleSheet.create({
+  sheet: { gap: Spacing.four },
+  sheetGroup: { gap: Spacing.two },
   flex: { flex: 1 },
   head: { gap: Spacing.two },
   icon: {
