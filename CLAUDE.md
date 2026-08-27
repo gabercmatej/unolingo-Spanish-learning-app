@@ -633,6 +633,17 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
   expensive. `validateContent()` checks drill concept ids resolve (a mistyped id makes a
   drill unreachable rather than throwing), and both the unit tests and `audit:content`
   assert every level has drills of both kinds.
+- **The Library collapses at two levels, and the second one is not decoration.** A section
+  rendered every entry it holds inline; unfiltered, "Foundations" holds 401 words, which made
+  the open section ~30,000 pixels tall and pushed every *later* section past the end of the
+  scroll — still mounted, still in the accessibility tree, unreachable by anyone unwilling to
+  scroll thirty-eight screens. It read as intermittent because which section opens depends on
+  progress and a filter can shrink the same section to three entries. `currentUnitId` and
+  `defaultUnitOpen` in `learning/library.ts` decide what opens; the screen renders that
+  decision. `defaultUnitOpen` releases the collapsing below `UNITS_OPEN_BELOW` (40), because
+  presenting three favourites as a row of closed folders is friction rather than structure.
+  The regression tests assert a **scale** property — a section that opens must not bury the
+  sections after it — rather than the presence of a chevron.
 - **The Library lists grammar and verbs in teaching order**, not alphabetically — it is a
   revision tool, so it has to match the path the learner walked. Use `byTeachingOrder` /
   `byVerbTeachingOrder` from the registry. A concept no lesson teaches sorts to the very end,
@@ -673,6 +684,38 @@ seven days**, so this runs weekly; rebuilding over the top preserves the learner
 
 `plugins/with-local-notifications-only.js` exists for this reason — see the reminder section
 above for why removing `expo-notifications` from `plugins` cannot achieve the same thing.
+
+## Getting it onto the web
+
+`bash scripts/deploy-web.sh` builds the export and ships it to Vercel at
+[unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app).
+It lives in the repo rather than deferring to the generic `deploy_web_demo` skill because
+that skill's `vercel.json` knows nothing about **dynamic routes**, and this app has four.
+
+- **A static export turns a dynamic route into a literal filename.** `word/[id]` lands on
+  disk as `word/[id].html`, and nothing serves that at `/word/v.casa`. Client-side
+  navigation reaches it perfectly, so the app looks fine and only breaks when somebody
+  refreshes a word page or opens a link somebody sent them — which is the entire purpose of
+  a shared demo. The script **derives** one rewrite per dynamic route from the export
+  instead of listing them, because a hardcoded list is a second place to remember a new
+  route and it rots without a symptom.
+- **The rewrite destination is the percent-encoded *clean* path**, `/word/%5Bid%5D`, not
+  `/word/[id].html`. `cleanUrls` answers the `.html` form with a 308, so a rewrite aimed
+  there lands on a redirect and never resolves.
+- **Vercel's uploader drops any directory named `node_modules`**, and Expo emits the
+  vector-icon fonts under `assets/node_modules/@expo/vector-icons/…` — so every icon
+  renders blank. The script renames the folder and rewrites the bundle's hardcoded URLs
+  back onto it.
+- The export runs with `.env` moved aside and refuses to publish a bundle containing a
+  secret: anything named `EXPO_PUBLIC_*` is inlined into the client bundle at build time.
+- **Verify against the live URL, not the build log.** The deploy that prompted this
+  reported success in three seconds while serving 404 on every route, including `/` — it
+  was configured to publish `public/`, which does not exist here, so it uploaded the bare
+  repo root. A green deploy is not a working one.
+
+On the web the learner record is `localStorage`, which is per-browser and per-origin, so
+every visitor gets an independent course with no server and no account. That is the whole
+of the multi-user story and it needs no code.
 
 ## Platform traps
 
