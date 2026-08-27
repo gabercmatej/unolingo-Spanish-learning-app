@@ -414,31 +414,35 @@ function UnitBlock({
           </Animated.View>
         ) : null}
 
-        {/* --- The cap: where the unit ends ------------------------------- */}
-        {state !== 'planned' ? (
+        {/*
+          --- The cap: what is left to do -------------------------------
+
+          Only while there is something left. The completed form of this said
+          "<unit> complete" in a green box, which the header above has already
+          said four times over — a green checkmark, the word "Completed", a
+          green lessons figure and a full green bar. A fifth restatement is not
+          reassurance, it is a row of chrome on every unit the learner has
+          finished, and it pushes the units that still need them further down
+          the page as the course goes on.
+
+          The incomplete form earns its place because it says something none of
+          those do: how many lessons remain.
+        */}
+        {state !== 'planned' && !complete ? (
           <View
             style={[
               styles.cap,
-              {
-                backgroundColor: complete ? theme.successSoft : theme.backgroundSunken,
-                borderColor: complete ? theme.success : theme.border,
-              },
+              { backgroundColor: theme.backgroundSunken, borderColor: theme.border },
             ]}>
-            <Icon
-              name={complete ? 'flag' : 'flag-outline'}
-              size={13}
-              tone={complete ? theme.success : theme.textTertiary}
-            />
+            <Icon name="flag-outline" size={13} tone={theme.textTertiary} />
             <Text
               variant="caption"
-              tone={complete ? theme.successText : theme.textTertiary}
+              tone={theme.textTertiary}
               numberOfLines={1}
               style={styles.flex}>
-              {complete
-                ? `${unit.unit.title} complete`
-                : `Finish ${unit.lessonCount - unit.lessonsDone} lesson${
-                    unit.lessonCount - unit.lessonsDone === 1 ? '' : 's'
-                  } to complete`}
+              {`Finish ${unit.lessonCount - unit.lessonsDone} lesson${
+                unit.lessonCount - unit.lessonsDone === 1 ? '' : 's'
+              } to complete`}
             </Text>
           </View>
         ) : null}
@@ -448,10 +452,12 @@ function UnitBlock({
           Nesting pressables emits nested <button> elements, invalid HTML and a
           hydration error on web.
 
-          It sits *below the cap* deliberately. The unit is already finished by
-          the time this appears; nothing here can change that, and its counter
-          is its own. This is the "revision/mastery" half of the model and it is
-          drawn outside the spine so it can never be mistaken for one.
+          It takes the cap's place once the unit completes, which is the right
+          swap: the cap answers "what is left to do" and by then nothing is.
+          The unit is already finished when this appears; nothing here can
+          change that, and its counter is its own. This is the
+          "revision/mastery" half of the model and it is drawn outside the
+          spine so it can never be mistaken for one.
         */}
         {complete && unit.practice.unlocked ? (
           <PressScale
