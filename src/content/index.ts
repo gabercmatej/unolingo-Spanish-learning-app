@@ -22,14 +22,17 @@ import { everydaySentences } from '@/content/sentences/everyday';
 import { foundationsSentences } from '@/content/sentences/foundations';
 import { routineSentences } from '@/content/sentences/routine';
 import { socialSentences } from '@/content/sentences/social';
+import { advancedExpansionSentences } from '@/content/sentences/advanced-expansion';
 import { cityAndStanceSentences } from '@/content/sentences/city-and-stance';
 import { imperativeSentences } from '@/content/sentences/imperatives';
+import { verbDepthSentences } from '@/content/sentences/verb-depth';
 import { verbWorkshopSentences } from '@/content/sentences/verb-workshop';
 import { verbWorkshopMoodSentences } from '@/content/sentences/verb-workshop-moods';
 import { subjunctiveImperativeSentences } from '@/content/sentences/subjunctive-imperative';
 import { a1CoreVocab } from '@/content/vocab/a1-core';
 import { a1EverydayVocab } from '@/content/vocab/a1-everyday-life';
 import { a2b2ExpansionVocab } from '@/content/vocab/a2b2-expansion';
+import { advancedExpansionVocab } from '@/content/vocab/advanced-expansion';
 import { a2CoreVocab } from '@/content/vocab/a2-core';
 import { b1CoreVocab } from '@/content/vocab/b1-core';
 import { b2CoreVocab } from '@/content/vocab/b2-core';
@@ -73,6 +76,7 @@ export const vocabConcepts: VocabConcept[] = [
   ...a1CoreVocab,
   ...a1EverydayVocab,
   ...a2b2ExpansionVocab,
+  ...advancedExpansionVocab,
   ...a2CoreVocab,
   ...b1CoreVocab,
   ...b2CoreVocab,
@@ -134,8 +138,10 @@ export const sentences: Sentence[] = [
   ...subjunctiveImperativeSentences,
   ...verbWorkshopSentences,
   ...verbWorkshopMoodSentences,
+  ...verbDepthSentences,
   ...imperativeSentences,
   ...cityAndStanceSentences,
+  ...advancedExpansionSentences,
 ];
 
 export { conversations, cultureNotes, curriculum, stories, verbs };
