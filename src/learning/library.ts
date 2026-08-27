@@ -229,3 +229,47 @@ export function sortForGrouping(
     return label(a).localeCompare(label(b), 'es');
   });
 }
+
+/**
+ * The unit inside a section the learner is currently working in.
+ *
+ * Same shape as `currentStageId` one level down, and for the same reason: a
+ * section that opens showing only unit headers is browsable, but it has also
+ * lost the learner's own position. Opening the unit they are in gives back the
+ * "you are here" the flat list had for free.
+ */
+export function currentUnitId(stage: LibraryStageGroup): string | null {
+  const partial = stage.units.find((unit) => unit.met > 0 && unit.met < unit.ids.length);
+  if (partial) return partial.unit.id;
+  const started = [...stage.units].reverse().find((unit) => unit.met > 0);
+  return started?.unit.id ?? stage.units[0]?.unit.id ?? null;
+}
+
+/**
+ * Below this many entries, a whole section is short enough to show at once and
+ * unit dropdowns are friction rather than structure.
+ *
+ * The number matters because the filters make section size vary by two orders
+ * of magnitude. "Foundations" holds 401 words unfiltered — which is what made
+ * an expanded section 30,000 pixels tall and pushed every later section past
+ * the end of the scroll, the bug this collapsing exists to fix — and three
+ * under "★ Favourites". Collapsing the second case would present a section
+ * that is already the size of a glance as a row of closed folders.
+ */
+export const UNITS_OPEN_BELOW = 40;
+
+/**
+ * Whether a unit starts open, before the learner has touched anything.
+ *
+ * Pure and here rather than in the screen for the usual reason: it is a policy
+ * decision about what the learner should see, and the Library screen renders
+ * what this decides instead of deciding it inline.
+ */
+export function defaultUnitOpen(
+  stage: LibraryStageGroup,
+  unitId: string,
+  isCurrentStage: boolean,
+): boolean {
+  if (stage.total <= UNITS_OPEN_BELOW) return true;
+  return isCurrentStage && unitId === currentUnitId(stage);
+}

@@ -30,12 +30,14 @@ import { useNow } from '@/hooks/use-now';
 import {
   countMet,
   currentStageId,
+  defaultUnitOpen,
   groupByCourse,
   passesFilter,
   sortForGrouping,
   type LibraryFilter,
   type LibraryGrouping,
   type LibraryStageGroup,
+  type LibraryUnitGroup,
 } from '@/learning/library';
 import { mastery, masteryBand, type MasteryBand } from '@/learning/srs';
 
@@ -145,9 +147,20 @@ export default function LibraryScreen() {
     [grouping, ordered, tab, learner],
   );
 
+  /*
+    Two levels of collapse, not one. A section is not a browsable size: with no
+    filter, "Foundations" holds 401 entries, and rendering them inline made the
+    open section 30,000 pixels tall and pushed every later section off the end
+    of the scroll — present in the tree, unreachable in practice, and looking
+    for all the world like the other sections had vanished. Which section
+    auto-opens depends on progress, which is what made it look intermittent.
+  */
   const openStage = currentStageId(grouped?.stages ?? []);
   const [openStages, setOpenStages] = useState<Record<string, boolean>>({});
+  const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
   const isStageOpen = (stageId: string) => openStages[stageId] ?? stageId === openStage;
+  const isUnitOpen = (stage: LibraryStageGroup, unitId: string) =>
+    openUnits[unitId] ?? defaultUnitOpen(stage, unitId, stage.stage.id === openStage);
 
   const counts = useMemo(() => {
     const result = { new: 0, learning: 0, familiar: 0, strong: 0, mastered: 0 };
@@ -286,6 +299,10 @@ export default function LibraryScreen() {
                   [stage.stage.id]: !isStageOpen(stage.stage.id),
                 }))
               }
+              isUnitOpen={(unitId) => isUnitOpen(stage, unitId)}
+              onToggleUnit={(unitId) =>
+                setOpenUnits((value) => ({ ...value, [unitId]: !isUnitOpen(stage, unitId) }))
+              }
               renderRow={renderRow}
             />
           ))}
@@ -313,11 +330,15 @@ function StageGroup({
   group,
   expanded,
   onToggle,
+  isUnitOpen,
+  onToggleUnit,
   renderRow,
 }: {
   group: LibraryStageGroup;
   expanded: boolean;
   onToggle: () => void;
+  isUnitOpen: (unitId: string) => boolean;
+  onToggleUnit: (unitId: string) => void;
   renderRow: (id: string) => React.ReactNode;
 }) {
   const theme = useTheme();
@@ -361,19 +382,79 @@ function StageGroup({
           exiting={FadeOut.duration(Motion.fast)}
           style={styles.units}>
           {group.units.map((unit) => (
-            <View key={unit.unit.id} style={styles.unit}>
-              <View style={styles.unitHead}>
-                <Icon name={unit.unit.icon} size={14} tone={theme[unit.unit.tone]} />
-                <Text variant="caption" color="textSecondary" numberOfLines={1} style={styles.flex}>
-                  {unit.unit.title}
-                </Text>
-                <Text variant="caption" color="textTertiary" numeric>
-                  {unit.met}/{unit.ids.length}
-                </Text>
-              </View>
-              <View style={styles.list}>{unit.ids.map(renderRow)}</View>
-            </View>
+            <UnitGroup
+              key={unit.unit.id}
+              group={unit}
+              expanded={isUnitOpen(unit.unit.id)}
+              onToggle={() => onToggleUnit(unit.unit.id)}
+              renderRow={renderRow}
+            />
           ))}
+        </Animated.View>
+      ) : null}
+    </Animated.View>
+  );
+}
+
+/**
+ * One unit inside an open section, collapsed by default.
+ *
+ * The header is a sibling of the rows rather than their parent, which is the
+ * app's standing rule about not nesting a pressable inside a pressable — the
+ * word rows underneath are each pressable themselves, and a button inside a
+ * button is invalid HTML and a hydration error on web.
+ */
+function UnitGroup({
+  group,
+  expanded,
+  onToggle,
+  renderRow,
+}: {
+  group: LibraryUnitGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  renderRow: (id: string) => React.ReactNode;
+}) {
+  const theme = useTheme();
+
+  return (
+    <Animated.View layout={LinearTransition.duration(200)} style={styles.unit}>
+      <PressScale
+        onPress={onToggle}
+        scaleTo={0.995}
+        hover="lift"
+        haptic="tap"
+        accessibilityLabel={`${group.unit.title}, ${group.met} of ${group.ids.length} met`}
+        accessibilityState={{ selected: expanded }}>
+        <View
+          style={[
+            styles.unitHead,
+            {
+              backgroundColor: expanded ? theme.backgroundRaised : 'transparent',
+              borderColor: expanded ? theme.border : 'transparent',
+            },
+          ]}>
+          <Icon
+            name={expanded ? 'chevron-down' : 'chevron-forward'}
+            size={14}
+            color="textTertiary"
+          />
+          <Icon name={group.unit.icon} size={14} tone={theme[group.unit.tone]} />
+          <Text variant="caption" color="textSecondary" numberOfLines={1} style={styles.flex}>
+            {group.unit.title}
+          </Text>
+          <Text variant="caption" color="textTertiary" numeric>
+            {group.met}/{group.ids.length}
+          </Text>
+        </View>
+      </PressScale>
+
+      {expanded ? (
+        <Animated.View
+          entering={FadeIn.duration(Motion.base)}
+          exiting={FadeOut.duration(Motion.fast)}
+          style={styles.list}>
+          {group.ids.map(renderRow)}
         </Animated.View>
       ) : null}
     </Animated.View>
@@ -534,7 +615,15 @@ const styles = StyleSheet.create({
   stageHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   units: { gap: Spacing.three, paddingTop: Spacing.one },
   unit: { gap: Spacing.two },
-  unitHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  unitHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
 
   wordRow: {
     flexDirection: 'row',

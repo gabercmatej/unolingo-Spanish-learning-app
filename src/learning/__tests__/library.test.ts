@@ -2,8 +2,11 @@ import { conceptOrigin, curriculum, getLessonThatIntroduces, vocabConcepts } fro
 import { makeLearner } from '@/learning/__tests__/helpers';
 import {
   RECENT_WINDOW_DAYS,
+  UNITS_OPEN_BELOW,
   countMet,
   currentStageId,
+  currentUnitId,
+  defaultUnitOpen,
   groupByCourse,
   passesFilter,
   sortForGrouping,
@@ -147,6 +150,75 @@ describe('met counts and the section that opens first', () => {
   it('opens on the first section for a learner who has met nothing', () => {
     const counted = countMet(groupByCourse(ids), makeLearner());
     expect(currentStageId(counted.stages)).toBe(counted.stages[0].stage.id);
+  });
+});
+
+/**
+ * Two levels of collapse, and why the second one is not decoration.
+ *
+ * The Library rendered every entry of an open section inline. Unfiltered, the
+ * first section holds 401 words, which made it ~30,000 pixels tall and put
+ * every *later* section past the end of the scroll — still mounted, still in
+ * the accessibility tree, and unreachable by any learner who was not prepared
+ * to scroll thirty-eight screens. Because which section opens by default
+ * depends on progress, and because a filter can shrink a section to three
+ * entries, it looked intermittent rather than structural.
+ *
+ * So these assert a *scale* property, not the presence of a chevron: a section
+ * that opens must not, by opening, bury the sections after it.
+ */
+describe('the unit that opens inside a section', () => {
+  const ids = vocabConcepts.map((concept) => concept.id);
+
+  it('opens the unit the learner is partway through', () => {
+    const groups = groupByCourse(ids);
+    const stage = groups.stages[0];
+    const target = stage.units[2];
+    const concepts: Record<string, ConceptState> = {};
+    for (const id of stage.units[0].ids) concepts[id] = retrieved(id);
+    for (const id of stage.units[1].ids) concepts[id] = retrieved(id);
+    for (const id of target.ids.slice(0, 1)) concepts[id] = retrieved(id);
+
+    const counted = countMet(groups, makeLearner({ concepts }));
+    expect(currentUnitId(counted.stages[0])).toBe(target.unit.id);
+  });
+
+  it('opens the first unit for a learner who has met nothing', () => {
+    const counted = countMet(groupByCourse(ids), makeLearner());
+    const stage = counted.stages[0];
+    expect(currentUnitId(stage)).toBe(stage.units[0].unit.id);
+  });
+
+  it('never opens more than one unit of a section big enough to bury the next one', () => {
+    const counted = countMet(groupByCourse(ids), makeLearner());
+    for (const stage of counted.stages) {
+      if (stage.total <= UNITS_OPEN_BELOW) continue;
+      const open = stage.units.filter((unit) =>
+        defaultUnitOpen(stage, unit.unit.id, true),
+      );
+      expect(open).toHaveLength(1);
+    }
+  });
+
+  it('leaves a section short enough to read at a glance fully open', () => {
+    // What a narrow filter produces: a handful of entries spread over units.
+    // Presenting three words as a row of closed folders is friction, not
+    // structure, so the collapsing releases below a threshold.
+    const counted = countMet(groupByCourse(ids.slice(0, 12)), makeLearner());
+    for (const stage of counted.stages) {
+      expect(stage.total).toBeLessThanOrEqual(UNITS_OPEN_BELOW);
+      for (const unit of stage.units) {
+        expect(defaultUnitOpen(stage, unit.unit.id, false)).toBe(true);
+      }
+    }
+  });
+
+  it('opens nothing in a big section the learner is not currently in', () => {
+    const counted = countMet(groupByCourse(ids), makeLearner());
+    const big = counted.stages.find((stage) => stage.total > UNITS_OPEN_BELOW)!;
+    for (const unit of big.units) {
+      expect(defaultUnitOpen(big, unit.unit.id, false)).toBe(false);
+    }
   });
 });
 
