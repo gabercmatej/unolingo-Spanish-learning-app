@@ -33,7 +33,7 @@ And the reference side — everything you have met, and how well you know it:
 
 <table>
 <tr>
-<td width="33%"><img src="docs/screenshots/progress.png" alt="Progress: a four-month activity calendar, weekly XP against your own average, and your weakest areas"></td>
+<td width="33%"><img src="docs/screenshots/progress.png" alt="Progress: a four-month activity calendar, XP for each day of the week you are viewing, and your weakest areas"></td>
 <td width="33%"><img src="docs/screenshots/library.png" alt="Library: every word met, filterable by how well it is known, each with its own mastery percentage"></td>
 <td width="33%"><img src="docs/screenshots/profile.png" alt="Profile: rank, curriculum position and CEFR proficiency shown as three separate measures"></td>
 </tr>
@@ -52,6 +52,14 @@ And the reference side — everything you have met, and how well you know it:
 after each answer, so if you already know the basics you reach B1 material in a handful of
 questions instead of grinding through "hola". It estimates a level, names your weak areas,
 and seeds the learner model — concepts you failed start shaky and due for review immediately.
+
+**Lessons are progression; practice is optional mastery.** A unit is complete when its
+required lessons are — full stop. Mixed practice, active recall, consolidation and Smart Review
+all improve how well you know the material and can never move a unit's state, so the two never
+share a counter or a progress bar. Locking is soft: content ahead of you is dimmed and marked
+off the recommended path, and it still opens. Finishing a lesson ahead back-fills every
+required lesson before it, marking those concepts *introduced* — unlocking the Library, the
+verb pages and production eligibility — without inventing recall evidence you never gave.
 
 **A real spaced-repetition model.** Every concept — a word, a grammar rule, a verb paradigm —
 carries a memory record: strength, stability, ease, depth, next review. `stability` is the
@@ -141,12 +149,12 @@ Three layers, deliberately kept apart:
 src/content/     data only — no React, no logic
   types.ts       the content model
   index.ts       registry + lookups + validateContent()
-  vocab/         ~650 vocabulary and phrase concepts
-  sentences/     1,522 natural sentences, tagged with what they exercise
-  grammar/       44 grammar concepts with deep-dive layers
-  verbs.ts       43 verbs; regular forms generated, irregulars authored
+  vocab/         918 vocabulary and phrase concepts
+  sentences/     2,603 natural sentences, tagged with what they exercise
+  grammar/       46 grammar concepts with deep-dive layers
+  verbs.ts       87 verbs; regular forms generated, irregulars authored
   verb-corpus.ts derives which sentences contain which conjugated form
-  curriculum.ts  6 stages → 63 units → 158 lessons
+  curriculum.ts  6 stages → 88 units → 238 lessons
   conversations.ts, stories.ts, culture.ts, drills.ts, placement.ts
 
 src/learning/    pure logic — no React, fully unit-tested
@@ -158,7 +166,10 @@ src/learning/    pure logic — no React, fully unit-tested
   backup.ts      what a backup is, what a restore must refuse
   migrate.ts     opening a record written by a different version of the app
   explain.ts     why the scheduler chose this exercise (developer mode)
-  placement.ts, xp.ts, ranks.ts, check.ts, achievements.ts, diagnostics.ts
+  progression.ts where you are on the path, and what finishing ahead implies
+  unit-practice.ts the optional practice a completed unit offers
+  library.ts     how the Library is grouped and filtered
+  placement.ts, xp.ts, ranks.ts, check.ts, grading.ts, achievements.ts, diagnostics.ts
 
 src/app/         Expo Router screens
 src/components/  ui primitives, exercise renderers, learn components
@@ -270,16 +281,16 @@ Six stages, A0 → C2, all with real content:
 
 | Stage | Level | Units | Lessons |
 |---|---|---|---|
-| Foundations | A0 → A1 | 14 | 41 |
-| Everyday Spanish | A1 → A2 | 15 | 31 |
-| Independent Spanish | A2 → B1 | 15 | 32 |
-| Conversational Fluency | B1 → B2 | 6 | 17 |
-| Advanced Spanish | B2 → C1 | 7 | 18 |
-| Mastery | C1 → C2 | 6 | 19 |
+| Foundations | A0 → A1 | 21 | 61 |
+| Everyday Spanish | A1 → A2 | 19 | 43 |
+| Independent Spanish | A2 → B1 | 19 | 45 |
+| Conversational Fluency | B1 → B2 | 10 | 31 |
+| Advanced Spanish | B2 → C1 | 11 | 34 |
+| Mastery | C1 → C2 | 8 | 24 |
 
-**63 units · 159 lessons** (67 of them optional enrichment that never blocks the path) ·
-420 words · 232 phrases · 44 grammar concepts · 43 verbs across 162 conjugation paradigms ·
-1,680 sentences · 25 conversation scenes · 25 stories · 12 culture notes · 110 drills ·
+**88 units · 238 lessons** (84 of them optional enrichment that never blocks the path) ·
+635 words · 283 phrases · 46 grammar concepts · 87 verbs across 485 conjugation paradigms ·
+2,603 sentences · 30 conversation scenes · 30 stories · 12 culture notes · 110 drills ·
 67 placement questions.
 
 Every figure here drifts with each content commit. Read them from `npm run audit:content`

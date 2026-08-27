@@ -15,8 +15,8 @@ import { verbs } from '@/content/verbs';
  * which sentences contain which conjugated form.
  *
  * Walk Spanish text, group every surface word by its deaccented form, and keep
- * the groups holding two or more distinct spellings. 3,397 words collapse to 65
- * groups, and every one is a genuine minimal pair: the diacritical set
+ * the groups holding two or more distinct spellings. 5,094 distinct words collapse
+ * to 91 such groups, and every one is a genuine minimal pair: the diacritical set
  * (qué/que, él/el, sí/si, cómo/como), demonstrative against verb (está/esta),
  * present yo against preterite él (hablo/habló), subjunctive against preterite
  * yo (hable/hablé).

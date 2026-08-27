@@ -103,7 +103,10 @@ something ahead implies about everything behind it), `unit-practice.ts` (the opt
 a completed unit offers), `library.ts` (how the Library is grouped and filtered),
 `teaching.ts` (what to say
 after an answer), `session.ts` (session assembly and ordering), `placement.ts`, `xp.ts`, `ranks.ts`,
-`check.ts` (grading), `achievements.ts`, `backup.ts` (what a backup is, what a restore
+`check.ts` (the one grading entry point) with `grading.ts` (the error → verdict/grade policy
+table), `meaning.ts` (whether a free answer said the same thing) and `es-variants.ts` (Spanish
+sentences that are mechanically the same sentence), `achievements.ts`, `reminders.ts` (which
+days the daily nudge is due), `backup.ts` (what a backup is, what a restore
 must refuse, when a snapshot is due), `migrate.ts` (opening a record written by another
 build), `defaults.ts` + `schema.ts` (the blank learner and `STATE_VERSION`, kept out of the
 store so the migrator never has to import React), `explain.ts` and `diagnostics.ts` (the
@@ -298,7 +301,8 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
     drift. Only `output` kinds are scaffolded: getting a multiple choice wrong is not evidence
     that multiple choice was too hard.
 - **A completed unit is not a finished unit, and the app says so in two numbers rather than
-  one.** Measured: **36 of 63 units had exactly one required lesson**, median 13 minutes. So
+  one.** Measured: **36 of 63 units had exactly one required lesson**, median 13 minutes — and
+  the curriculum expansion did not dissolve it, at 41 of 88 units and a median of 17. So
   finishing a unit meant meeting nine words, answering twelve questions, and landing on ~22%
   mastery with nothing to do but replay the lesson. `learning/unit-practice.ts` generates
   `mixed → recall → consolidate` from what the unit already declares — it adds **no content**,
@@ -351,15 +355,15 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
     - Three kinds of token come out of a sentence. **Function words** (`el`, `en`, `que`) never
       count — structural, and present in lesson one. **Covered** words are ones some concept
       accounts for, and are the ones worth counting. **Untracked** words — content words no
-      concept covers, 28% of the corpus — are deliberately *not* counted as unknown: refusing
+      concept covers, 20% of the corpus — are deliberately *not* counted as unknown: refusing
       every sentence containing one would reject most of the corpus and make eligibility a
       measure of vocabulary-file completeness. `audit:content` reports the frequent ones
-      instead (`nadie` appears 63 times and is never taught).
+      instead (`nadie` appears 93 times and is never taught).
     - Verb forms register against the **paradigm as well as the verb**, because either is
       enough to read the word: "han visto" is legible to somebody who knows *ver*, and equally
       to somebody studying the present perfect.
     - `output` tolerates **zero** unknown words. That is affordable because it was measured: for
-      a learner who has genuinely reached a level, 77% (A1) to 93% (B2) of the sentences at or
+      a learner who has genuinely reached a level, 72% (A1) to 96% (B2) of the sentences at or
       below it contain no unknown word at all.
   - The ceiling comes from what has been *introduced*, not from `estimateProficiency` —
     the question is "has the course shown them this?", not "how good are they?". A placement
@@ -483,8 +487,8 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
   past 20 exercises the lesson has to split.
 - **Teaching cards are not exercises, and are not budgeted as ones.** They used to be pushed
   into the same array the practice target was measured against, which forced a hard
-  `slice(0, 8)` on new concepts per lesson. Fifty of the 159 lessons teach more than eight
-  things and one teaches twenty, so most of what the course introduced reached the learner
+  `slice(0, 8)` on new concepts per lesson. Eighty-seven of the 238 lessons teach more than
+  eight things and one teaches twenty, so most of what the course introduced reached the learner
   with **no introduction at all** — no card, no meaning, no example, just a multiple choice
   about a word they had never been shown. The target now counts answerable work only;
   cards are additive.
@@ -501,13 +505,14 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
   `wordBank` is the only kind that tests word order, clitic position, agreement, negation,
   question inversion and preposition choice at once — and it was absent from the tier that
   brand-new concepts sit in. Generation is a pure read, so nothing a learner answers inside a
-  lesson moves them out of that tier while it is being built: measured across the 86 core and
-  grammar lessons, a word bank appeared in **none** on a first pass, and in 7 of 86 for a
-  learner early in the course. It now runs through every band below mastery, second in the
-  gentle tiers — after one recognition, because a word met thirty seconds ago deserves one
-  look before being built into a sentence. Measured after: 86 of 86 at each of 0.2, 0.45 and
-  0.7. Above 0.78 it deliberately drops out, because assembling blocks is the bridge *to*
-  production and handing it back to somebody across it is a step backwards dressed as variety.
+  lesson moves them out of that tier while it is being built: measured at the time across the
+  then-86 core and grammar lessons, a word bank appeared in **none** on a first pass, and in
+  7 of 86 for a learner early in the course. It now runs through every band below mastery,
+  second in the gentle tiers — after one recognition, because a word met thirty seconds ago
+  deserves one look before being built into a sentence. Measured after, and again on the
+  expanded course: 148 of 148 at each of 0.2, 0.45 and 0.7. Above 0.78 it deliberately drops
+  out, because assembling blocks is the bridge *to* production and handing it back to
+  somebody across it is a step backwards dressed as variety.
   Both halves are pinned in `session.test.ts`.
 - **`candidateKinds` used to `return` early for a never-seen concept**, which skipped the
   freshness and recency pass at the bottom of the function. The order was therefore always
@@ -562,7 +567,7 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
     pass — because either half alone can be satisfied by moving a threshold.
   - **Accent-only minimal pairs are derived from the corpus, not listed by hand.**
     `src/content/accent-pairs.ts` groups every Spanish surface word by its deaccented form and
-    keeps the groups with two or more spellings — 65 of them, every one a genuine minimal pair:
+    keeps the groups with two or more spellings — 91 of them, every one a genuine minimal pair:
     the diacritical set (`qué`/`que`, `él`/`el`, `sí`/`si`, `cómo`/`como`), demonstrative against
     verb (`está`/`esta`), present yo against preterite él (`hablo`/`habló`), subjunctive against
     preterite yo (`hable`/`hablé`). Deriving from **Spanish text only** is load-bearing, not
@@ -617,9 +622,9 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
   dedicated listening, reading and conversation lessons, but those are *additional* depth,
   not the only place those skills live: every sentence can become audio, so a plain
   vocabulary or grammar lesson still generates listening and production. Measured across
-  the 86 core/grammar lessons, 100% contain at least one listening exercise and one
-  production exercise, and the overall mix is roughly 34% grammar / 27% production /
-  25% listening / 14% vocabulary. A test in `session.test.ts` holds this at a floor of 80%,
+  the 148 core/grammar lessons, 100% contain at least one listening exercise and one
+  production exercise, and the overall mix is roughly 45% grammar / 22% production /
+  21% listening / 12% vocabulary. A test in `session.test.ts` holds this at a floor of 80%,
   because a change to `candidateKinds` could quietly turn ordinary lessons back into
   reading-only sessions and nothing else would notice.
 - **`correctMistake` and `chooseNatural` are hand-authored only.** They come from
@@ -845,10 +850,16 @@ still there, which is what stops a web button feeling like it forgot you.
 Sentence ids are prefixed **per file**, and the letters do not correspond to CEFR level:
 `s.f` foundations · `s.k` a1-core · `s.m` a2-core · `s.b` b1-core · `s.c` b2-core ·
 `s.d` c1-core · `s.e` everyday **and** c2-core (c2 disambiguates with a trailing `c`:
-`s.e1c`) · `s.r` routine · `s.s` social · `s.a` around-spain.
+`s.e1c`) · `s.r` routine · `s.s` social · `s.a` around-spain · `s.g` a1-everyday-life ·
+`s.n` verb-workshop · `s.h` verb-workshop-moods · `s.i` imperatives ·
+`s.j` subjunctive-imperative · `s.t` city-and-stance · `s.u` advanced-expansion ·
+`s.v` verb-depth.
 
 That `s.e` overlap is a live hazard — check for collisions when adding sentences, and note
-that the id uniqueness test is what catches it.
+that the id uniqueness test is what catches it — nineteen files across eighteen letters, and
+the doubled one is `s.e`. A new sentence file has to claim a letter this list does not already
+use, so read the list rather than guessing: a collision is caught by that test and by nothing
+in the compiler.
 
 ## Adding course content
 
@@ -884,6 +895,10 @@ those tests cross-check content against logic.
 | `session.test.ts` | session assembly and interleaving, checkpoints, the B2 production shift, `skillBalance`, the modality floor, the placement staircase, XP |
 | `srs.test.ts` | `retrievability`, review intervals, mastery bands, due dates |
 | `answer-check.test.ts` | normalisation, accents, the typo-versus-grammar rule, `pronounAgrees`, English comprehension leniency and its polarity guard |
+| `accent-pairs.test.ts` | that the derived accent set is a plausible size and holds the real minimal pairs while leaving `café`/`años`/`mañana` out of it |
+| `equivalences.test.ts` | the English equivalence table, at word and at phrase level |
+| `es-variants.test.ts` | the three mechanical Spanish rewrites — `al`/`a el`, `del`/`de el`, and the clitic climb that must not fire on "busco un lugar" |
+| `meaning.test.ts` | free-turn coverage scoring, and that polarity is absolute rather than weighted |
 | `grading.test.ts` | the policy table's totality, and what each exercise kind is actually testing |
 | `grading-corpus.test.ts` | that the corpus accepts its own authored answers, and refuses eight classes of mechanical mutation of them |
 | `cefr.test.ts` | `estimateProficiency`'s skill gate, and the checkpoint's per-skill floor |
@@ -913,13 +928,17 @@ subsystem stayed dead through 119 passing tests because every link was tested in
 
 ## Known open work
 
-- **Depth is median 3–4 sentences per concept and every stage draws ≤8% from below its level.**
-  The audit's NOTE reports the eight least-practised concepts per stage against that stage's
-  median, and it says so *whether or not anything is wrong* — a standing priority queue, not a
-  defect report. The queue is now mostly narrow items (clothes, months, individual idioms) that
-  are finished at two or three exposures; do not read it as a quota. The spine — ser (43),
-  estar (39), ir (32), tener (27), quedar, llevar, hacer, ya, todavía, aunque — is where density
-  was actually spent.
+- **Depth is median 2–4 sentences per concept, and the later stages draw a fifth to a quarter
+  of their sentences from below their own level** (0% at A0→A1, 22% at B1→B2, 26% at B2→C1,
+  against a warning threshold of 50%). That share rose with the expansion and is not itself a
+  defect — a B2 stage reusing A2 sentences is the spiral — but it is the number to watch if a
+  later stage starts feeling easy. The audit's NOTE reports the eight least-practised concepts
+  per stage against that stage's median, and it says so *whether or not anything is wrong* — a
+  standing priority queue, not a defect report. The queue is now mostly narrow items (clothes,
+  months, individual idioms) that are finished at two or three exposures; do not read it as a
+  quota. Density was actually spent on the grammar spine — g.preterite (115), g.present-perfect
+  (99), g.subjunctive-intro (91), v.vosotros (88), g.conditional (82) — and on the core verbs
+  behind it: ser (46), estar (39), ir (33), tener (30), hacer (29), quedar and llevar (23).
 - **`vosotros` and `tú` remain the thinnest persons against `él`.** Partly legitimate:
   third-person narration dominates any corpus. The target is not parity — it is that group
   dialogue keeps appearing, since that is where those forms live. The imperative corpus added
@@ -928,8 +947,17 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   far less so than before the expansion: adding 44 verbs without their non-indicative moods
   would have recreated the table-only state at scale, so `verb-workshop-moods.ts` and
   `imperatives.ts` exist to stop that.
-- **Nine paradigms cover only one person each**, which the audit reports without warning on. That
-  is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
+- **103 of the 485 paradigms cover only one person each**, which the audit reports without
+  warning on. Adding 44 verbs multiplied the paradigm count roughly fourfold, and a new verb
+  enters the corpus in one or two persons before its sentences catch up — so this number grew
+  with the expansion and is a queue rather than a defect. Some verbs genuinely appear in one
+  person in this corpus and always will.
+- **41 concepts can be read but not produced at the moment they are introduced** — every
+  sentence carrying them still needs something the learner has not met, so the eligibility gate
+  offers them for comprehension and withholds them from production until the spiral catches up.
+  The audit reports it as a NOTE rather than a warning, because the gate is behaving correctly:
+  the fix is another sentence for the concept, not a looser rule. Distinct from the *readable*
+  figure below it, which is zero and must stay there.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
   pronunciation check. A deliberate limit — see `lib/speech.ts` for the seam where real audio and
   recognition would land. This is the largest remaining gap in the course as a whole.
@@ -943,10 +971,10 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   question is which layer is wrong, not whether it is. Nothing there computes its own numbers:
   a diagnostic that invents them can agree with itself while the system disagrees with both.
 - **Untracked vocabulary is the remaining hole in the eligibility gate.** The word gate closed
-  the tag shortfall, but 28% of the corpus's content words belong to no concept at all, and
+  the tag shortfall, but 20% of the corpus's content words belong to no concept at all, and
   those are invisible to it by design — see the `content/lexicon.ts` note above for why
   counting them would be worse. `audit:content` reports the ones appearing eight or more times
-  (27 of them, led by `nadie` at 63) as a standing authoring queue. Teaching those words is the
+  (37 of them, led by `nadie` at 93) as a standing authoring queue. Teaching those words is the
   cheapest way to make the gate sharper, and it is content work rather than a code change.
 - **Composition is the surface that breaks silently.** The conjugation subsystem stayed dead
   through 119 passing tests because every link was tested individually and the chain was not.
