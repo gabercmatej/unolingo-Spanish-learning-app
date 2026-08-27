@@ -51,6 +51,15 @@ which has happened: the audit's *model* of the runtime can be wrong. When a chec
 with the app, find out which of them is lying before changing either. Passing is still not the same
 as finished: the NOTES are a standing priority queue and are supposed to keep printing.
 
+It also measures **what a stage can say**, not only how much it contains.
+`content/coverage.ts` declares semantic slots — one thing the learner must be able to
+express, several acceptable Spanish words, tied to the stage that needs it — plus core verb
+and core grammar coverage, and a check for a later stage going shallow relative to the
+course's own busiest one. That shape resists the two failure modes of a coverage metric: it
+cannot be satisfied by padding (forty more adjectives do not fill the "knee" slot), and it is
+not a quota (nothing says a stage needs N words). Its first run found A1 "Home and rooms" at
+5 of 19 and A2 "The city" at 1 of 14 — the volume table had been green throughout.
+
 It measures **distribution and depth, not presence**. The presence version of this file
 went green the moment every stage had one of everything, while thirteen of fourteen A1
 units still had no audio — so it now reports how far each modality *reaches* across a
@@ -89,7 +98,9 @@ ids, missing sentences and broken lesson prerequisites.
 CEFR estimate), `answer-check.ts`, `generator.ts` (concept + learner state → exercise),
 `eligibility.ts` (what the learner may be *asked to produce*), `scope.ts` (where a review may
 draw its targets from, and what it is trying to achieve), `mistakes.ts` (the retry queue and
-what closes a mistake), `unit-arc.ts` (a unit's guided teaching sequence),
+what closes a mistake), `progression.ts` (where the learner is on the path, and what finishing
+something ahead implies about everything behind it), `unit-practice.ts` (the optional practice
+a completed unit offers), `library.ts` (how the Library is grouped and filtered),
 `teaching.ts` (what to say
 after an answer), `session.ts` (session assembly and ordering), `placement.ts`, `xp.ts`, `ranks.ts`,
 `check.ts` (grading), `achievements.ts`, `backup.ts` (what a backup is, what a restore
@@ -151,19 +162,29 @@ screen. That was measured before deciding not to build for it.
 ## Curriculum shape
 
 `content/curriculum.ts` is one continuous journey across six CEFR stages, all of which now
-have real content — there are no `planned` (outline-only) stages left.
+have real content — there are no `planned` (outline-only) stages left. **Re-read every figure
+below from `npm run audit:content` rather than from here**; they drift with each content
+commit, and a stale number is worse than none.
 
 - **Stage → Unit → Lesson → Exercise.** The *unit* is the navigation unit; the Learn page
   renders stages as accordions and units as rows, and only the current unit expands.
 - **Checkpoints** (`kind: 'checkpoint'` + `checkpointFor: <stageId>`) ignore `teaches` and
   draw from every concept in the stage.
-- **Completion ≠ mastery.** `unitProgress()` returns lesson completion *and* a separately
-  decaying `mastery`, plus `needsReview` and a `phase`. The phase is read off mastery, not
-  off lesson count — finishing the lessons moves a unit out of `learning` and no further,
-  through `practising` → `strengthening` → `maintaining`. That figure used to be the most
-  useful number on the Learn page and the only one that did nothing when pressed; it now
-  starts `unitStrengthPlan`, which orders unresolved mistakes → met-once → faded →
-  recognised-but-never-produced → the rest, and never replays the original lesson.
+- **Lessons are progression. Practice is optional mastery.** A unit is complete when every
+  *required* lesson in it is complete — full stop. Mixed practice, active recall,
+  consolidation, strengthening and Smart Review all happen *after* that, improve `mastery`,
+  and can never move `state`. The two never share a counter, a progress bar or a list.
+  - This was the single worst piece of incoherence in the app, and it was not a bug in any
+    module. A unit described itself through three overlapping state machines at once —
+    `UnitState` off required lessons, `UnitPhase` off mastery, and a generated arc whose
+    revision steps were stored as pseudo-lessons — and the Learn page rendered the *arc's*
+    counter as the unit's progress. So a unit with every lesson ticked read `2/5` with
+    "Next: Active recall" under it: two questions answered through one number, unreadable as
+    either. Each machine was internally correct, which is why no per-module search found it.
+  - `UnitProgress.practice` (was `arc`) is the optional half. Steps are unordered, available
+    the moment the unit completes, and excluded from every progress figure. `unitStrengthPlan`
+    still orders unresolved mistakes → met-once → faded → recognised-but-never-produced → the
+    rest, and never replays the original lesson.
 - CEFR placement of a unit is a **deliberate pedagogical decision**, not an accident of file
   order. The course was restructured bottom-up specifically because A1 competencies were
   sitting in the A1→A2 stage. If placement looks wrong, moving it is legitimate.
@@ -190,6 +211,39 @@ before the lessons that need them`, `never lets an optional lesson block another
 `never reports an untouched unit as already complete`). A naive
 re-link that treats every lesson uniformly will pass typecheck and break progression — that
 is exactly what these tests exist to catch.
+
+### Locking is soft, and finishing something ahead is what moves you
+
+`learning/progression.ts` owns where the learner is. Content ahead of them is dimmed and
+marked as off the recommended path, and it still **opens**: the course guides order without
+enforcing it.
+
+**Successfully completing required lesson X auto-completes every unfinished required lesson
+before X, and nothing else, ever.** Opening a future unit does nothing. Opening a future
+lesson does nothing. Starting one and quitting does nothing. Being killed by the OS halfway
+through does nothing. Only reaching the real end of a session counts — which
+`completedLessonId` already gated on, because *answering is not finishing*.
+
+- Optional lessons are never auto-completed, and nothing after the reached lesson is touched.
+- A skipped lesson's concepts go through **`introduce()`**, which sets `introduced` and
+  schedules `dueAt` while leaving `timesSeen`, `strength`, `depth` and `lastReviewed` alone.
+  That is the **encountered vs retrieved** rule again: a skip unlocks the Library, the verb
+  pages, the grammar and eligibility for production exactly like a played unit, without
+  fabricating recall evidence the mastery figure would then report as real. A skip is a
+  declaration of intent, not proof.
+- **`continueTarget` is a one-line lookup — the first incomplete required lesson — and that is
+  only correct because completed required lessons can never have a hole in them.** Placement
+  completes a prefix; a skip back-fills. `progression.test.ts` asserts that contiguous-prefix
+  invariant directly, because if it ever breaks Continue silently starts pointing *behind* the
+  learner and nothing else in the app would notice.
+- **In progress, abandoned and completed are three different states**, and completion is never
+  inferred from answers submitted or XP earned. `activeLesson` marks the first; leaving the
+  screen clears it (abandoned); reaching the end clears it and completes the lesson. React
+  cleanup does not run when the OS kills the process, which is exactly what makes Resume
+  possible and what makes quitting distinguishable from being interrupted.
+
+No `STATE_VERSION` bump for any of it: `completedLessons[id].skipped` and `activeLesson` are
+both optional fields, the `MistakeRecord` and `developerMode` shapes.
 
 ## Key invariants
 
@@ -243,27 +297,23 @@ is exactly what these tests exist to catch.
     Both the in-session retry (`buildRetry`) and the mistake queue step down it, so they cannot
     drift. Only `output` kinds are scaffolded: getting a multiple choice wrong is not evidence
     that multiple choice was too hard.
-- **A unit is a guided arc, not one lesson with a tick on it.** Measured: **36 of 63 units have
-  exactly one required lesson**, median 13 minutes. So finishing a unit meant meeting nine
-  words, answering twelve questions, and landing on ~22% mastery with nothing to do but replay
-  the lesson. `learning/unit-arc.ts` adds `mixed → recall → consolidate` after the lessons —
-  three to five sittings, twenty to thirty minutes — and adds **no content**: the phases are
-  generated from what the unit already declares, which is exactly what "lessons never contain
-  exercises" buys.
-  - **A phase is complete when it has been done *or* when its goal is already met.** A learner
-    who already retrieves every concept under pressure gains nothing from a recall session, and
-    making them sit through one to earn a tick is the app inventing work. It also means a unit
-    finished before the arc existed does not reopen if the learner genuinely knows it.
-  - Phases are **rotated, not ranked**: `generateOfKind` takes the first kind that works, so a
-    fixed preference list produced six `translateToEn` in a row — the Duolingo failure this was
-    meant to avoid, reached from the other direction. The list rotates by position, the same
-    device as `LISTENING_ROTATION`.
-  - Progress is stored in `completedLessons` under `arc:<unitId>:<phase>`. That map is keyed by
-    string and nothing requires the keys to name lessons, so this needs **no `STATE_VERSION`
-    bump**; a stale key orphans an entry rather than breaking a screen.
-  - `unitProgress().state` still means "every required lesson is finished" — unchanged, so an
-    existing record's stage counters do not move. Whether the *teaching* is finished is
-    `progress.arc.complete`, and the two are allowed to disagree.
+- **A completed unit is not a finished unit, and the app says so in two numbers rather than
+  one.** Measured: **36 of 63 units had exactly one required lesson**, median 13 minutes. So
+  finishing a unit meant meeting nine words, answering twelve questions, and landing on ~22%
+  mastery with nothing to do but replay the lesson. `learning/unit-practice.ts` generates
+  `mixed → recall → consolidate` from what the unit already declares — it adds **no content**,
+  which is what "lessons never contain exercises" buys.
+  - **It is offered, never required.** Practice unlocks when the unit completes and is
+    unordered from then on; a learner who wants to jump straight to consolidation may. The
+    version that chained these steps and counted them into the unit's progress is what made a
+    fully-lessoned unit render `2/5`.
+  - **A step still reports `satisfied` when the record already demonstrates its goal.** A
+    learner who retrieves every concept under pressure gains nothing from a recall session,
+    and nudging them at one forever is the app inventing work.
+  - Progress is stored in `completedLessons` under `arc:<unitId>:<phase>`. That key is
+    deliberately unchanged from when these were arc steps: it is a storage key existing
+    records already contain, and renaming it would orphan every learner's practice history to
+    rename a string nobody sees. No `STATE_VERSION` bump; a stale key orphans an entry.
 - **Nothing is asked for before it is taught.** `learning/eligibility.ts` gates every
   sentence, drill and conversation turn on what the learner has actually been introduced
   to. This closed a bug where a learner who had just met `v.amigo` in the Family unit was
@@ -447,6 +497,18 @@ is exactly what these tests exist to catch.
     left **genuinely untouched** — not introduced, not practised, not scored — and picked up
     on the next pass. The alternative is what used to happen: the surplus arrived through the
     practice pool, marked as met and tested, and never once displayed.
+- **Sentence building is a core format, and was unreachable on a first encounter.**
+  `wordBank` is the only kind that tests word order, clitic position, agreement, negation,
+  question inversion and preposition choice at once — and it was absent from the tier that
+  brand-new concepts sit in. Generation is a pure read, so nothing a learner answers inside a
+  lesson moves them out of that tier while it is being built: measured across the 86 core and
+  grammar lessons, a word bank appeared in **none** on a first pass, and in 7 of 86 for a
+  learner early in the course. It now runs through every band below mastery, second in the
+  gentle tiers — after one recognition, because a word met thirty seconds ago deserves one
+  look before being built into a sentence. Measured after: 86 of 86 at each of 0.2, 0.45 and
+  0.7. Above 0.78 it deliberately drops out, because assembling blocks is the bridge *to*
+  production and handing it back to somebody across it is a step backwards dressed as variety.
+  Both halves are pinned in `session.test.ts`.
 - **`candidateKinds` used to `return` early for a never-seen concept**, which skipped the
   freshness and recency pass at the bottom of the function. The order was therefore always
   exactly `RECOGNITION`, `multipleChoice` always came first, and it always had the material
@@ -832,11 +894,13 @@ those tests cross-check content against logic.
 | `eligibility.test.ts` | the introduction-before-production rule itself, per exercise kind |
 | `introduction-order.test.ts` | the same rule end to end — a real learner walking real lessons, plus spiral reuse and the drill/conversation gate |
 | `teaching.test.ts` | what an answer is worth saying, and the level policy on showing meaning |
+| `progression.test.ts` | what completion may mean and what may cause it — the skip-forward rule, the three lesson states, and the contiguous-prefix invariant Continue depends on |
+| `library.test.ts` | Library grouping by the section and unit that taught a thing, and the shown-vs-retrieved line the filters draw |
 | `unit-cycle.test.ts` | the strength plan, the actionable mastery figure, and listening rotation |
 | `transactional.test.ts` | that only evidence moves mastery — a card is exposure, generation is a pure read, and an abandoned session commits only what was answered |
 | `mistake-review.test.ts` | that Review Mistakes contains the mistakes and nothing else, what closes one, and the scaffolded retry |
 | `review-scope.test.ts` | global vs unit scope: where each review may draw its targets from |
-| `unit-arc.test.ts` | the guided arc — its shape per unit, its sequence, the already-met escape hatch, and that the phases differ |
+| `unit-practice.test.ts` | optional practice — its shape per unit, that it is gated only by completion, the already-met escape hatch, and that playing it moves nothing but its own counter |
 | `verb-corpus.test.ts` | the ambiguity guards — cross-verb syncretism, homographs, person syncretism, multi-word forms |
 | `verb-flow.test.ts` | the whole conjugation pathway, end to end, including the subjunctive and imperative moods |
 | `tense-coverage.test.ts` | that every declared `TenseId` is carried, and that an unbuildable tense throws instead of fabricating forms |
@@ -856,20 +920,14 @@ subsystem stayed dead through 119 passing tests because every link was tested in
   are finished at two or three exposures; do not read it as a quota. The spine — ser (43),
   estar (39), ir (32), tener (27), quedar, llevar, hacer, ya, todavía, aunque — is where density
   was actually spent.
-- **`vosotros` (109) and `tú` (154) remain the thinnest persons against `él` (580).** Partly
-  legitimate: third-person narration dominates any corpus. The target is not parity — it is that
-  group dialogue keeps appearing, since that is where those forms live.
-- **`future` (47), `imperative` (60) and `presentPerfect` (67) are the thinnest tenses.**
-  `presentSubjunctive` arrived at 217 — second only to the present — because the mood was
-  added to sixteen verbs with a corpus behind it rather than to one with a table.
-  `conditional` went from 16 to 104 when the future/conditional stems were paired.
-- **The audit's new NOTEs are a standing authoring queue, not defects.** "Lessons preview
-  words taught much later" names sentences whose incidental vocabulary arrives later in the
-  course — "Vale, hasta luego" in lesson one, with `vale` formally taught much later. That is
-  a *preview*, and the eligibility gate keeps it out of production until the word is taught;
-  the note exists so an author can decide the word deserves teaching earlier. "Concepts that
-  can be read but not produced when introduced" and "tags with no word of that family" are
-  the same shape: judgement queues that will never reach zero and are not supposed to.
+- **`vosotros` and `tú` remain the thinnest persons against `él`.** Partly legitimate:
+  third-person narration dominates any corpus. The target is not parity — it is that group
+  dialogue keeps appearing, since that is where those forms live. The imperative corpus added
+  in the expansion is deliberately written across all five persons for exactly this reason.
+- **The future, the imperative and the present perfect remain the thinnest tenses**, though
+  far less so than before the expansion: adding 44 verbs without their non-indicative moods
+  would have recreated the table-only state at scale, so `verb-workshop-moods.ts` and
+  `imperatives.ts` exist to stop that.
 - **Nine paradigms cover only one person each**, which the audit reports without warning on. That
   is a real limit, not a defect: some verbs genuinely appear in one person in this corpus.
 - **Speaking is scored on self-report.** `speak` exercises play and accept; there is no
