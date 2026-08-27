@@ -8,6 +8,16 @@ overlap: engaging enough to open daily, built around how people actually acquire
 
 Expo + React Native + TypeScript. Runs on iOS, Android and web. Offline, no account, no server.
 
+## Try it
+
+**[unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app)** — the
+full course, running in the browser.
+
+Your progress is yours alone. There is no server and no account: the learner record lives in
+your own browser's storage, so two people opening the same link get two independent courses
+and neither can see or disturb the other's. Clearing your site data resets you to zero, and
+Settings → Export writes the record to a file you can import on another machine.
+
 ---
 
 ## What it looks like

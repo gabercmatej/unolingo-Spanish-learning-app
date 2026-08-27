@@ -4,18 +4,14 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-const MARK = require('@/assets/images/brand/mark.png');
-const LOCKUP = require('@/assets/images/brand/lockup.png');
+const MASCOT = require('@/assets/images/brand/mascot.png');
 
-/** Intrinsic proportions of `lockup.png`, so the caller only sets a width. */
-const LOCKUP_RATIO = 922 / 768;
-
-export type LogoVariant = 'mark' | 'lockup';
+/** Intrinsic proportions of `mascot.png`, so the caller only sets a width. */
+const MASCOT_RATIO = 586 / 640;
 
 export interface LogoProps {
-  /** Width. `mark` is square; `lockup` derives its height from the artwork. */
+  /** Width. Height follows the artwork's own proportions. */
   size?: number;
-  variant?: LogoVariant;
   /**
    * Wraps the mark in a round brand plate. Use where the logo sits against a
    * busy or ambiguous surface and needs its own ground — a page header, say.
@@ -25,20 +21,24 @@ export interface LogoProps {
 }
 
 /**
- * The Unolingo mark.
+ * The Unolingo mark — the mascot.
+ *
+ * One piece of artwork rather than the mark/lockup pair it replaced, which is
+ * why there is no `variant`: two variants that resolve to the same image is a
+ * prop that reads as a choice and makes none.
  *
  * The artwork is a transparent PNG rather than inline SVG or an emoji: it is a
  * painted illustration with soft interior shading that vector primitives would
  * flatten, and the cutout means the same file sits correctly on cream and on
  * the dark surface without a second asset.
  */
-export function Logo({ size = 72, variant = 'mark', plate, style }: LogoProps) {
+export function Logo({ size = 72, plate, style }: LogoProps) {
   const theme = useTheme();
 
   const art = (
     <Image
-      source={variant === 'lockup' ? LOCKUP : MARK}
-      style={{ width: size, height: variant === 'lockup' ? size * LOCKUP_RATIO : size }}
+      source={MASCOT}
+      style={{ width: size, height: size * MASCOT_RATIO }}
       contentFit="contain"
       // Bundled artwork — a fade would read as a loading glitch.
       transition={0}

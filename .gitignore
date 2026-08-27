@@ -60,3 +60,7 @@ Thumbs.db
 *.log
 logs/
 coverage/
+
+# Web demo deploy artifacts
+.web-demo-deploy/
+.web-demo-project

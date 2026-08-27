@@ -181,14 +181,10 @@ export default function OnboardingScreen() {
           ]}
           keyboardShouldPersistTaps="handled">
           <Animated.View entering={FadeInDown.duration(420)} style={styles.column}>
-            {/* The full lockup greets you on first run — it is the one screen
-                where the app introduces itself. A retake is not a brand moment,
-                so it gets the bare mark. */}
-            <Logo
-              variant={isRetake ? 'mark' : 'lockup'}
-              size={isRetake ? 72 : 148}
-              style={styles.mark}
-            />
+            {/* The mascot greets you on first run — it is the one screen where
+                the app introduces itself. A retake is not a brand moment, so it
+                gets a smaller one. */}
+            <Logo size={isRetake ? 72 : 148} style={styles.mark} />
 
             <Text variant="display" rounded>
               {isRetake ? 'Retake the test' : 'Unolingo'}
