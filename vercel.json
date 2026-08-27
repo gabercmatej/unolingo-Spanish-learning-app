@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx expo export --platform web && node scripts/prepare-web-deploy.mjs",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/assets/node_modules/:path*", "destination": "/assets/nm/:path*" },
+    { "source": "/grammar/:id", "destination": "/grammar/%5Bid%5D" },
+    { "source": "/unit/:id", "destination": "/unit/%5Bid%5D" },
+    { "source": "/verb/:id", "destination": "/verb/%5Bid%5D" },
+    { "source": "/word/:id", "destination": "/word/%5Bid%5D" }
+  ]
+}

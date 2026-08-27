@@ -64,3 +64,6 @@ coverage/
 # Web demo deploy artifacts
 .web-demo-deploy/
 .web-demo-project
+# Written by the Vercel CLI: the project link, and the env pulled with it.
+.vercel
+.env.local

@@ -1,0 +1,14 @@
+# Vercel builds this project from source (see vercel.json), so it needs the app
+# and nothing else. Without this the CLI tries to upload ~19,000 files and is
+# refused at 15,000 — the native projects and the local export dominate, and
+# none of it is used by the build.
+node_modules
+dist
+.web-demo-deploy
+ios
+android
+.expo
+.playwright-mcp
+docs/screenshots
+coverage
+skill-observations
