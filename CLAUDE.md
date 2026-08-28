@@ -687,35 +687,43 @@ above for why removing `expo-notifications` from `plugins` cannot achieve the sa
 
 ## Getting it onto the web
 
-`bash scripts/deploy-web.sh` builds the export and ships it to Vercel at
-[unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app).
-It lives in the repo rather than deferring to the generic `deploy_web_demo` skill because
-that skill's `vercel.json` knows nothing about **dynamic routes**, and this app has four.
+The site is [unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app),
+and **there is exactly one build path**: `vercel.json` carries the build command, the output
+directory and the rewrites, so a `git push` and `bash scripts/deploy-web.sh` produce the same
+site. That is the whole design, and it is not tidiness.
 
-- **A static export turns a dynamic route into a literal filename.** `word/[id]` lands on
-  disk as `word/[id].html`, and nothing serves that at `/word/v.casa`. Client-side
-  navigation reaches it perfectly, so the app looks fine and only breaks when somebody
-  refreshes a word page or opens a link somebody sent them — which is the entire purpose of
-  a shared demo. The script **derives** one rewrite per dynamic route from the export
-  instead of listing them, because a hardcoded list is a second place to remember a new
-  route and it rots without a symptom.
+- **Two build paths silently fought each other, and the push won.** The Vercel project is
+  connected to this repo, so every push triggered a build using the *project's* settings —
+  framework "Other", output directory `public`, which does not exist here — and published the
+  bare repo root: 404 on every route, including `/`, in three seconds, reported as success.
+  Meanwhile the deploy script published a correct prebuilt copy. So the site worked until the
+  next push and then reverted, which reads as random breakage. `vercel.json` wins over project
+  settings, which is what makes the push correct rather than merely overridden.
+- **A static export turns a dynamic route into a literal filename.** `word/[id]` lands on disk
+  as `word/[id].html`, and nothing serves that at `/word/v.casa`. Client-side navigation
+  reaches it perfectly, so the app looks fine and only breaks when somebody refreshes a word
+  page or opens a link somebody sent them — which is the entire purpose of a public URL.
+- **The rewrites must be committed, so they are the one hardcoded list here.** Vercel reads
+  `vercel.json` *before* the build, so nothing can generate them. `src/app/__tests__/web-deploy.test.ts`
+  therefore asserts the list against the files in `src/app`: this list rots without a symptom,
+  and the test is the only thing that would notice.
 - **The rewrite destination is the percent-encoded *clean* path**, `/word/%5Bid%5D`, not
-  `/word/[id].html`. `cleanUrls` answers the `.html` form with a 308, so a rewrite aimed
-  there lands on a redirect and never resolves.
-- **Vercel's uploader drops any directory named `node_modules`**, and Expo emits the
-  vector-icon fonts under `assets/node_modules/@expo/vector-icons/…` — so every icon
-  renders blank. The script renames the folder and rewrites the bundle's hardcoded URLs
-  back onto it.
-- The export runs with `.env` moved aside and refuses to publish a bundle containing a
-  secret: anything named `EXPO_PUBLIC_*` is inlined into the client bundle at build time.
-- **Verify against the live URL, not the build log.** The deploy that prompted this
-  reported success in three seconds while serving 404 on every route, including `/` — it
-  was configured to publish `public/`, which does not exist here, so it uploaded the bare
-  repo root. A green deploy is not a working one.
+  `/word/[id].html`. `cleanUrls` answers the `.html` form with a 308, so a rewrite aimed there
+  lands on a redirect and never resolves. That was the first attempt and it looked correct.
+- **Vercel will not serve a path containing a `node_modules` segment**, and Expo emits the
+  vector-icon fonts under `assets/node_modules/@expo/vector-icons/…` — so every icon renders
+  blank. `scripts/prepare-web-deploy.mjs` renames the folder as part of the build and the
+  rewrite maps the bundle's hardcoded URLs onto it. The two have to stay in step.
+- `.vercelignore` keeps the CLI upload under Vercel's 15,000-file limit — the native projects
+  and a local `dist/` came to 19,471, and none of it is built.
+- **Verify against the live URL, not the build log.** `scripts/deploy-web.sh` checks every
+  route and the icon font after deploying and exits non-zero if any of them is not 200, because
+  a green deploy is not a working one. A Git build that takes ~2 minutes ran the export; one
+  that takes 3 seconds published files.
 
-On the web the learner record is `localStorage`, which is per-browser and per-origin, so
-every visitor gets an independent course with no server and no account. That is the whole
-of the multi-user story and it needs no code.
+On the web the learner record is `localStorage`, which is per-browser and per-origin, so every
+visitor gets an independent course with no server and no account. That is the whole of the
+multi-user story and it needs no code.
 
 ## Platform traps
 
