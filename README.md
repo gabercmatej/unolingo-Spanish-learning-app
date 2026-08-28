@@ -1,5 +1,12 @@
 # Unolingo
 
+### ▶ [Try it in your browser — unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app)
+
+No install, no sign-up. The full course runs client-side, and your progress stays in your own
+browser.
+
+---
+
 A Spanish-learning app built for one learner, teaching **Peninsular Spanish (es-ES)**.
 
 Duolingo is fun but repetitive, and better at teaching isolated words than Spanish.
@@ -10,13 +17,17 @@ Expo + React Native + TypeScript. Runs on iOS, Android and web. Offline, no acco
 
 ## Try it
 
-**[unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app)** — the
-full course, running in the browser.
+**[unolingo-spanish-learning-app.vercel.app](https://unolingo-spanish-learning-app.vercel.app)** —
+the whole course: 88 units, 238 lessons, every exercise type, placement test included.
 
-Your progress is yours alone. There is no server and no account: the learner record lives in
-your own browser's storage, so two people opening the same link get two independent courses
-and neither can see or disturb the other's. Clearing your site data resets you to zero, and
-Settings → Export writes the record to a file you can import on another machine.
+Your progress is yours alone. There is no server and no account, so nothing you do is visible
+to anyone else: the learner record lives in your own browser's storage, and two people opening
+the same link get two independent courses. Clearing your site data resets you to zero, and
+Settings → Export writes the record to a file you can import on another machine or another
+browser.
+
+Audio uses your device's own Spanish voices, so how good it sounds depends on what your
+browser has installed. The iOS and Android builds are the same app from the same codebase.
 
 ---
 
@@ -27,13 +38,13 @@ One session, start to finish:
 <table>
 <tr>
 <td width="25%"><img src="docs/screenshots/learn.png" alt="The Learn screen: streak, daily goal, the next lesson, and the whole A0 to C2 journey as collapsible stages"></td>
-<td width="25%"><img src="docs/screenshots/session.png" alt="A word-bank exercise: build the Spanish sentence from shuffled tokens"></td>
-<td width="25%"><img src="docs/screenshots/feedback.png" alt="The moment after a correct answer, with the earned XP and a note explaining the grammar point"></td>
-<td width="25%"><img src="docs/screenshots/results.png" alt="Session results: an accuracy ring, XP earned, and which concepts improved and by how much"></td>
+<td width="25%"><img src="docs/screenshots/session.png" alt="A matching exercise: four Spanish phrases to pair with their English meanings"></td>
+<td width="25%"><img src="docs/screenshots/feedback.png" alt="The moment after a correct answer: the verdict, the XP earned, and the word with its meaning"></td>
+<td width="25%"><img src="docs/screenshots/results.png" alt="Session results: an accuracy ring, the streak banked, XP earned, and which concepts improved and by how much"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>Learn</b><br>what to do next, and how far the road runs</sub></td>
-<td align="center"><sub><b>Practise</b><br>one sentence, six exercise types</sub></td>
+<td align="center"><sub><b>Practise</b><br>one sentence, sixteen exercise types</sub></td>
 <td align="center"><sub><b>Feedback</b><br>never scolds, always explains</sub></td>
 <td align="center"><sub><b>Results</b><br>named movement, not just a score</sub></td>
 </tr>
@@ -43,13 +54,13 @@ And the reference side — everything you have met, and how well you know it:
 
 <table>
 <tr>
-<td width="33%"><img src="docs/screenshots/progress.png" alt="Progress: a four-month activity calendar, XP for each day of the week you are viewing, and your weakest areas"></td>
-<td width="33%"><img src="docs/screenshots/library.png" alt="Library: every word met, filterable by how well it is known, each with its own mastery percentage"></td>
+<td width="33%"><img src="docs/screenshots/progress.png" alt="Progress: the CEFR estimate as a ring, lifetime XP, words met, accuracy, lessons done, and units completed in each stage"></td>
+<td width="33%"><img src="docs/screenshots/library.png" alt="Library: words grouped by the section and unit that taught them, each unit collapsing, each word with its own mastery percentage"></td>
 <td width="33%"><img src="docs/screenshots/profile.png" alt="Profile: rank, curriculum position and CEFR proficiency shown as three separate measures"></td>
 </tr>
 <tr>
 <td align="center"><sub><b>Progress</b><br>measured against yourself</sub></td>
-<td align="center"><sub><b>Library</b><br>your own annotated dictionary</sub></td>
+<td align="center"><sub><b>Library</b><br>grouped by where you met it</sub></td>
 <td align="center"><sub><b>Profile</b><br>three measures, never conflated</sub></td>
 </tr>
 </table>
@@ -275,7 +286,7 @@ outcome** — sound carries further than a vibration, so it has to earn its plac
 
 ```bash
 npx expo start                   # dev server; press i / a / w
-npm test                         # 211 tests — learning logic + content integrity
+npm test                         # 545 tests — learning logic + content integrity
 npm run typecheck
 npm run lint
 npm run audit:content            # coverage and depth report; a gap list, not a gate
