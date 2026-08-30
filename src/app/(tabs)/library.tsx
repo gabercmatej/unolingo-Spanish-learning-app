@@ -19,6 +19,7 @@ import {
   getVerb,
   grammarConcepts,
   teachingOrder,
+  verbConceptIds,
   verbTeachingOrder,
   verbs,
   vocabConcepts,
@@ -89,15 +90,11 @@ export default function LibraryScreen() {
        * non-existent `v.<verb>` state would report every verb as unmet.
        */
       return verbs
-        .filter((verb) => {
-          const related = [
-            ...Object.keys(verb.tenses).map((tense) => `f.${verb.id}.${tense}`),
-            ...vocabConcepts.filter((c) => c.verbId === verb.id).map((c) => c.id),
-          ];
-          return related.some((id) =>
+        .filter((verb) =>
+          verbConceptIds(verb.id).some((id) =>
             passesFilter(filter, { id, state: learner.concepts[id], learner, now }),
-          );
-        })
+          ),
+        )
         .map((verb) => verb.id);
     }
     return vocabConcepts
@@ -143,7 +140,10 @@ export default function LibraryScreen() {
   );
 
   const grouped = useMemo(
-    () => (grouping === 'course' ? countMet(groupByCourse(ordered, tab === 'verbs'), learner) : null),
+    () =>
+      grouping === 'course'
+        ? countMet(groupByCourse(ordered, tab === 'verbs'), learner, tab === 'verbs')
+        : null,
     [grouping, ordered, tab, learner],
   );
 

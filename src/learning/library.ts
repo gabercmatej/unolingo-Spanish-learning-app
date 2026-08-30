@@ -1,4 +1,4 @@
-import { conceptOrigin, curriculum, levelIndex, verbOrigin } from '@/content';
+import { conceptOrigin, curriculum, levelIndex, verbConceptIds, verbOrigin } from '@/content';
 import type { CefrLevel, Stage, Unit } from '@/content/types';
 import { hasEncountered } from '@/learning/mastery';
 import { mastery, masteryBand, type MasteryBand } from '@/learning/srs';
@@ -145,12 +145,24 @@ export function groupByCourse(ids: string[], forVerbs = false): {
   return { stages, ungrouped };
 }
 
-/** Fills in the `met` counts a grouping needs to show progress per section. */
+/**
+ * Fills in the `met` counts a grouping needs to show progress per section.
+ *
+ * `forVerbs` has to be passed the same way `groupByCourse` takes it, because a
+ * verb entry's id is a verb id and not a concept id: a verb is met when any of
+ * the concepts behind it has been. Asking `learner.concepts[verbId]` instead is
+ * a lookup that cannot ever hit, so it does not fail loudly — it silently
+ * reports every verb section as `0 / n`, which is exactly what it did.
+ */
 export function countMet(
   groups: { stages: LibraryStageGroup[]; ungrouped: string[] },
   learner: LearnerState,
+  forVerbs = false,
 ): { stages: LibraryStageGroup[]; ungrouped: string[] } {
-  const met = (id: string) => hasEncountered(learner.concepts[id]);
+  const met = (id: string) =>
+    forVerbs
+      ? verbConceptIds(id).some((conceptId) => hasEncountered(learner.concepts[conceptId]))
+      : hasEncountered(learner.concepts[id]);
   return {
     ungrouped: groups.ungrouped,
     stages: groups.stages.map((stage) => {

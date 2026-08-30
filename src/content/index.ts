@@ -291,6 +291,32 @@ export function teachingOrder(conceptId: string): number {
 }
 
 /**
+ * The concepts a verb is known through.
+ *
+ * A verb is not itself a unit of memory: it has no `ConceptState`, because what
+ * a learner actually holds is its paradigms (`f.<verb>.<tense>`) and the
+ * vocabulary entry that points at it. So every question of the form "has this
+ * verb been reached?" — where it was taught, where it sits in the course, how
+ * many of a section's verbs the learner has met — has to be asked of these ids
+ * and never of the verb id.
+ *
+ * It is one function rather than the same two loops written out at each call
+ * site because it had already been written out three times, and the fourth
+ * place that needed it instead looked up `learner.concepts['ser']`, which is
+ * always undefined — so the Library reported every verb section as `0 / n`
+ * however much of the course the learner had walked.
+ */
+const conceptsByVerb = new Map<string, string[]>();
+for (const verb of verbs) {
+  conceptsByVerb.set(verb.id, [
+    ...verbFormConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
+    ...vocabConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
+  ]);
+}
+
+export const verbConceptIds = (verbId: string): string[] => conceptsByVerb.get(verbId) ?? [];
+
+/**
  * A verb has no lesson of its own — it is reached through its conjugation
  * concepts and through the vocabulary entry that points at it, so its position
  * is the earliest of those.
@@ -298,12 +324,7 @@ export function teachingOrder(conceptId: string): number {
 const verbOrder = new Map<string, number>();
 for (const verb of verbs) {
   let earliest = UNTAUGHT;
-  for (const concept of verbFormConcepts) {
-    if (concept.verbId === verb.id) earliest = Math.min(earliest, teachingOrder(concept.id));
-  }
-  for (const concept of vocabConcepts) {
-    if (concept.verbId === verb.id) earliest = Math.min(earliest, teachingOrder(concept.id));
-  }
+  for (const id of verbConceptIds(verb.id)) earliest = Math.min(earliest, teachingOrder(id));
   verbOrder.set(verb.id, earliest);
 }
 
@@ -350,11 +371,7 @@ const verbOriginById = new Map<string, ConceptOrigin>();
 for (const verb of verbs) {
   let best: ConceptOrigin | undefined;
   let bestOrder = UNTAUGHT;
-  const candidates = [
-    ...verbFormConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
-    ...vocabConcepts.filter((concept) => concept.verbId === verb.id).map((c) => c.id),
-  ];
-  for (const id of candidates) {
+  for (const id of verbConceptIds(verb.id)) {
     const order = teachingOrder(id);
     if (order < bestOrder) {
       const origin = originByConcept.get(id);

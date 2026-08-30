@@ -648,6 +648,15 @@ both optional fields, the `MistakeRecord` and `developerMode` shapes.
   revision tool, so it has to match the path the learner walked. Use `byTeachingOrder` /
   `byVerbTeachingOrder` from the registry. A concept no lesson teaches sorts to the very end,
   which `audit:content` flags.
+- **A verb is not a unit of memory, so never ask the learner state about a verb id.** There is
+  no `ConceptState` for `ser`; what the learner holds is its paradigms (`f.ser.<tense>`) and
+  the vocabulary entry pointing at it, and `verbConceptIds` in the registry is the one place
+  that mapping lives. `countMet` did the lookup on the verb id instead — which is not a lookup
+  that can fail loudly, it is one that can never hit — so every verb section of the Library
+  read `0 / n` at every point in the course, and because the section and unit that open by
+  default are chosen from those counts, the verbs tab also always opened at the very beginning
+  rather than where the learner was. Three other places had already written the same two loops
+  out by hand; the fix was to have one of them.
 
 ## Progress is not disposable
 

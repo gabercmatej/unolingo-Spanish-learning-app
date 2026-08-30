@@ -1,4 +1,11 @@
-import { conceptOrigin, curriculum, getLessonThatIntroduces, vocabConcepts } from '@/content';
+import {
+  conceptOrigin,
+  curriculum,
+  getLessonThatIntroduces,
+  verbConceptIds,
+  verbs,
+  vocabConcepts,
+} from '@/content';
 import { makeLearner } from '@/learning/__tests__/helpers';
 import {
   RECENT_WINDOW_DAYS,
@@ -265,5 +272,51 @@ describe('ordering', () => {
       level,
     });
     expect(sample).toEqual(original);
+  });
+});
+
+/**
+ * A verb has no `ConceptState` of its own.
+ *
+ * It is known through its paradigms (`f.<verb>.<tense>`) and its vocabulary
+ * entry, which is why the verbs tab's filter asks about those rather than about
+ * a `v.<verb>` that does not exist. `countMet` did not know it and looked up
+ * `learner.concepts['ser']` — always undefined — so every verb section reported
+ * `0 / n` however much of the course the learner had walked, and the section
+ * and unit that open by default fell back to the first ones rather than to the
+ * learner's own position.
+ */
+describe('verbs are met through their paradigms', () => {
+  const ids = verbs.map((verb) => verb.id);
+
+  it('counts a verb as met when one of its concepts has been', () => {
+    const groups = groupByCourse(ids, true);
+    const unit = groups.stages[0].units[0];
+    const verbId = unit.ids[0];
+    const behind = verbConceptIds(verbId);
+    expect(behind.length).toBeGreaterThan(0);
+
+    const learner = makeLearner({
+      concepts: { [behind[0]]: introduce(createConceptState(behind[0], NOW), NOW) },
+    });
+    const counted = countMet(groups, learner, true);
+    expect(counted.stages[0].units[0].met).toBe(1);
+    expect(counted.stages[0].met).toBe(1);
+  });
+
+  it('reports nothing met for a learner who has met nothing', () => {
+    const counted = countMet(groupByCourse(ids, true), makeLearner(), true);
+    expect(counted.stages.every((stage) => stage.met === 0)).toBe(true);
+  });
+
+  it('opens the verb section the learner is partway through', () => {
+    const groups = groupByCourse(ids, true);
+    const target = groups.stages[1];
+    const concepts: Record<string, ConceptState> = {};
+    for (const id of groups.stages[0].ids.flatMap(verbConceptIds)) concepts[id] = retrieved(id);
+    for (const id of target.ids.slice(0, 2).flatMap(verbConceptIds)) concepts[id] = retrieved(id);
+
+    const counted = countMet(groups, makeLearner({ concepts }), true);
+    expect(currentStageId(counted.stages)).toBe(target.stage.id);
   });
 });
